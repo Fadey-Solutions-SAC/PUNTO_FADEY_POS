@@ -24,7 +24,12 @@ export function applyDatabaseEnv() {
   const configured = process.env.DB_PATH?.trim()
   if (!configured) return
   const file = path.resolve(configured)
-  mkdirSync(path.dirname(file), { recursive: true })
-  mkdirSync(path.join(path.dirname(file), "uploads"), { recursive: true })
+  // En el build de Render el disco persistente aún no está montado.
+  try {
+    mkdirSync(path.dirname(file), { recursive: true })
+    mkdirSync(path.join(path.dirname(file), "uploads"), { recursive: true })
+  } catch {
+    /* ignore */
+  }
   process.env.DATABASE_URL = `file:${file.replaceAll("\\", "/")}`
 }

@@ -3,14 +3,23 @@ services:
     name: punto-fadey
     runtime: node
     plan: starter
-    buildCommand: npm install && npx prisma generate && npm run build
+    # Build sin DB_PATH: el disco /var/data solo existe al arrancar el servicio.
+    buildCommand: npm install && DB_PATH= DATABASE_URL="file:./prisma/build.db" npx prisma generate && DB_PATH= DATABASE_URL="file:./prisma/build.db" npm run build
     startCommand: npm run start:server
     envVars:
+      - key: NODE_VERSION
+        value: "20.19.0"
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=460
       - key: DB_PATH
         value: /var/data/punto-fadey.db
+      - key: DATABASE_URL
+        value: file:/var/data/punto-fadey.db
       - key: AUTH_SECRET
+        sync: false
+      - key: PERU_CONSULTAS_TOKEN
         sync: false
     disk:
       name: punto-fadey-data
