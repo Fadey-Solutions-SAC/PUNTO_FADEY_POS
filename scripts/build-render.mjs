@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { mkdirSync, existsSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import path from "node:path"
 
 // El disco /var/data de Render no existe durante el build.
@@ -31,12 +31,23 @@ function run(label, command, args) {
   }
 }
 
-const prisma = path.join("node_modules", ".bin", process.platform === "win32" ? "prisma.cmd" : "prisma")
-const next = path.join("node_modules", ".bin", process.platform === "win32" ? "next.cmd" : "next")
-if (!existsSync(prisma)) {
-  console.error("[build-render] falta node_modules/.bin/prisma; corre npm install primero")
-  process.exit(1)
+const bin = (name) =>
+  path.join("node_modules", ".bin", process.platform === "win32" ? `${name}.cmd` : name)
+
+const required = [
+  "node_modules/tailwindcss/package.json",
+  "node_modules/@tailwindcss/postcss/package.json",
+  "node_modules/next/package.json",
+  "node_modules/prisma/package.json",
+]
+
+for (const file of required) {
+  if (!existsSync(file)) {
+    console.error(`[build-render] falta ${file}. Revisa el Build Command: npm install --include=dev`)
+    process.exit(1)
+  }
 }
 
-run("prisma generate", prisma, ["generate"])
-run("next build", next, ["build"])
+run("prisma generate", bin("prisma"), ["generate"])
+// Webpack + PostCSS evita el loader @tailwindcss/turbopack en el build de Render.
+run("next build", bin("next"), ["build", "--webpack"])
