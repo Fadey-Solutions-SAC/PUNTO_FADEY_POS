@@ -11,8 +11,23 @@ import { authenticate, openConfigSession, provisionBusiness, registerOwner } fro
 
 export async function loginAction(_prev: { error: string }, formData: FormData) {
   try {
+    const username = String(formData.get("username") ?? formData.get("email") ?? "").trim()
+    const password = String(formData.get("password") ?? "")
+    if (!username && !password) return { error: "Usuario y contraseña requerida" }
+    if (!username && password) {
+      assertNoCode(password)
+      await assertAttempts("config", 6, 10 * 60 * 1000)
+      if (!configPasswordOk(password)) {
+        await noteAttempt("config", 10 * 60 * 1000)
+        return { error: "Contraseña incorrecta" }
+      }
+      await clearAttempts("config")
+      await signSession(await openConfigSession())
+      redirect("/")
+    }
+    if (!password) return { error: "Usuario y contraseña requerida" }
     await assertAttempts("login", 8, 10 * 60 * 1000)
-    const session = await authenticate(String(formData.get("username") ?? formData.get("email") ?? ""), String(formData.get("password") ?? ""))
+    const session = await authenticate(username, password)
     await clearAttempts("login")
     await signSession(session)
   } catch (error) {

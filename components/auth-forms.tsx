@@ -12,31 +12,20 @@ import { useActionState, useState } from "react";
 export function LoginForm() {
   const [state, action, pending] = useActionState(loginAction, { error: "" });
   const [visible, setVisible] = useState(false);
-  const [configMode, setConfigMode] = useState(false);
-  if (configMode) {
-    return (
-      <div className="space-y-3">
-        <ConfigLoginForm />
-        <button type="button" className="w-full text-center text-sm text-white/80 underline" onClick={() => setConfigMode(false)}>
-          Ingresar con usuario y contraseña
-        </button>
-      </div>
-    );
-  }
   return (
     <form action={action} className="space-y-3">
       <label className="flex items-center gap-3 rounded-2xl bg-[#141b27]/85 px-4 py-3 ring-1 ring-white/10">
         <UserRound className="text-slate-300" size={18} />
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] text-slate-300">Usuario</span>
-          <input name="username" required autoComplete="username" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-400" placeholder="usuario" />
+          <input name="username" autoComplete="username" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-400" placeholder="usuario" />
         </span>
       </label>
       <label className="flex items-center gap-3 rounded-2xl bg-[#141b27]/85 px-4 py-3 ring-1 ring-white/10">
         <Lock className="text-slate-300" size={18} />
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] text-slate-300">Contraseña</span>
-          <input name="password" type={visible ? "text" : "password"} required autoComplete="current-password" className="w-full bg-transparent text-sm text-white outline-none" />
+          <input name="password" type={visible ? "text" : "password"} autoComplete="current-password" className="w-full bg-transparent text-sm text-white outline-none" />
         </span>
         <button type="button" className="text-slate-300" onClick={() => setVisible((value) => !value)} aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}>
           {visible ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -46,9 +35,6 @@ export function LoginForm() {
       <button type="submit" disabled={pending} className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#f5c518] text-sm font-semibold text-[#1a1403] transition hover:bg-[#e6b40a] disabled:opacity-60">
         <LogIn size={16} />
         {pending ? "Entrando…" : "Ingresar"}
-      </button>
-      <button type="button" className="w-full text-center text-sm text-white/80 underline" onClick={() => setConfigMode(true)}>
-        Modo configuración
       </button>
     </form>
   );
