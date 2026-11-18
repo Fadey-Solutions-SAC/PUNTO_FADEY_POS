@@ -3,7 +3,7 @@ services:
     name: punto-fadey
     runtime: node
     plan: starter
-    buildCommand: npm install && node scripts/build-render.mjs
+    buildCommand: NPM_CONFIG_PRODUCTION=false npm install && node scripts/build-render.mjs
     startCommand: npm run start:server
     envVars:
       - key: NODE_VERSION
