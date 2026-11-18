@@ -36,7 +36,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/uploads") ||
     pathname === "/sw.js" ||
     pathname === "/manifest.webmanifest" ||
-    pathname === "/favicon.ico"
+    pathname === "/favicon.ico" ||
+    pathname === "/icon.png" ||
+    pathname === "/icon"
   ) {
     return NextResponse.next();
   }
@@ -61,5 +63,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icons|brand|uploads|sw.js).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|icon$|icons|brand|uploads|sw.js).*)"],
 };
