@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
+    cpus: 1,
     optimizePackageImports: ["lucide-react"],
     serverActions: {
       bodySizeLimit: "3mb",
