@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { getCatalog } from "../api"
 
 export function CatalogPage() {
@@ -42,12 +43,21 @@ export function CatalogPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Catálogo</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {filtered.length} producto{filtered.length === 1 ? "" : "s"}. Alta y edición siguen en Next hasta la
-          siguiente fase.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Catálogo</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {filtered.length} producto{filtered.length === 1 ? "" : "s"}.
+          </p>
+        </div>
+        {data.writable ? (
+          <Link
+            to="/productos/nuevo"
+            className="h-10 rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold leading-10 text-white"
+          >
+            Nuevo producto
+          </Link>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -81,6 +91,7 @@ export function CatalogPage() {
               <th className="px-3 py-2 font-medium">Stock</th>
               <th className="px-3 py-2 font-medium text-right">Precio</th>
               <th className="px-3 py-2 font-medium">Estado</th>
+              <th className="px-3 py-2 font-medium" />
             </tr>
           </thead>
           <tbody>
@@ -98,6 +109,13 @@ export function CatalogPage() {
                   <span className={product.active ? "text-emerald-700" : "text-slate-400"}>
                     {product.active ? "Activo" : "Inactivo"}
                   </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {data.writable ? (
+                    <Link to={`/productos/${product.id}`} className="text-[var(--pf-accent)] hover:underline">
+                      Editar
+                    </Link>
+                  ) : null}
                 </td>
               </tr>
             ))}

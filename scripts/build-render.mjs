@@ -7,8 +7,8 @@ delete process.env.DB_PATH
 process.env.DATABASE_URL = "file:./prisma/build.db"
 process.env.NODE_ENV = "production"
 process.env.NEXT_TELEMETRY_DISABLED = "1"
-// El servicio en runtime usa 400 MB; el build de Next necesita más heap.
-process.env.NODE_OPTIONS = "--max-old-space-size=1536"
+// Vite + Prisma: heap moderado (ya no compilamos Next en Render).
+process.env.NODE_OPTIONS = "--max-old-space-size=768"
 if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 16) {
   process.env.AUTH_SECRET = "render-build-placeholder-secret"
 }
@@ -36,10 +36,9 @@ const bin = (name) =>
   path.join("node_modules", ".bin", process.platform === "win32" ? `${name}.cmd` : name)
 
 const required = [
-  "node_modules/tailwindcss/package.json",
-  "node_modules/@tailwindcss/postcss/package.json",
-  "node_modules/next/package.json",
   "node_modules/prisma/package.json",
+  "node_modules/express/package.json",
+  "node_modules/tsx/package.json",
 ]
 
 for (const file of required) {
@@ -50,5 +49,12 @@ for (const file of required) {
 }
 
 run("prisma generate", bin("prisma"), ["generate"])
-// Webpack + PostCSS evita el loader @tailwindcss/turbopack en el build de Render.
-run("next build", bin("next"), ["build", "--webpack"])
+run("vite client deps", "npm", ["install", "--prefix", "client", "--include=dev"])
+run("vite build", "npm", ["run", "build", "--prefix", "client"])
+
+if (!existsSync(path.join("client", "dist", "index.html"))) {
+  console.error("[build-render] falta client/dist/index.html tras el build Vite")
+  process.exit(1)
+}
+
+console.log("\n[build-render] listo: Express + Vite (sin Next build)")

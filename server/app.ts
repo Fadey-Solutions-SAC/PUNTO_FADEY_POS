@@ -1,6 +1,5 @@
 /**
- * API Express (migración Vite).
- * Render sigue en Next (`npm run start:server`) hasta el corte final.
+ * API Express + SPA Vite (arranque de producción en Render).
  */
 import cors from "cors"
 import express from "express"
@@ -8,7 +7,7 @@ import cookieParser from "cookie-parser"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { applyDatabaseEnv } from "../lib/storage"
+import { applyDatabaseEnv, uploadsDir } from "../lib/storage"
 import { registerAuthRoutes } from "./routes/auth"
 import { registerBillingRoutes } from "./routes/billing"
 import { registerCashRoutes } from "./routes/cash"
@@ -53,8 +52,8 @@ app.get("/api/version", (_req, res) => {
   res.json({
     version: APP_VERSION,
     label: formatAppVersion(),
-    stack: "vite-migration-in-progress",
-    nextStillPrimary: true,
+    stack: "express-vite",
+    nextStillPrimary: false,
   })
 })
 
@@ -70,9 +69,11 @@ registerBillingRoutes(app)
 registerReportsRoutes(app)
 registerSettingsRoutes(app)
 
+app.use("/uploads", express.static(uploadsDir()))
+
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist))
-  app.get(/^(?!\/api).*/, (_req, res) => {
+  app.get(/^(?!\/api)(?!\/uploads).*/, (_req, res) => {
     res.sendFile(path.join(clientDist, "index.html"))
   })
 } else {
@@ -82,12 +83,12 @@ if (existsSync(clientDist)) {
 <html lang="es"><meta charset="utf-8"/><title>Punto Fadey API</title>
 <body style="font-family:sans-serif;padding:2rem;background:#0c1222;color:#fff">
 <h1>Punto Fadey API</h1>
-<p>Versión ${pkg.version}. Producción sigue en Next.</p>
+<p>Versión ${pkg.version}. Falta client/dist (build Vite).</p>
 <p><a href="/api/healthz" style="color:#7dd3c7">/api/healthz</a> · <a href="/api/version" style="color:#7dd3c7">/api/version</a></p>
 </body></html>`)
   })
 }
 
 app.listen(PORT, () => {
-  console.log(`[punto-fadey-api] ${formatAppVersion()} en :${PORT} (Vite en paralelo; Next en Render)`)
+  console.log(`[punto-fadey-api] ${formatAppVersion()} en :${PORT} (Express + Vite)`)
 })

@@ -287,6 +287,69 @@ export function getCatalog() {
   }>("/api/catalog")
 }
 
+export function getCatalogForm() {
+  return request<{
+    categories: { id: string; name: string }[]
+    units: { id: string; name: string; symbol: string }[]
+  }>("/api/catalog/form")
+}
+
+export function getCatalogProduct(id: string) {
+  return request<{
+    writable: boolean
+    values: {
+      id: string
+      name: string
+      internalCode: string
+      categoryId: string
+      brandName: string
+      baseUnitId: string
+      description: string
+      costPrice: string
+      salePrice: string
+      wholesalePrice: string
+      retailPrice: string
+      minStock: string
+      maxStock: string
+      trackLots: boolean
+      isActive: boolean
+      barcodes: string[]
+    }
+    categories: { id: string; name: string }[]
+    units: { id: string; name: string; symbol: string }[]
+  }>(`/api/catalog/products/${id}`)
+}
+
+export function saveCatalogProduct(input: {
+  id?: string
+  name: string
+  internalCode?: string
+  categoryId?: string
+  brandName?: string
+  baseUnitId: string
+  costPrice: string
+  salePrice: string
+  wholesalePrice: string
+  retailPrice: string
+  minStock: string
+  trackLots: boolean
+  isActive: boolean
+  barcodes?: string[]
+  presentations?: unknown[]
+}) {
+  return request<{ ok: true; id: string }>("/api/catalog/products", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function createCatalogCategory(name: string) {
+  return request<{ ok: true }>("/api/catalog/categories", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  })
+}
+
 export function getCustomers() {
   return request<{
     currency: string

@@ -38,8 +38,8 @@ export function PresentationsPage() {
                 <td className="px-3 py-2">{row.factorLabel}</td>
                 <td className="px-3 py-2">{row.unitSymbol}</td>
                 <td className="px-3 py-2 text-right">
-                  <Link to={`/pendiente/productos/${row.productId}`} className="text-[var(--pf-accent)] hover:underline">
-                    Editar (Next)
+                  <Link to={`/productos/${row.productId}`} className="text-[var(--pf-accent)] hover:underline">
+                    Editar
                   </Link>
                 </td>
               </tr>

@@ -19,6 +19,7 @@ import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
 import { PresentationsPage } from "./pages/PresentationsPage"
 import { PricesPage } from "./pages/PricesPage"
+import { ProductFormPage } from "./pages/ProductFormPage"
 import { PurchaseHistoryPage } from "./pages/PurchaseHistoryPage"
 import { ReceptionPage } from "./pages/ReceptionPage"
 import { ReportsPage } from "./pages/ReportsPage"
@@ -119,10 +120,12 @@ export function App() {
           <Route path="caja/cierre" element={<CloseCashPage />} />
           <Route path="caja/historial" element={<CashHistoryPage />} />
           <Route path="productos" element={<CatalogPage />} />
+          <Route path="productos/nuevo" element={<ProductFormPage />} />
           <Route path="productos/unidades" element={<UnitsPage />} />
           <Route path="productos/presentaciones" element={<PresentationsPage />} />
           <Route path="productos/codigos" element={<BarcodesPage />} />
           <Route path="productos/precios" element={<PricesPage />} />
+          <Route path="productos/:productId" element={<ProductFormPage />} />
           <Route path="clientes" element={<CustomersPage />} />
           <Route path="clientes/historial" element={<CustomerHistoryPage />} />
           <Route path="clientes/creditos" element={<CreditsPage />} />
