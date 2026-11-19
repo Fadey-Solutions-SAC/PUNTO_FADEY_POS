@@ -1,83 +1,74 @@
 import { useEffect, useState } from "react"
-import { Link, Route, Routes } from "react-router-dom"
+import { Navigate, Route, Routes } from "react-router-dom"
+import { getBootstrap, getMe, getVersion } from "./api"
+import { HomePage } from "./pages/HomePage"
+import { LoginPage } from "./pages/LoginPage"
 
-type VersionPayload = {
-  version: string
-  label: string
-  nextStillPrimary?: boolean
-}
+type Me = Awaited<ReturnType<typeof getMe>>
 
-/**
- * Shell Vite (fase 1). El POS completo sigue en Next hasta migrar pantalla por pantalla.
- */
 export function App() {
-  return (
-    <Routes>
-      <Route path="*" element={<MigrationHome />} />
-    </Routes>
-  )
-}
-
-function MigrationHome() {
-  const [info, setInfo] = useState<VersionPayload | null>(null)
-  const [error, setError] = useState("")
+  const [ready, setReady] = useState(false)
+  const [versionLabel, setVersionLabel] = useState("v…")
+  const [me, setMe] = useState<Me | null>(null)
+  const [bootError, setBootError] = useState("")
 
   useEffect(() => {
     let cancelled = false
-    fetch("/api/version")
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json() as Promise<VersionPayload>
-      })
-      .then((data) => {
-        if (!cancelled) setInfo(data)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Sin API")
-      })
+    ;(async () => {
+      try {
+        const [version, bootstrap] = await Promise.all([getVersion(), getBootstrap()])
+        if (cancelled) return
+        setVersionLabel(version.label || bootstrap.version)
+        try {
+          const session = await getMe()
+          if (!cancelled) setMe(session)
+        } catch {
+          if (!cancelled) setMe(null)
+        }
+      } catch (err) {
+        if (!cancelled) setBootError(err instanceof Error ? err.message : "Sin API")
+      } finally {
+        if (!cancelled) setReady(true)
+      }
+    })()
     return () => {
       cancelled = true
     }
   }, [])
 
+  if (!ready) {
+    return <div className="fixed inset-0 grid place-items-center bg-black text-sm text-slate-400">Cargando…</div>
+  }
+
+  if (bootError) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-3 px-6 text-slate-200">
+        <h1 className="text-xl font-semibold">API no disponible</h1>
+        <p className="text-sm text-slate-400">{bootError}</p>
+        <p className="text-sm text-slate-500">Arranca con npm run dev:api (o npm run dev:stack).</p>
+      </main>
+    )
+  }
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-6 px-6 py-10">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--pf-accent)]">Punto Fadey</p>
-        <h1 className="mt-2 text-3xl font-bold text-white">Migración a Vite</h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-400">
-          Esta es la fase 1: cliente Vite + API Express en paralelo. En Render el sistema sigue sirviendo Next
-          hasta migrar login, caja y el resto por partes.
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-        <p className="text-sm text-slate-400">Versión API</p>
-        {info ? (
-          <p className="mt-1 text-2xl font-semibold text-white">{info.label}</p>
-        ) : error ? (
-          <p className="mt-1 text-sm text-amber-300">API no conectada ({error}). Arranca con npm run dev:api</p>
-        ) : (
-          <p className="mt-1 text-sm text-slate-500">Consultando…</p>
-        )}
-        {info?.nextStillPrimary ? (
-          <p className="mt-2 text-xs text-slate-500">Producción: Next sigue siendo el arranque en Render.</p>
-        ) : null}
-      </div>
-
-      <ol className="space-y-2 text-sm text-slate-300">
-        <li>1. API Express + health/version (listo)</li>
-        <li>2. Login y sesión por API</li>
-        <li>3. Caja / ventas / inventario por módulos</li>
-        <li>4. Corte final: Render arranca Express + client/dist</li>
-      </ol>
-
-      <Link
-        to="/"
-        className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white"
-      >
-        Shell Vite activo
-      </Link>
-    </main>
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          me ? (
+            <Navigate to="/" replace />
+          ) : (
+            <LoginPage
+              versionLabel={versionLabel}
+              onSuccess={async () => {
+                setMe(await getMe())
+              }}
+            />
+          )
+        }
+      />
+      <Route path="/" element={me ? <HomePage me={me} /> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={me ? "/" : "/login"} replace />} />
+    </Routes>
   )
 }

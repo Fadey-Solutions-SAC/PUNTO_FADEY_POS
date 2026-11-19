@@ -5,6 +5,8 @@ import path from "node:path"
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Reutiliza logo/iconos del POS (Next/public) sin duplicar.
+  publicDir: path.resolve(__dirname, "../public"),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -15,14 +17,6 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://127.0.0.1:3001",
-        changeOrigin: true,
-      },
-      "/brand": {
-        target: "http://127.0.0.1:3000",
-        changeOrigin: true,
-      },
-      "/icons": {
-        target: "http://127.0.0.1:3000",
         changeOrigin: true,
       },
     },

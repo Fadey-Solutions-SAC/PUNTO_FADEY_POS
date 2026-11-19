@@ -1,5 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks"
 import { createHash, timingSafeEqual } from "node:crypto"
-import { headers } from "next/headers"
 import { AppError } from "@/lib/errors"
 
 const CODE_PATTERN = /[<>{}\\`;]|javascript\s*:|<\s*script/i
@@ -7,6 +7,7 @@ const PASSWORD_HASH = "399f2a990a33b3cbf8432568937c9bfd6afaa7c3ec37c0b8056145f2a
 
 type Bucket = { count: number; reset: number }
 const buckets = new Map<string, Bucket>()
+const clientIpStore = new AsyncLocalStorage<{ ip: string }>()
 
 export function assertNoCode(value: string) {
   if (CODE_PATTERN.test(value)) throw new AppError("No se permiten caracteres de código")
@@ -19,9 +20,21 @@ export function configPasswordOk(password: string) {
   return timingSafeEqual(digest, expected)
 }
 
+/** Express (y tests) fijan IP sin depender de next/headers. */
+export function runWithClientIp<T>(ip: string, fn: () => Promise<T>) {
+  return clientIpStore.run({ ip }, fn)
+}
+
 async function clientKey() {
-  const requestHeaders = await headers()
-  return requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || "local"
+  const fromStore = clientIpStore.getStore()?.ip
+  if (fromStore) return fromStore
+  try {
+    const { headers } = await import("next/headers")
+    const requestHeaders = await headers()
+    return requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || "local"
+  } catch {
+    return "local"
+  }
 }
 
 export async function assertAttempts(scope: string, limit: number, windowMs: number) {
