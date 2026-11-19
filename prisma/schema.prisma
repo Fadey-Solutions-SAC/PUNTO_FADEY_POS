@@ -754,7 +754,8 @@ model BusinessPaymentMethod {
   businessId String
   code       String
   label      String
-  locked     Boolean  @default(false)
+  /// INTEGER 0/1 (tabla creada por SQL crudo; no usar Boolean o db push pide accept-data-loss).
+  locked     Int      @default(0)
   createdAt  DateTime @default(now())
 
   @@unique([businessId, code])
@@ -762,8 +763,9 @@ model BusinessPaymentMethod {
 }
 
 model BusinessPosSetting {
-  businessId     String  @id
-  hardwareReader Boolean @default(false)
+  businessId String @id
+  /// INTEGER 0/1 (tabla creada por SQL crudo).
+  hardwareReader Int @default(0)
 }
 
 model AssistantBilling {
