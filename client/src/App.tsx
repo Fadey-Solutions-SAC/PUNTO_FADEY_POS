@@ -10,6 +10,7 @@ import { CustomersPage } from "./pages/CustomersPage"
 import { DashboardPage } from "./pages/DashboardPage"
 import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
+import { ReturnsPage } from "./pages/ReturnsPage"
 import { SaleDetailPage } from "./pages/SaleDetailPage"
 import { SalesHistoryPage } from "./pages/SalesHistoryPage"
 import { SalesPage } from "./pages/SalesPage"
@@ -93,6 +94,7 @@ export function App() {
           <Route index element={<DashboardPage panel={panel} />} />
           <Route path="ventas" element={<SalesPage />} />
           <Route path="ventas/historial" element={<SalesHistoryPage />} />
+          <Route path="ventas/devoluciones" element={<ReturnsPage />} />
           <Route path="ventas/:saleId/ticket" element={<TicketPage />} />
           <Route path="ventas/:saleId" element={<SaleDetailPage />} />
           <Route path="caja" element={<CashPage />} />

@@ -64,6 +64,14 @@ export function SaleDetailPage() {
           <Link to="/ventas/historial" className="font-medium text-[var(--pf-navy)] hover:underline">
             Historial
           </Link>
+          {sale.status === "COMPLETED" ? (
+            <Link
+              to={`/ventas/devoluciones?venta=${sale.id}`}
+              className="font-medium text-[var(--pf-navy)] hover:underline"
+            >
+              Devolver
+            </Link>
+          ) : null}
           {sale.canVoid ? (
             <button type="button" onClick={() => setOpen(true)} className="font-medium text-red-600 hover:underline">
               Anular

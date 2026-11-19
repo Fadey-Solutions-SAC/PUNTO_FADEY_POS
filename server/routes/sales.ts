@@ -8,7 +8,7 @@ import { prisma } from "../../lib/db"
 import { resolveUnitPriceCents } from "../../lib/pricing"
 import { can } from "../../lib/roles"
 import { PAYMENT_LABEL } from "../../lib/labels"
-import { confirmSale, getSale, voidSale } from "../../lib/sales"
+import { confirmSale, getSale, returnSale, voidSale } from "../../lib/sales"
 import { buildTicketText, type TicketSale } from "../../lib/ticket-text"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
 
@@ -211,6 +211,61 @@ export function registerSalesRoutes(app: Express) {
       const ctx = req.tenant!
       const stockMode = String(req.body?.stockMode ?? "restore") === "keep" ? "keep" : "restore"
       await voidSale(ctx, String(req.params.id), String(req.body?.reason ?? ""), stockMode)
+      res.json({ ok: true })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/sales/:id/return", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "returnSale", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso de devoluciones" })
+        return
+      }
+      const sale = await getSale(ctx, String(req.params.id))
+      if (sale.status !== "COMPLETED") {
+        res.status(400).json({ error: "Esa venta no está confirmada" })
+        return
+      }
+      const lines = sale.lines
+        .map((line) => {
+          const returned = line.returnLines.reduce((sum, item) => sum + item.quantity, 0)
+          const remaining = line.quantity - returned
+          return {
+            id: line.id,
+            description: line.description,
+            remaining,
+            remainingLabel: formatQty(remaining),
+          }
+        })
+        .filter((line) => line.remaining > 0)
+      res.json({
+        saleId: sale.id,
+        code: sale.id.slice(-6).toUpperCase(),
+        credit: sale.saleType === "CREDIT",
+        customerName: sale.customer?.name ?? "Público",
+        lines,
+      })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/sales/:id/return", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const refundMethod = String(req.body?.refundMethod ?? "CASH") === "CREDIT" ? "CREDIT" : "CASH"
+      const lines = Array.isArray(req.body?.lines) ? req.body.lines : []
+      await returnSale(ctx, {
+        saleId: String(req.params.id),
+        refundMethod,
+        lines: lines.map((line: { saleLineId?: string; quantity?: string }) => ({
+          saleLineId: String(line.saleLineId ?? ""),
+          quantity: String(line.quantity ?? "0"),
+        })),
+      })
       res.json({ ok: true })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })

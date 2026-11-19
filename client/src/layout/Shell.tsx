@@ -7,6 +7,7 @@ const VITE_HREF: Record<string, string> = {
   "/": "/",
   "/ventas": "/ventas",
   "/ventas/historial": "/ventas/historial",
+  "/ventas/devoluciones": "/ventas/devoluciones",
   "/ventas/anulaciones": "/ventas/historial?status=VOIDED",
   "/caja": "/caja",
   "/caja/historial": "/caja/historial",
@@ -75,7 +76,7 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:px-6">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Vite · fase 8</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Vite · fase 9</p>
             <p className="font-semibold text-[var(--pf-navy)]">{panel.business.name}</p>
           </div>
           <button

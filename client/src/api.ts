@@ -247,6 +247,27 @@ export function voidSale(saleId: string, reason: string, stockMode: "restore" | 
   })
 }
 
+export function getSaleReturn(saleId: string) {
+  return request<{
+    saleId: string
+    code: string
+    credit: boolean
+    customerName: string
+    lines: { id: string; description: string; remaining: number; remainingLabel: string }[]
+  }>(`/api/sales/${saleId}/return`)
+}
+
+export function submitSaleReturn(
+  saleId: string,
+  refundMethod: "CASH" | "CREDIT",
+  lines: { saleLineId: string; quantity: string }[],
+) {
+  return request<{ ok: true }>(`/api/sales/${saleId}/return`, {
+    method: "POST",
+    body: JSON.stringify({ refundMethod, lines }),
+  })
+}
+
 export function getCatalog() {
   return request<{
     currency: string
