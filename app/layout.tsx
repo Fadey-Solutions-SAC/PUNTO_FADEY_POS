@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Suspense, type ReactNode } from "react";
 import { PwaRegister } from "@/components/pwa";
+import { SplashGate } from "@/components/splash-gate";
+import { brandLogoUrl } from "@/lib/cover";
 import "./globals.css";
 
 const geist = Geist({
@@ -32,11 +34,14 @@ export const viewport: Viewport = {
 
 export const instant = false;
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const logo = await brandLogoUrl().catch(() => null);
   return (
     <html lang="es" className={`${geist.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <Suspense fallback={<div className="p-8 text-sm text-slate-500">Cargando…</div>}>{children}</Suspense>
+        <SplashGate logoSrc={logo}>
+          <Suspense fallback={<div className="p-8 text-sm text-slate-500">Cargando…</div>}>{children}</Suspense>
+        </SplashGate>
         <PwaRegister />
       </body>
     </html>
