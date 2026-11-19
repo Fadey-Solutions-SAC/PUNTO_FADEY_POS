@@ -4,6 +4,7 @@ import { getBootstrap, getMe, getPanelBootstrap, getVersion, type PanelBootstrap
 import { Shell } from "./layout/Shell"
 import { CashHistoryPage } from "./pages/CashHistoryPage"
 import { CashPage } from "./pages/CashPage"
+import { CatalogPage } from "./pages/CatalogPage"
 import { CloseCashPage } from "./pages/CloseCashPage"
 import { DashboardPage } from "./pages/DashboardPage"
 import { LoginPage } from "./pages/LoginPage"
@@ -96,6 +97,7 @@ export function App() {
           <Route path="caja" element={<CashPage />} />
           <Route path="caja/cierre" element={<CloseCashPage />} />
           <Route path="caja/historial" element={<CashHistoryPage />} />
+          <Route path="productos" element={<CatalogPage />} />
           <Route path="pendiente/*" element={<PendingPage />} />
         </Route>
       ) : (

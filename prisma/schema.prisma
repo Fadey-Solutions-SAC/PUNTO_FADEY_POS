@@ -746,3 +746,59 @@ model ElectronicDocument {
   @@index([businessId, status])
   @@index([saleId])
 }
+
+/// Tablas creadas antes por SQL crudo (`lib/payment-methods`, `pos-settings`, `billing-assistant`).
+/// Deben vivir en el schema para que `prisma db push` no intente dropearlas en Render.
+model BusinessPaymentMethod {
+  id         String   @id
+  businessId String
+  code       String
+  label      String
+  locked     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([businessId, code])
+  @@index([businessId])
+}
+
+model BusinessPosSetting {
+  businessId     String  @id
+  hardwareReader Boolean @default(false)
+}
+
+model AssistantBilling {
+  businessId          String    @id
+  tradeName           String?
+  address             String?
+  ubigeo              String?
+  department          String?
+  province            String?
+  district            String?
+  phone               String?
+  email               String?
+  solUser             String?
+  solPasswordCipher   String?
+  certCipher          String?
+  certPasswordCipher  String?
+  certName            String?
+  updatedAt           DateTime?
+}
+
+model AssistantDocument {
+  documentId String    @id
+  businessId String
+  hash       String?
+  qr         String?
+  pdfBase64  String?
+  updatedAt  DateTime?
+
+  @@index([businessId])
+}
+
+model DocumentBuyer {
+  documentId String  @id
+  businessId String
+  address    String?
+
+  @@index([businessId])
+}

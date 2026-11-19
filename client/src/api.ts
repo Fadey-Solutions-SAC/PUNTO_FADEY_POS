@@ -246,3 +246,22 @@ export function voidSale(saleId: string, reason: string, stockMode: "restore" | 
     body: JSON.stringify({ reason, stockMode }),
   })
 }
+
+export function getCatalog() {
+  return request<{
+    currency: string
+    writable: boolean
+    categories: { id: string; name: string }[]
+    products: {
+      id: string
+      code: string | null
+      name: string
+      categoryId: string | null
+      categoryName: string | null
+      brandName: string | null
+      price: string
+      stock: string
+      active: boolean
+    }[]
+  }>("/api/catalog")
+}
