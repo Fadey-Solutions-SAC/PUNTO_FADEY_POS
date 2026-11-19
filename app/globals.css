@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../components/entry-splash.css";
 
 @theme inline {
   --font-sans: var(--font-geist-sans);

@@ -8,7 +8,6 @@ import {
 } from "@/lib/entry-splash-session";
 import { playSplashSound } from "@/lib/splash-sound";
 import { useCallback, useEffect, useRef, useState } from "react";
-import "@/components/entry-splash.css";
 
 const SPLASH_HOLD_MS = 3000;
 const SPLASH_EXIT_MS = 450;

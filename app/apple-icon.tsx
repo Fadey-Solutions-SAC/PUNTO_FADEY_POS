@@ -1,9 +1,9 @@
-import { brandIconPng } from "@/lib/brand-icon"
+import { readFile } from "node:fs/promises"
+import path from "node:path"
 
 export const size = { width: 180, height: 180 }
 export const contentType = "image/png"
-export const dynamic = "force-dynamic"
 
 export default async function AppleIcon() {
-  return brandIconPng(180)
+  return readFile(path.join(process.cwd(), "public", "icons", "icon-180.png"))
 }

@@ -24,8 +24,13 @@ async function resolveBrandLogoPath() {
 export async function brandIconPng(size: number) {
   const source = await resolveBrandLogoPath()
   const input = await readFile(source)
-  return sharp(input)
-    .resize(size, size, { fit: "cover", position: "centre" })
-    .png()
-    .toBuffer()
+  try {
+    return await sharp(input)
+      .resize(size, size, { fit: "cover", position: "centre" })
+      .png()
+      .toBuffer()
+  } catch {
+    const fallback = path.join(process.cwd(), "public", "icons", `icon-${size}.png`)
+    return readFile(fallback)
+  }
 }
