@@ -319,3 +319,159 @@ export function saveCustomer(input: {
     body: JSON.stringify(input),
   })
 }
+
+export function getCustomerHistory(cliente?: string) {
+  const q = cliente ? `?cliente=${encodeURIComponent(cliente)}` : ""
+  return request<{
+    currency: string
+    customers: { id: string; name: string }[]
+    sales: {
+      id: string
+      createdAtLabel: string
+      customerName: string
+      typeLabel: string
+      total: string
+    }[]
+  }>(`/api/customers/history${q}`)
+}
+
+export function getCustomerCredits() {
+  return request<{
+    currency: string
+    methods: { code: string; label: string }[]
+    accounts: {
+      saleId: string
+      customerId: string
+      customerName: string
+      createdAtLabel: string
+      dueCents: number
+      due: string
+    }[]
+  }>("/api/customers/credits")
+}
+
+export function postCustomerAbono(input: {
+  customerId: string
+  saleId: string
+  amount: string
+  method: string
+}) {
+  return request<{ ok: true }>("/api/customers/credits/abono", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function getCatalogUnits() {
+  return request<{
+    writable: boolean
+    units: { id: string; name: string; symbol: string; dimension: string; dimensionLabel: string }[]
+    conversions: { id: string; from: string; to: string; factor: string }[]
+  }>("/api/catalog/units")
+}
+
+export function createCatalogUnit(input: { name: string; symbol: string; dimension: string }) {
+  return request<{ ok: true }>("/api/catalog/units", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function getCatalogPresentations() {
+  return request<{
+    rows: {
+      id: string
+      productId: string
+      productName: string
+      name: string
+      factorLabel: string
+      unitSymbol: string
+    }[]
+  }>("/api/catalog/presentations")
+}
+
+export function getCatalogBarcodes() {
+  return request<{
+    writable: boolean
+    products: { id: string; name: string }[]
+    codes: { id: string; code: string; productName: string }[]
+  }>("/api/catalog/barcodes")
+}
+
+export function createCatalogBarcode(productId: string, code: string) {
+  return request<{ ok: true }>("/api/catalog/barcodes", {
+    method: "POST",
+    body: JSON.stringify({ productId, code }),
+  })
+}
+
+export function getCatalogPrices() {
+  return request<{
+    currency: string
+    canCreateList: boolean
+    canSavePrice: boolean
+    products: { id: string; name: string }[]
+    lists: { id: string; name: string; items: { id: string; productName: string; price: string }[] }[]
+  }>("/api/catalog/prices")
+}
+
+export function createCatalogPriceList(name: string) {
+  return request<{ ok: true; id: string }>("/api/catalog/prices/lists", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function saveCatalogPriceItem(input: { listId: string; productId: string; price: string }) {
+  return request<{ ok: true }>("/api/catalog/prices/items", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function getInventoryAlerts() {
+  return request<{
+    warehouseName: string
+    stockAlerts: { id: string; name: string; stock: string; minStock: string; state: string }[]
+    lots: { id: string; productName: string; code: string; quantity: string; expiresAtLabel: string; notice: string }[]
+  }>("/api/inventory/alerts")
+}
+
+export function getInventoryWarehouses() {
+  return request<{
+    currentWarehouseId: string
+    warehouses: {
+      id: string
+      name: string
+      branch: string
+      isDefault: boolean
+      inUse: boolean
+      rows: {
+        id: string
+        code: string
+        name: string
+        category: string
+        brand: string
+        stock: string
+        state: string
+      }[]
+    }[]
+  }>("/api/inventory/warehouses")
+}
+
+export function getInventoryKardex(producto?: string) {
+  const q = producto ? `?producto=${encodeURIComponent(producto)}` : ""
+  return request<{
+    movements: {
+      id: string
+      createdAtLabel: string
+      warehouseName: string
+      productName: string
+      typeLabel: string
+      quantityLabel: string
+      balanceLabel: string
+      userName: string
+      reason: string
+    }[]
+  }>(`/api/inventory/kardex${q}`)
+}

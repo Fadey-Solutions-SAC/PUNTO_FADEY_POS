@@ -12,7 +12,9 @@ import { applyDatabaseEnv } from "../lib/storage"
 import { registerAuthRoutes } from "./routes/auth"
 import { registerCashRoutes } from "./routes/cash"
 import { registerCatalogRoutes } from "./routes/catalog"
+import { registerCatalogExtraRoutes } from "./routes/catalog-extra"
 import { registerCustomersRoutes } from "./routes/customers"
+import { registerInventoryRoutes } from "./routes/inventory"
 import { registerSalesRoutes } from "./routes/sales"
 import { APP_VERSION, formatAppVersion } from "../lib/version"
 
@@ -56,7 +58,9 @@ registerAuthRoutes(app)
 registerCashRoutes(app)
 registerSalesRoutes(app)
 registerCatalogRoutes(app)
+registerCatalogExtraRoutes(app)
 registerCustomersRoutes(app)
+registerInventoryRoutes(app)
 
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist))

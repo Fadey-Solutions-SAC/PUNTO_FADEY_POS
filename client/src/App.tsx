@@ -2,19 +2,28 @@ import { useEffect, useState } from "react"
 import { Navigate, Route, Routes } from "react-router-dom"
 import { getBootstrap, getMe, getPanelBootstrap, getVersion, type PanelBootstrap } from "./api"
 import { Shell } from "./layout/Shell"
+import { AlertsPage } from "./pages/AlertsPage"
+import { BarcodesPage } from "./pages/BarcodesPage"
 import { CashHistoryPage } from "./pages/CashHistoryPage"
 import { CashPage } from "./pages/CashPage"
 import { CatalogPage } from "./pages/CatalogPage"
 import { CloseCashPage } from "./pages/CloseCashPage"
+import { CreditsPage } from "./pages/CreditsPage"
+import { CustomerHistoryPage } from "./pages/CustomerHistoryPage"
 import { CustomersPage } from "./pages/CustomersPage"
 import { DashboardPage } from "./pages/DashboardPage"
+import { KardexPage } from "./pages/KardexPage"
 import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
+import { PresentationsPage } from "./pages/PresentationsPage"
+import { PricesPage } from "./pages/PricesPage"
 import { ReturnsPage } from "./pages/ReturnsPage"
 import { SaleDetailPage } from "./pages/SaleDetailPage"
 import { SalesHistoryPage } from "./pages/SalesHistoryPage"
 import { SalesPage } from "./pages/SalesPage"
 import { TicketPage } from "./pages/TicketPage"
+import { UnitsPage } from "./pages/UnitsPage"
+import { WarehousesPage } from "./pages/WarehousesPage"
 
 type Me = Awaited<ReturnType<typeof getMe>>
 
@@ -101,7 +110,16 @@ export function App() {
           <Route path="caja/cierre" element={<CloseCashPage />} />
           <Route path="caja/historial" element={<CashHistoryPage />} />
           <Route path="productos" element={<CatalogPage />} />
+          <Route path="productos/unidades" element={<UnitsPage />} />
+          <Route path="productos/presentaciones" element={<PresentationsPage />} />
+          <Route path="productos/codigos" element={<BarcodesPage />} />
+          <Route path="productos/precios" element={<PricesPage />} />
           <Route path="clientes" element={<CustomersPage />} />
+          <Route path="clientes/historial" element={<CustomerHistoryPage />} />
+          <Route path="clientes/creditos" element={<CreditsPage />} />
+          <Route path="inventario/alertas" element={<AlertsPage />} />
+          <Route path="inventario/almacenes" element={<WarehousesPage />} />
+          <Route path="inventario/kardex" element={<KardexPage />} />
           <Route path="pendiente/*" element={<PendingPage />} />
         </Route>
       ) : (
