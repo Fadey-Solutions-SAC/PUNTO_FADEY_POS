@@ -84,12 +84,20 @@ export async function addMovement(
   })
 }
 
-export async function closeSession(ctx: TenantContext, input: { counted: string; notes?: string }) {
+export async function closeSession(
+  ctx: TenantContext,
+  input: {
+    counted: string
+    notes?: string
+    arqueoDetail?: string
+  },
+) {
   assertCan(ctx, "cashClose")
   const current = await currentSession(ctx)
   if (!current) throw new AppError("No hay una caja abierta")
   const summary = await summarizeSession(ctx, current.id)
   const counted = toMoneyInt(input.counted || "0")
+  const noteParts = [input.notes?.trim(), input.arqueoDetail?.trim()].filter(Boolean)
   return prisma.cashSession.updateMany({
     where: { id: current.id, businessId: ctx.businessId, status: "OPEN" },
     data: {
@@ -98,13 +106,15 @@ export async function closeSession(ctx: TenantContext, input: { counted: string;
       expectedAmount: summary.expected,
       countedAmount: counted,
       difference: counted - summary.expected,
-      cashSales: summary.byMethod.CASH,
-      cardSales: summary.byMethod.CARD,
-      transferSales: summary.byMethod.TRANSFER,
-      otherSales: summary.byMethod.OTHER,
+      cashSales: summary.byMethod.CASH ?? 0,
+      cardSales: summary.byMethod.CARD ?? 0,
+      transferSales: summary.byMethod.TRANSFER ?? 0,
+      otherSales: Object.entries(summary.byMethod)
+        .filter(([method]) => method !== "CASH" && method !== "CARD" && method !== "TRANSFER" && method !== "CREDIT")
+        .reduce((sum, [, amount]) => sum + amount, 0),
       incomeTotal: summary.income,
       expenseTotal: summary.expense,
-      notes: input.notes?.trim() || null,
+      notes: noteParts.length ? noteParts.join("\n") : null,
     },
   })
 }

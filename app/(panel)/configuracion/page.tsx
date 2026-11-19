@@ -2,6 +2,7 @@ import { createBranchAction, createRegisterAction, createUserAction, deleteRegis
 import { AppearancePicker } from "@/components/appearance-picker";
 import { SimpleForm } from "@/components/forms";
 import { NewBusinessForm } from "@/components/new-business";
+import { HardwareReaderSettings } from "@/components/hardware-reader-settings";
 import { PaymentMethodsSettings } from "@/components/payment-methods-settings";
 import { PrintingSettings } from "@/components/printing-settings";
 import { SettingsBoard, type SettingsItem } from "@/components/settings-board";
@@ -9,6 +10,7 @@ import { AuditSettings, BackupSettings, BillingSettings } from "@/components/set
 import { Card, Field, Forbidden, Label, PageHeader, Select } from "@/components/ui";
 import { fromPercentInt } from "@/lib/money";
 import { listPaymentMethods } from "@/lib/payment-methods";
+import { readPosSettings } from "@/lib/pos-settings";
 import { can, PERMISSIONS, PERMISSION_LABEL } from "@/lib/roles";
 import { readTheme } from "@/lib/appearance";
 import { brandLogoUrl, loginCoverUrl } from "@/lib/cover";
@@ -20,12 +22,13 @@ export const instant = false;
 export default async function SettingsPage() {
   const ctx = await requireTenant();
   if (!can(ctx.role, "settings", ctx.grants)) return <Forbidden />;
-  const [{ business, branches, users }, cover, logo, theme, paymentMethods] = await Promise.all([
+  const [{ business, branches, users }, cover, logo, theme, paymentMethods, posSettings] = await Promise.all([
     businessSnapshot(ctx),
     loginCoverUrl(),
     brandLogoUrl(),
     readTheme(ctx.businessId),
     listPaymentMethods(ctx),
+    readPosSettings(ctx.businessId),
   ]);
   const registers = branches.flatMap((branch) => branch.registers.filter((register) => register.isActive).map((register) => ({ ...register, branch })));
   const items: SettingsItem[] = [
@@ -39,6 +42,7 @@ export default async function SettingsPage() {
     { id: "usuarios", group: "Equipo", label: "Usuarios" },
     { id: "cajas", group: "Equipo", label: "Cajas" },
   ];
+  items.push({ id: "lector", group: "Sistema", label: "Lector" });
   items.push({ id: "impresion", group: "Sistema", label: "Impresión" });
   if (can(ctx.role, "billing", ctx.grants)) items.push({ id: "facturacion", group: "Sistema", label: "Facturación" });
   if (can(ctx.role, "backup", ctx.grants)) items.push({ id: "copia", group: "Sistema", label: "Copia" });
@@ -199,6 +203,7 @@ export default async function SettingsPage() {
         </SimpleForm>
       </Card>
           ),
+          lector: <HardwareReaderSettings enabled={posSettings.hardwareReader} />,
           impresion: <PrintingSettings />,
           ...(can(ctx.role, "billing", ctx.grants) ? { facturacion: <BillingSettings ctx={ctx} /> } : {}),
           ...(can(ctx.role, "backup", ctx.grants) ? { copia: <BackupSettings /> } : {}),

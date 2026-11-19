@@ -1,8 +1,7 @@
-import { closeCashAction } from "@/actions/operations";
-import { SimpleForm } from "@/components/forms";
-import { Card, Field, Forbidden, Label, PageHeader } from "@/components/ui";
+import { CashArqueo } from "@/components/cash-arqueo";
+import { Forbidden, PageHeader } from "@/components/ui";
 import { summarizeSession, currentSession } from "@/lib/cash";
-import { formatMoney } from "@/lib/money";
+import { listPaymentMethods } from "@/lib/payment-methods";
 import { can } from "@/lib/roles";
 import { requireTenant } from "@/lib/tenant";
 
@@ -13,32 +12,36 @@ export default async function CloseCashPage() {
   if (!can(ctx.role, "cashClose", ctx.grants)) return <Forbidden />;
   const session = await currentSession(ctx);
   if (!session) return <PageHeader title="Cierre" description="No hay una caja abierta." />;
-  const summary = await summarizeSession(ctx, session.id);
-  const rows = [
-    ["Efectivo inicial", summary.session.openingAmount],
-    ["Ventas en efectivo", summary.byMethod.CASH],
-    ["Tarjetas", summary.byMethod.CARD],
-    ["Transferencias", summary.byMethod.TRANSFER],
-    ["Otros medios", summary.byMethod.OTHER],
-    ["Crédito", summary.byMethod.CREDIT],
-    ["Ingresos y depósitos", summary.income],
-    ["Egresos y retiros", summary.expense],
-    ["Total esperado en efectivo", summary.expected],
-  ] as const;
+  const [summary, methods] = await Promise.all([
+    summarizeSession(ctx, session.id),
+    listPaymentMethods(ctx),
+  ]);
+
+  const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]));
+  const posRows = Object.entries(summary.byMethod)
+    .filter(([code, amount]) => code !== "CASH" && code !== "CREDIT" && amount > 0)
+    .map(([code, expected]) => ({
+      code,
+      label: labels[code] ?? code,
+      expected,
+    }));
+
   return (
-    <div className="max-w-xl space-y-4">
-      <PageHeader title="Cierre de caja" description={session.register.name} />
-      <Card>
-        <ul className="space-y-1 text-sm">
-          {rows.map(([label, amount]) => (
-            <li key={label} className="flex justify-between"><span>{label}</span><span>{formatMoney(amount, ctx.currency)}</span></li>
-          ))}
-        </ul>
-      </Card>
-      <SimpleForm action={closeCashAction} submit="Cerrar caja">
-        <div><Label>Total contado</Label><Field name="counted" required /></div>
-        <div><Label>Notas</Label><Field name="notes" /></div>
-      </SimpleForm>
+    <div className="mx-auto max-w-4xl space-y-4">
+      <PageHeader
+        title="Cierre de caja"
+        description="Arqueo con conteo rápido de efectivo y confirmación de POS / otros medios."
+      />
+      <CashArqueo
+        currency={ctx.currency}
+        registerName={session.register.name}
+        opening={summary.session.openingAmount}
+        expectedCash={summary.expected}
+        income={summary.income}
+        expense={summary.expense}
+        byMethod={summary.byMethod}
+        posRows={posRows}
+      />
     </div>
   );
 }

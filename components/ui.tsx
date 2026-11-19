@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 export const fieldClass =
   "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
@@ -38,9 +38,11 @@ export function Button({
   );
 }
 
-export function Field(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${fieldClass} ${props.className ?? ""}`} />;
-}
+export const Field = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Field(props, ref) {
+  return <input ref={ref} {...props} className={`${fieldClass} ${props.className ?? ""}`} />;
+});
+Field.displayName = "Field";
+
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} className={`min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 ${props.className ?? ""}`} />;

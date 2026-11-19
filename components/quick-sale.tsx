@@ -7,13 +7,32 @@ import { printDocumentTicket, printSaleTicket } from "@/components/assistant-pri
 import { ChargeWindow, type ChargeLine } from "@/components/charge-window";
 import { CheckoutDocument, checkoutProblem, type CheckoutBuyer, type CheckoutKind } from "@/components/checkout-document";
 import { ProductPhoto } from "@/components/product-photo";
-import { CodeField, ScannerButton } from "@/components/scanner";
+import { CodeField, playScanPit, ScannerButton } from "@/components/scanner";
 import { Button, ErrorText } from "@/components/ui";
 import { formatMoney, formatQty, fromMoneyInt, mulScale, toFactorInt, toMoneyInt, toQtyInt } from "@/lib/money";
 import { resolveUnitPriceText } from "@/lib/pricing";
 import type { CatalogProduct, PriceListShape, PriceMode } from "@/lib/types";
+import ArrowLeftRight from "lucide-react/icons/arrow-left-right";
+import ChevronDown from "lucide-react/icons/chevron-down";
+import ClipboardList from "lucide-react/icons/clipboard-list";
+import History from "lucide-react/icons/history";
+import Lock from "lucide-react/icons/lock";
+import Plus from "lucide-react/icons/plus";
+import Search from "lucide-react/icons/search";
+import ShoppingCart from "lucide-react/icons/shopping-cart";
+import Wallet from "lucide-react/icons/wallet";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+
+type CashAccess = { href: string; label: string; icon: "pendientes" | "movimientos" | "ingresos" | "historial" | "cierre" };
+const ACCESS_ICONS: Record<CashAccess["icon"], ComponentType<{ size?: number; className?: string }>> = {
+  pendientes: ClipboardList,
+  movimientos: ArrowLeftRight,
+  ingresos: Wallet,
+  historial: History,
+  cierre: Lock,
+};
 
 type DraftLine = { productId: string; presentationId: string; quantity: string };
 type LoadedDraft = {
@@ -38,6 +57,8 @@ export function QuickSale({
   canCredit,
   sessionOpen,
   paymentMethods,
+  hardwareReader = false,
+  cashAccesses = [],
   draft,
 }: {
   products: CatalogProduct[];
@@ -50,6 +71,8 @@ export function QuickSale({
   canCredit: boolean;
   sessionOpen: boolean;
   paymentMethods?: { value: string; label: string }[];
+  hardwareReader?: boolean;
+  cashAccesses?: CashAccess[];
   draft?: LoadedDraft;
 }) {
   const router = useRouter();
@@ -63,6 +86,7 @@ export function QuickSale({
   const [listId, setListId] = useState(draft?.priceListId ?? "");
   const [lines, setLines] = useState<DraftLine[]>(draft?.lines ?? []);
   const [discountPct, setDiscountPct] = useState(draft?.discountPercent ?? "0");
+  const [discountFixed, setDiscountFixed] = useState("0");
   const [customerId, setCustomerId] = useState(draft?.customerId ?? "");
   const [saleType, setSaleType] = useState<"CASH" | "CREDIT">(draft?.saleType ?? "CASH");
   const [loadingDraft, setLoadingDraft] = useState(false);
@@ -75,6 +99,7 @@ export function QuickSale({
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
   const [variantsOf, setVariantsOf] = useState<string | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
   const keyRef = useRef(draft?.idempotencyKey ?? "");
   const appliedId = useRef(draft?.id ?? "");
   const chargeFor = useRef("");
@@ -99,6 +124,7 @@ export function QuickSale({
       setLines(result.draft.lines);
       setCustomerId(result.draft.customerId ?? "");
       setDiscountPct(result.draft.discountPercent);
+      setDiscountFixed("0");
       setListId(result.draft.priceListId ?? "");
       setMode(result.draft.mode);
       setSaleType(result.draft.saleType);
@@ -153,9 +179,18 @@ export function QuickSale({
   }, [lines, sellable, mode, list]);
 
   const subtotal = priced.reduce((sum, line) => sum + line.total, 0);
-  const discount = Math.min(subtotal, Math.round((subtotal * Number(discountPct || 0)) / 100));
+  const discountFromPct = Math.min(subtotal, Math.round((subtotal * Number(discountPct || 0)) / 100));
+  const discountFromFixed = (() => {
+    try {
+      return Math.min(subtotal, toMoneyInt(discountFixed || "0"));
+    } catch {
+      return 0;
+    }
+  })();
+  const discount = Math.max(discountFromPct, discountFromFixed);
   const total = subtotal - discount;
-  const overLimit = Number(discountPct || 0) > discountLimit;
+  const effectivePct = subtotal > 0 ? (discount / subtotal) * 100 : 0;
+  const overLimit = effectivePct > discountLimit;
 
   useEffect(() => {
     if (!wantCharge || loadingDraft || !urlDraft || appliedId.current !== urlDraft || lines.length === 0 || total <= 0) return;
@@ -165,20 +200,41 @@ export function QuickSale({
     setPayments([{ method: "CASH", amount: fromMoneyInt(total).toFixed(2), reference: "" }]);
   }, [wantCharge, loadingDraft, urlDraft, lines.length, total]);
 
-  function changeDiscount(value: string) {
-    setDiscountPct(value);
-    const nextDiscount = Math.min(subtotal, Math.round((subtotal * Number(value || 0)) / 100));
+  function syncPaymentAmount(nextDiscount: number) {
     const nextTotal = subtotal - (Number.isFinite(nextDiscount) ? nextDiscount : 0);
     setPayments((current) => current.length === 1 ? [{ ...current[0], amount: fromMoneyInt(nextTotal).toFixed(2) }] : current);
   }
 
+  function changeDiscountPct(value: string) {
+    setDiscountPct(value);
+    const nextDiscount = Math.min(subtotal, Math.round((subtotal * Number(value || 0)) / 100));
+    setDiscountFixed(fromMoneyInt(nextDiscount).toFixed(2));
+    syncPaymentAmount(nextDiscount);
+  }
+
+  function changeDiscountFixed(value: string) {
+    setDiscountFixed(value);
+    let nextDiscount = 0;
+    try {
+      nextDiscount = Math.min(subtotal, toMoneyInt(value || "0"));
+    } catch {
+      nextDiscount = 0;
+    }
+    const pct = subtotal > 0 ? (nextDiscount / subtotal) * 100 : 0;
+    setDiscountPct(Number.isFinite(pct) ? pct.toFixed(2) : "0");
+    syncPaymentAmount(nextDiscount);
+  }
+
   useEffect(() => {
     if (!paying) return;
+    setDiscountFixed(fromMoneyInt(discount).toFixed(2));
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape" && !pending) setPaying(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // Solo al abrir cobro: alinear monto fijo con el descuento vigente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paying, pending]);
 
   function ensureKey() {
@@ -208,6 +264,7 @@ export function QuickSale({
     });
     setMessage("");
     setVariantsOf(null);
+    setCartOpen(true);
   }
 
   function onCode(code: string) {
@@ -218,7 +275,9 @@ export function QuickSale({
     }
     const barcode = product.barcodes.find((item) => item.code === code);
     add(product, barcode?.presentationId || undefined);
+    playScanPit();
     setQuery("");
+    setCartOpen(true);
   }
 
   function commitSearch(raw?: string) {
@@ -349,12 +408,21 @@ export function QuickSale({
   }
 
   const variants = variantsOf ? sellable.filter((product) => product.parentId === variantsOf) : [];
+  const cartUnits = priced.reduce((sum, line) => {
+    try {
+      return sum + toQtyInt(line.quantity || "0");
+    } catch {
+      return sum;
+    }
+  }, 0);
+  const cartLabel = `${formatQty(cartUnits)} producto${formatQty(cartUnits) === "1" ? "" : "s"}`;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
-      <section className="space-y-3">
-        {!sessionOpen ? <ErrorText>No hay caja abierta. Puedes armar la venta, pero el cobro exige una caja.</ErrorText> : null}
-        <div className="flex gap-2">
+    <div className="mx-auto w-full max-w-3xl space-y-4">
+      {!sessionOpen ? <ErrorText>No hay caja abierta. Puedes armar la venta, pero el cobro exige una caja.</ErrorText> : null}
+      <div className="flex gap-2">
+        <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm">
+          <Search size={16} className="shrink-0 text-slate-400" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -364,13 +432,71 @@ export function QuickSale({
                 commitSearch(event.currentTarget.value);
               }
             }}
-            placeholder="Buscar nombre, código interno o escanear"
-            className="h-12 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            placeholder="Buscar producto…"
+            className="min-w-0 flex-1 bg-transparent outline-none"
           />
-          <ScannerButton onCode={onCode} />
+        </label>
+        <ScannerButton onCode={onCode} />
+      </div>
+      {hardwareReader ? <CodeField onCode={onCode} autoFocus placeholder="Lector USB o Bluetooth" /> : null}
+      {message ? <p className="text-sm text-amber-700">{message}</p> : null}
+
+      <div className="overflow-hidden rounded-2xl border border-primary/20 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setCartOpen((open) => !open)}
+          className="flex w-full items-center gap-3 bg-primary px-4 py-3 text-left text-white"
+          aria-expanded={cartOpen}
+        >
+          <ShoppingCart size={18} className="shrink-0" />
+          <span className="flex-1 font-semibold">Carrito de compras</span>
+          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-medium">{cartLabel}</span>
+          <ChevronDown size={18} className={`shrink-0 transition ${cartOpen ? "rotate-180" : ""}`} />
+        </button>
+        {cartOpen ? (
+          <div className="space-y-3 p-4">
+            {loadingDraft ? <p className="text-sm text-slate-500">Cargando la venta pendiente…</p> : null}
+            {!loadingDraft && priced.length === 0 ? <p className="text-sm text-slate-500">Sin productos</p> : null}
+            {priced.map((line) => (
+              <div key={`${line.productId}-${line.presentationId}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium text-navy">{line.name}</p>
+                  <button type="button" className="text-xs text-red-700" onClick={() => setLines((current) => current.filter((item) => !(item.productId === line.productId && item.presentationId === line.presentationId)))}>Quitar</button>
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <input value={line.quantity} onChange={(event) => setLines((current) => current.map((item) => item.productId === line.productId && item.presentationId === line.presentationId ? { ...item, quantity: event.target.value } : item))} className="h-9 w-20 rounded-xl border border-slate-200 px-2 text-sm" />
+                  <span className="text-sm text-slate-500">{formatMoney(toMoneyInt(line.unitPrice), currency)}</span>
+                  <span className="ml-auto text-sm font-medium">{formatMoney(line.total, currency)}</span>
+                </div>
+                {line.short ? <p className="text-xs text-red-700">Stock insuficiente</p> : null}
+              </div>
+            ))}
+            <div className="space-y-2 border-t pt-3 text-sm">
+              <label className="block">Precio
+                <select value={mode} onChange={(event) => setMode(event.target.value as PriceMode)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-2">
+                  <option value="SALE">Precio de venta</option>
+                  <option value="RETAIL">Minorista</option>
+                  <option value="WHOLESALE">Mayorista</option>
+                </select>
+              </label>
+              <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
+              <div className="flex justify-between"><span>Descuento</span><span>{formatMoney(discount, currency)}</span></div>
+              <div className="flex justify-between text-lg font-semibold text-navy"><span>Total</span><span>{formatMoney(total, currency)}</span></div>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" className="flex-1" disabled={pending || loadingDraft || priced.length === 0} onClick={() => { setError(""); setStatus(""); setPaying(true); setPayments([{ method: "CASH", amount: fromMoneyInt(total).toFixed(2), reference: "" }]); }}>Cobrar</Button>
+              <Button type="button" variant="secondary" disabled={pending || loadingDraft || priced.length === 0} onClick={park}>Pendiente</Button>
+            </div>
+            <ErrorText>{error}</ErrorText>
+          </div>
+        ) : null}
+      </div>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-2">
+          <h2 className="text-lg font-semibold text-navy">Productos</h2>
+          <p className="text-xs text-slate-500">Catálogo disponible</p>
         </div>
-        <CodeField onCode={onCode} autoFocus placeholder="Lector USB o Bluetooth" />
-        {message ? <p className="text-sm text-amber-700">{message}</p> : null}
         <div className="flex gap-2 overflow-x-auto pb-1">
           <button type="button" onClick={() => setCategoryId("")} className={`rounded-full px-3 py-1.5 text-sm shadow-sm ${categoryId === "" ? "pf-button" : "bg-white text-slate-700"}`}>Todos</button>
           {categories.map((category) => (
@@ -379,21 +505,29 @@ export function QuickSale({
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+        <div className="space-y-2">
           {visible.map((product) => {
             const presentation = product.presentations.find((item) => item.isDefault) ?? product.presentations[0];
             const price = presentation
               ? resolveUnitPriceText({ product, presentation, mode, listItems: list?.items })
               : product.salePrice;
             return (
-              <button key={product.id} type="button" onClick={() => add(product)} className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary sm:gap-3 sm:p-3">
-                <ProductPhoto name={product.name} imagePath={product.imagePath} className="h-10 w-10 shrink-0 sm:h-12 sm:w-12" />
-                <span className="min-w-0 break-words">
-                  <p className="line-clamp-2 text-sm font-medium">{product.name}</p>
-                  <p className="mt-1 text-sm font-semibold text-primary">{formatMoney(toMoneyInt(price), currency)}</p>
-                  <p className="text-xs text-slate-500">Stock {product.stock} {product.baseUnit}</p>
-                </span>
-              </button>
+              <div key={product.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <ProductPhoto name={product.name} imagePath={product.imagePath} className="h-12 w-12 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-navy">{product.name}</p>
+                  <p className="text-sm font-semibold text-primary">{formatMoney(toMoneyInt(price), currency)}</p>
+                  <p className="text-xs text-slate-500">Stock: {product.stock} {product.baseUnit}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Agregar ${product.name}`}
+                  onClick={() => add(product)}
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-primary text-white shadow-sm transition hover:brightness-110"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
             );
           })}
         </div>
@@ -411,46 +545,27 @@ export function QuickSale({
           </div>
         ) : null}
       </section>
-      <aside id="cart" className="space-y-3 lg:sticky lg:top-20 lg:self-start">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[var(--pf-shadow)]">
-          <h2 className="font-semibold text-navy">Carrito</h2>
-          <div className="mt-3 space-y-3">
-            {loadingDraft ? <p className="text-sm text-slate-500">Cargando la venta pendiente…</p> : null}
-            {!loadingDraft && priced.length === 0 ? <p className="text-sm text-slate-500">Sin productos</p> : null}
-            {priced.map((line) => (
-              <div key={`${line.productId}-${line.presentationId}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm">{line.name}</p>
-                  <button type="button" className="text-xs text-red-700" onClick={() => setLines((current) => current.filter((item) => !(item.productId === line.productId && item.presentationId === line.presentationId)))}>Quitar</button>
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <input value={line.quantity} onChange={(event) => setLines((current) => current.map((item) => item.productId === line.productId && item.presentationId === line.presentationId ? { ...item, quantity: event.target.value } : item))} className="h-9 w-20 rounded-xl border border-slate-200 px-2 text-sm" />
-                  <span className="text-sm text-slate-500">{formatMoney(toMoneyInt(line.unitPrice), currency)}</span>
-                  <span className="ml-auto text-sm font-medium">{formatMoney(line.total, currency)}</span>
-                </div>
-                {line.short ? <p className="text-xs text-red-700">Stock insuficiente</p> : null}
-              </div>
-            ))}
+
+      {cashAccesses.length > 0 ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold tracking-wide text-navy">Accesos de caja</h2>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {cashAccesses.map((item) => {
+              const Icon = ACCESS_ICONS[item.icon];
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex flex-col items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2 py-3 text-center text-xs font-medium text-navy transition hover:border-primary/30 hover:bg-white"
+                >
+                  <Icon size={20} className="text-primary" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
           </div>
-          <div className="mt-4 space-y-2 border-t pt-3 text-sm">
-            <label className="block">Precio
-              <select value={mode} onChange={(event) => setMode(event.target.value as PriceMode)} className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-2">
-                <option value="SALE">Precio de venta</option>
-                <option value="RETAIL">Minorista</option>
-                <option value="WHOLESALE">Mayorista</option>
-              </select>
-            </label>
-            <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(subtotal, currency)}</span></div>
-            <div className="flex justify-between"><span>Descuento</span><span>{formatMoney(discount, currency)}</span></div>
-            <div className="flex justify-between text-lg font-semibold text-navy"><span>Total</span><span>{formatMoney(total, currency)}</span></div>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Button type="button" className="flex-1" disabled={pending || loadingDraft || priced.length === 0} onClick={() => { setError(""); setStatus(""); setPaying(true); setPayments([{ method: "CASH", amount: fromMoneyInt(total).toFixed(2), reference: "" }]); }}>Cobrar</Button>
-            <Button type="button" variant="secondary" disabled={pending || loadingDraft || priced.length === 0} onClick={park}>Pendiente</Button>
-          </div>
-          <ErrorText>{error}</ErrorText>
-        </div>
-      </aside>
+        </section>
+      ) : null}
       {paying ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/50 p-4" role="dialog" aria-modal="true" aria-label="Cobro" onMouseDown={(event) => { if (event.target === event.currentTarget && !pending) setPaying(false); }}>
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl">
@@ -471,9 +586,36 @@ export function QuickSale({
               onClose={() => setPaying(false)}
             >
               <CheckoutDocument kind={docKind} onKind={setDocKind} buyer={buyer} onBuyer={setBuyer} disabled={pending} />
-              <label className="mt-3 block text-sm text-slate-700">Descuento %
-                <input value={discountPct} disabled={pending} onChange={(event) => changeDiscount(event.target.value)} inputMode="decimal" className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-2 disabled:bg-slate-50" />
-              </label>
+              <div className="mt-3">
+                <p className="mb-2 text-sm font-medium text-slate-700">Descuento</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-700">
+                    <span className="font-medium text-navy">Porcentaje</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">Descuento sobre el subtotal</span>
+                    <div className="relative mt-2">
+                      <input
+                        value={discountPct}
+                        disabled={pending}
+                        onChange={(event) => changeDiscountPct(event.target.value)}
+                        inputMode="decimal"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pr-8 text-sm outline-none focus:border-primary disabled:bg-slate-50"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">%</span>
+                    </div>
+                  </label>
+                  <label className="block rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-700">
+                    <span className="font-medium text-navy">Monto fijo</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">Importe exacto a descontar</span>
+                    <input
+                      value={discountFixed}
+                      disabled={pending}
+                      onChange={(event) => changeDiscountFixed(event.target.value)}
+                      inputMode="decimal"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary disabled:bg-slate-50"
+                    />
+                  </label>
+                </div>
+              </div>
               {overLimit ? <p className="mt-1 text-xs text-amber-700">Supera el tope de {discountLimit}%. Solo un administrador puede cobrarlo.</p> : null}
               {discount > 0 ? <p className="mt-1 text-xs text-slate-500">Subtotal {formatMoney(subtotal, currency)} · descuento {formatMoney(discount, currency)}</p> : null}
               {saleType === "CREDIT" ? (

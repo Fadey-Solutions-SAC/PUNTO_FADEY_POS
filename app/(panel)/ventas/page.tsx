@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { openCashAction } from "@/actions/operations";
 import { SimpleForm } from "@/components/forms";
@@ -10,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { formatDate, formatMoney, fromMoneyInt, fromPercentInt } from "@/lib/money";
 import { listPaymentMethods } from "@/lib/payment-methods";
+import { readPosSettings } from "@/lib/pos-settings";
 import { can } from "@/lib/roles";
 import { readDraft } from "@/lib/sales";
 import { requireTenant } from "@/lib/tenant";
@@ -64,7 +64,7 @@ export default async function SalePage({ searchParams }: { searchParams: Promise
     );
   }
 
-  const [products, categories, customers, lists, draft, paymentMethods] = sell
+  const [products, categories, customers, lists, draft, paymentMethods, posSettings] = sell
     ? await Promise.all([
         loadCatalog(ctx),
         prisma.category.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
@@ -77,58 +77,61 @@ export default async function SalePage({ searchParams }: { searchParams: Promise
             })
           : Promise.resolve(null),
         listPaymentMethods(ctx),
+        readPosSettings(ctx.businessId),
       ])
-    : [[], [], [], [], null, []];
+    : [[], [], [], [], null, [], { hardwareReader: false }];
 
-  const options = [
-    sell ? { href: "/ventas/pendientes", label: "Ventas pendientes" } : null,
-    cash ? { href: "/caja/movimientos", label: "Movimientos" } : null,
-    cash ? { href: "/caja/ingresos", label: "Ingresos y egresos" } : null,
-    can(ctx.role, "cashClose", ctx.grants) ? { href: "/caja/cierre", label: "Cierre" } : null,
-    cash ? { href: "/caja/historial", label: "Historial de caja" } : null,
-  ].filter((item): item is { href: string; label: string } => item !== null);
+  const cashAccesses = [
+    sell ? { href: "/ventas/pendientes", label: "Pendientes", icon: "pendientes" as const } : null,
+    cash ? { href: "/caja/movimientos", label: "Movimientos", icon: "movimientos" as const } : null,
+    cash ? { href: "/caja/ingresos", label: "Ingresos / egresos", icon: "ingresos" as const } : null,
+    cash ? { href: "/caja/historial", label: "Historial", icon: "historial" as const } : null,
+    can(ctx.role, "cashClose", ctx.grants) ? { href: "/caja/cierre", label: "Cierre", icon: "cierre" as const } : null,
+  ].filter((item): item is { href: string; label: string; icon: "pendientes" | "movimientos" | "ingresos" | "historial" | "cierre" } => item !== null);
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex-1 space-y-5 pb-4">
-        <p className="text-sm text-slate-500">
-          {session.register.name} abierta · {formatDate(session.openedAt)} · efectivo inicial {formatMoney(session.openingAmount, ctx.currency)}
-        </p>
-        {sell ? (
-          <Suspense fallback={<p className="text-sm text-slate-500">Cargando venta…</p>}>
-            <QuickSale
-              products={products}
-              categories={categories}
-              customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
-              lists={lists.map((list) => ({
-                id: list.id,
-                name: list.name,
-                isDefault: list.isDefault,
-                items: list.items.map((item) => ({
-                  productId: item.productId,
-                  presentationId: item.presentationId,
-                  price: fromMoneyInt(item.price).toFixed(2),
-                })),
-              }))}
-              currency={ctx.currency}
-              discountLimit={fromPercentInt(ctx.discountLimitPct).toNumber()}
-              allowCredit={ctx.allowCredit}
-              canCredit={can(ctx.role, "credit", ctx.grants)}
-              sessionOpen
-              paymentMethods={paymentMethods.map((method) => ({ value: method.code, label: method.label }))}
-              draft={draft ?? undefined}
-            />
-          </Suspense>
-        ) : null}
-      </div>
-      {options.length > 0 ? (
-        <div className="sticky bottom-0 z-10 -mx-4 mt-4 flex flex-wrap gap-2 border-t border-slate-200 bg-canvas/95 px-4 py-3 backdrop-blur lg:-mx-6 lg:px-6">
-          {options.map((item) => (
-            <Link key={item.href} href={item.href} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-navy shadow-sm hover:border-primary/30">
-              {item.label}
-            </Link>
-          ))}
-        </div>
+    <div className="space-y-4 pb-6">
+      <p className="text-sm text-slate-500">
+        {session.register.name} abierta · {formatDate(session.openedAt)} · efectivo inicial {formatMoney(session.openingAmount, ctx.currency)}
+      </p>
+      {sell ? (
+        <Suspense fallback={<p className="text-sm text-slate-500">Cargando venta…</p>}>
+          <QuickSale
+            products={products}
+            categories={categories}
+            customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
+            lists={lists.map((list) => ({
+              id: list.id,
+              name: list.name,
+              isDefault: list.isDefault,
+              items: list.items.map((item) => ({
+                productId: item.productId,
+                presentationId: item.presentationId,
+                price: fromMoneyInt(item.price).toFixed(2),
+              })),
+            }))}
+            currency={ctx.currency}
+            discountLimit={fromPercentInt(ctx.discountLimitPct).toNumber()}
+            allowCredit={ctx.allowCredit}
+            canCredit={can(ctx.role, "credit", ctx.grants)}
+            sessionOpen
+            paymentMethods={paymentMethods.map((method) => ({ value: method.code, label: method.label }))}
+            hardwareReader={posSettings.hardwareReader}
+            cashAccesses={cashAccesses}
+            draft={draft ?? undefined}
+          />
+        </Suspense>
+      ) : cashAccesses.length > 0 ? (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-navy">Accesos de caja</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {cashAccesses.map((item) => (
+              <a key={item.href} href={item.href} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-navy">
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </Card>
       ) : null}
     </div>
   );

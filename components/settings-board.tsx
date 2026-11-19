@@ -9,6 +9,7 @@ import History from "lucide-react/icons/history";
 import ImageIcon from "lucide-react/icons/image";
 import Palette from "lucide-react/icons/palette";
 import Printer from "lucide-react/icons/printer";
+import ScanBarcode from "lucide-react/icons/scan-barcode";
 import Store from "lucide-react/icons/store";
 import Users from "lucide-react/icons/users";
 import Wallet from "lucide-react/icons/wallet";
@@ -27,6 +28,7 @@ const ICONS: Record<string, Icon> = {
   otro: Building2,
   usuarios: Users,
   cajas: Wallet,
+  lector: ScanBarcode,
   impresion: Printer,
   facturacion: FileText,
   copia: Download,

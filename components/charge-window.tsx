@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, ErrorText } from "@/components/ui";
+import { Button, ErrorText, fieldClass } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
-import type { ReactNode } from "react";
+import ChevronDown from "lucide-react/icons/chevron-down";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export const CHARGE_METHODS = [
   { value: "CASH", label: "Efectivo" },
@@ -14,6 +15,83 @@ export const CHARGE_METHODS = [
 export type ChargeMethod = string;
 
 export type ChargeLine = { method: ChargeMethod; amount: string; reference: string };
+
+function MethodDropdown({
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const selected = options.find((item) => item.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((current) => !current)}
+        className={`${fieldClass} flex items-center justify-between gap-2 text-left disabled:bg-slate-50`}
+      >
+        <span className="truncate">{selected?.label ?? "Método"}</span>
+        <ChevronDown size={16} className={`shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-20 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 text-sm shadow-[var(--pf-shadow)]"
+        >
+          {options.map((method) => {
+            const active = method.value === value;
+            return (
+              <li key={method.value} role="option" aria-selected={active}>
+                <button
+                  type="button"
+                  className={`flex w-full items-center px-3 py-2.5 text-left transition ${
+                    active ? "bg-primary/10 font-medium text-navy" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={() => {
+                    onChange(method.value);
+                    setOpen(false);
+                  }}
+                >
+                  {method.label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 export function ChargeWindow({
   total,
@@ -64,22 +142,22 @@ export function ChargeWindow({
       {children}
       {saleType === "CASH" ? payments.map((payment, index) => (
         <div key={index} className="mt-2 grid grid-cols-[1fr_6rem] gap-2">
-          <select
+          <MethodDropdown
             value={payment.method}
-            onChange={(event) => onPayments(payments.map((item, itemIndex) => itemIndex === index ? { ...item, method: event.target.value } : item))}
-            className="h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm"
-          >
-            {options.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}
-          </select>
+            options={options}
+            disabled={pending}
+            onChange={(method) => onPayments(payments.map((item, itemIndex) => itemIndex === index ? { ...item, method } : item))}
+          />
           <input
             value={payment.amount}
+            disabled={pending}
             onChange={(event) => onPayments(payments.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))}
-            className="h-10 rounded-xl border border-slate-200 px-2 text-sm"
+            className={`${fieldClass} disabled:bg-slate-50`}
           />
         </div>
       )) : <p className="mt-2 text-sm text-slate-600">Se cargará al crédito del cliente.</p>}
       {saleType === "CASH" && allowSplit ? (
-        <button type="button" className="mt-2 text-sm text-teal-800" onClick={() => onPayments([...payments, { method: splitDefault, amount: "", reference: "" }])}>Agregar medio de pago</button>
+        <button type="button" className="mt-2 text-sm text-primary" onClick={() => onPayments([...payments, { method: splitDefault, amount: "", reference: "" }])}>Agregar medio de pago</button>
       ) : null}
       <div className="mt-3 flex gap-2">
         <Button type="button" disabled={pending} onClick={onConfirm}>{pending ? status || "Cobrando…" : confirmLabel}</Button>

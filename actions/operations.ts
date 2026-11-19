@@ -13,6 +13,7 @@ import { saveBrandLogo, saveLoginCover } from "@/lib/cover"
 import { assertAttempts, assertNoCode, configPasswordOk, noteAttempt } from "@/lib/guard"
 import { assertCan } from "@/lib/roles"
 import { createPaymentMethod, deletePaymentMethod } from "@/lib/payment-methods"
+import { saveHardwareReader } from "@/lib/pos-settings"
 import { createBranch, createWarehouse, deleteWarehouse, updateBusiness } from "@/lib/settings"
 import { createUser, deleteMember, updateMember } from "@/lib/setup"
 import { clearSession, readSession, signSession } from "@/lib/session"
@@ -63,6 +64,24 @@ export async function closeCashAction(_prev: { error: string }, formData: FormDa
     return { error: "" }
   } catch (error) {
     return formError(error)
+  }
+}
+
+export async function closeCashBoardAction(input: { counted: string; notes?: string; arqueoDetail?: string }) {
+  try {
+    const ctx = await requireTenant()
+    await closeSession(ctx, {
+      counted: input.counted,
+      notes: input.notes,
+      arqueoDetail: input.arqueoDetail,
+    })
+    revalidatePath("/caja")
+    revalidatePath("/caja/historial")
+    revalidatePath("/ventas")
+    return { ok: true as const }
+  } catch (error) {
+    unstable_rethrow(error)
+    return { ok: false as const, error: errorMessage(error) }
   }
 }
 
@@ -458,6 +477,19 @@ export async function deletePaymentMethodAction(id: string) {
   try {
     const ctx = await requireTenant()
     await deletePaymentMethod(ctx, id)
+    revalidatePath("/configuracion")
+    revalidatePath("/ventas")
+    return { ok: true as const }
+  } catch (error) {
+    unstable_rethrow(error)
+    return { ok: false as const, error: errorMessage(error) }
+  }
+}
+
+export async function saveHardwareReaderAction(enabled: boolean) {
+  try {
+    const ctx = await requireTenant()
+    await saveHardwareReader(ctx, enabled)
     revalidatePath("/configuracion")
     revalidatePath("/ventas")
     return { ok: true as const }

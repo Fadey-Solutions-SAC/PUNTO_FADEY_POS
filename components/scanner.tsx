@@ -4,6 +4,7 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 import { BarcodeFormat } from "@zxing/library";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { Button } from "@/components/ui";
+import Camera from "lucide-react/icons/camera";
 
 const FORMATS = [
   BarcodeFormat.EAN_13,
@@ -15,6 +16,29 @@ const FORMATS = [
   BarcodeFormat.ITF,
   BarcodeFormat.QR_CODE,
 ];
+
+/** Pit corto al leer un código (cámara o lector). */
+export function playScanPit() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const audio = new Ctx();
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.value = 1400;
+    gain.gain.setValueAtTime(0.0001, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, audio.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.09);
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.start();
+    oscillator.stop(audio.currentTime + 0.1);
+    window.setTimeout(() => void audio.close(), 250);
+  } catch {
+    /* noop */
+  }
+}
 
 export function CodeField({
   onCode,
@@ -52,25 +76,13 @@ export function ScannerButton({ onCode }: { onCode: (code: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
+      <Button type="button" variant="secondary" className="h-12 shrink-0 gap-1.5 px-3" onClick={() => setOpen(true)}>
+        <Camera size={16} />
         Cámara
       </Button>
       {open ? <ScannerDialog onClose={() => setOpen(false)} onCode={onCode} /> : null}
     </>
   );
-}
-
-function beep() {
-  const audio = new AudioContext();
-  const oscillator = audio.createOscillator();
-  const gain = audio.createGain();
-  oscillator.frequency.value = 880;
-  gain.gain.value = 0.04;
-  oscillator.connect(gain);
-  gain.connect(audio.destination);
-  oscillator.start();
-  oscillator.stop(audio.currentTime + 0.08);
-  window.setTimeout(() => audio.close(), 200);
 }
 
 function ScannerDialog({ onClose, onCode }: { onClose: () => void; onCode: (code: string) => void }) {
@@ -81,6 +93,7 @@ function ScannerDialog({ onClose, onCode }: { onClose: () => void; onCode: (code
   const [torchOn, setTorchOn] = useState(false);
   const [torchOk, setTorchOk] = useState(false);
   const [hit, setHit] = useState("");
+  const [ready, setReady] = useState(true);
   const last = useRef({ code: "", at: 0 });
   const onCodeRef = useRef(onCode);
   onCodeRef.current = onCode;
@@ -101,15 +114,22 @@ function ScannerDialog({ onClose, onCode }: { onClose: () => void; onCode: (code
         const selected = deviceId || preferred?.deviceId;
         if (!deviceId && selected) setDeviceId(selected);
         const controls = await reader.decodeFromVideoDevice(selected, video, (result) => {
-          if (!result) return;
+          if (!result || stopped) return;
           const code = result.getText().trim();
           const now = Date.now();
-          if (!code || (code === last.current.code && now - last.current.at < 1600)) return;
+          // Evita doble lectura del mismo frame; permite reescanear el mismo código tras ~0.9 s.
+          if (!code || (code === last.current.code && now - last.current.at < 900)) return;
           last.current = { code, at: now };
           setHit(code);
-          if (navigator.vibrate) navigator.vibrate(80);
-          beep();
+          setReady(false);
+          if (navigator.vibrate) navigator.vibrate(60);
           onCodeRef.current(code);
+          // “Refresca” la UI para la siguiente lectura sin cerrar la cámara.
+          window.setTimeout(() => {
+            if (stopped) return;
+            setHit("");
+            setReady(true);
+          }, 450);
         });
         stopCamera = () => controls.stop();
         const track = video.srcObject instanceof MediaStream ? video.srcObject.getVideoTracks()[0] : undefined;
@@ -137,11 +157,21 @@ function ScannerDialog({ onClose, onCode }: { onClose: () => void; onCode: (code
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 sm:items-center">
       <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold text-navy">Escanear código</h2>
+          <div>
+            <h2 className="font-semibold text-navy">Escanear código</h2>
+            <p className="text-xs text-slate-500">Lee, suma 1 unidad y sigue hasta cerrar.</p>
+          </div>
           <button onClick={onClose} type="button" className="text-sm text-slate-500">Cerrar</button>
         </div>
-        <video ref={videoRef} className={`aspect-video w-full rounded-xl bg-black object-cover ${hit ? "ring-4 ring-teal-500" : ""}`} muted playsInline />
-        {hit ? <p className="mt-2 text-sm text-teal-700">Leído: {hit}</p> : null}
+        <video
+          ref={videoRef}
+          className={`aspect-video w-full rounded-xl bg-black object-cover transition ${hit ? "ring-4 ring-primary" : ready ? "ring-2 ring-slate-200" : ""}`}
+          muted
+          playsInline
+        />
+        {hit ? <p className="mt-2 text-sm font-medium text-primary">Leído: {hit} · +1</p> : (
+          <p className="mt-2 text-sm text-slate-500">{ready ? "Listo para el siguiente código…" : "Procesando…"}</p>
+        )}
         {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
         <div className="mt-3 flex flex-wrap gap-2">
           {devices.length > 1 ? (
