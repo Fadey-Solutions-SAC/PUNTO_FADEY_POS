@@ -16,6 +16,7 @@ import { readTheme } from "@/lib/appearance";
 import { brandLogoUrl, loginCoverUrl } from "@/lib/cover";
 import { businessSnapshot } from "@/lib/settings";
 import { requireTenant } from "@/lib/tenant";
+import { APP_VERSION, formatAppVersion } from "@/lib/version";
 
 export const instant = false;
 
@@ -47,9 +48,10 @@ export default async function SettingsPage() {
   if (can(ctx.role, "billing", ctx.grants)) items.push({ id: "facturacion", group: "Sistema", label: "Facturación" });
   if (can(ctx.role, "backup", ctx.grants)) items.push({ id: "copia", group: "Sistema", label: "Copia" });
   items.push({ id: "auditoria", group: "Sistema", label: "Auditoría" });
+  items.push({ id: "version", group: "Sistema", label: "Versión" });
   return (
     <div className="space-y-4">
-      <PageHeader title="Configuración" description="Estos datos pertenecen solo al negocio activo." />
+      <PageHeader title="Configuración" description={`Estos datos pertenecen solo al negocio activo. · ${formatAppVersion()}`} />
       <SettingsBoard
         items={items}
         sections={{
@@ -63,20 +65,20 @@ export default async function SettingsPage() {
           logo: (
       <Card>
         <h2 className="mb-1 font-medium">Logo</h2>
-        <p className="mb-3 text-sm text-slate-500">Esta imagen se muestra en el inicio de sesión y en la barra del sistema.</p>
+        <p className="mb-3 text-sm text-slate-500">Esta imagen se muestra en el inicio de sesión y en la barra del sistema. JPG, PNG o WebP de hasta 2 MB.</p>
         <img src={logo ?? "/brand/punto-fadey.jpg"} alt="Logo actual" className="mb-3 size-24 rounded-full object-cover" />
         <SimpleForm action={saveLogoAction} submit="Guardar logo" encType="multipart/form-data">
-          <Field name="logo" type="file" accept="image/jpeg,image/png,image/webp" required />
+          <Field name="logo" type="file" accept="image/jpeg,image/jpg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
         </SimpleForm>
       </Card>
           ),
           portada: (
       <Card>
         <h2 className="mb-1 font-medium">Portada de inicio</h2>
-        <p className="mb-3 text-sm text-slate-500">Esta imagen se muestra detrás del inicio de sesión.</p>
+        <p className="mb-3 text-sm text-slate-500">Esta imagen se muestra detrás del inicio de sesión. JPG, PNG o WebP de hasta 5 MB.</p>
         {cover ? <img src={cover} alt="Portada actual" className="mb-3 h-36 w-full rounded-xl object-cover" /> : <p className="mb-3 text-sm text-slate-500">Todavía no hay una portada. El inicio de sesión usa un fondo oscuro.</p>}
         <SimpleForm action={saveCoverAction} submit="Guardar portada" encType="multipart/form-data">
-          <Field name="cover" type="file" accept="image/jpeg,image/png,image/webp" required />
+          <Field name="cover" type="file" accept="image/jpeg,image/jpg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required />
         </SimpleForm>
       </Card>
           ),
@@ -208,6 +210,13 @@ export default async function SettingsPage() {
           ...(can(ctx.role, "billing", ctx.grants) ? { facturacion: <BillingSettings ctx={ctx} /> } : {}),
           ...(can(ctx.role, "backup", ctx.grants) ? { copia: <BackupSettings /> } : {}),
           auditoria: <AuditSettings ctx={ctx} />,
+          version: (
+      <Card>
+        <h2 className="mb-1 font-medium">Versión del sistema</h2>
+        <p className="mb-3 text-sm text-slate-500">Se actualiza con cada despliegue de Punto Fadey (A.B.C.D, cada dígito de 0 a 9).</p>
+        <p className="text-2xl font-semibold tracking-wide text-[var(--pf-navy)]">{formatAppVersion(APP_VERSION)}</p>
+      </Card>
+          ),
           otro: (
       <Card>
         <h2 className="mb-3 font-medium">Otro negocio</h2>

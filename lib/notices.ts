@@ -1,9 +1,7 @@
-import packageJson from "@/package.json"
 import { prisma } from "@/lib/db"
 import { formatQty } from "@/lib/money"
 import type { TenantContext } from "@/lib/types"
-
-export const APP_VERSION = packageJson.version
+export { APP_VERSION } from "@/lib/version"
 
 export type NoticeKind = "out" | "low" | "expiry"
 

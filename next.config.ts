@@ -7,7 +7,8 @@ const nextConfig: NextConfig = {
     cpus: 1,
     optimizePackageImports: ["lucide-react"],
     serverActions: {
-      bodySizeLimit: "3mb",
+      // Portada hasta 5 MB + overhead multipart del formulario.
+      bodySizeLimit: "6mb",
     },
   },
   turbopack: {

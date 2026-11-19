@@ -5,7 +5,26 @@ import { assertCan } from "@/lib/roles"
 import { uploadsDir } from "@/lib/storage"
 import type { TenantContext } from "@/lib/types"
 
-const EXTENSIONS: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }
+const EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/pjpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+}
+
+const COVER_MAX_BYTES = 5_000_000
+const LOGO_MAX_BYTES = 2_000_000
+
+function extensionFor(file: File) {
+  const byType = EXTENSIONS[file.type]
+  if (byType) return byType
+  const name = file.name.toLowerCase()
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "jpg"
+  if (name.endsWith(".png")) return "png"
+  if (name.endsWith(".webp")) return "webp"
+  return null
+}
 
 export async function loginCoverUrl() {
   const dir = uploadsDir()
@@ -24,8 +43,8 @@ export async function loginCoverUrl() {
 export async function saveLoginCover(ctx: TenantContext, file: File) {
   assertCan(ctx, "settings")
   if (!file || file.size === 0) throw new AppError("Elige una imagen de portada")
-  if (file.size > 5_000_000) throw new AppError("La portada supera 5 MB")
-  const ext = EXTENSIONS[file.type]
+  if (file.size > COVER_MAX_BYTES) throw new AppError("La portada supera 5 MB. Usa una imagen más liviana.")
+  const ext = extensionFor(file)
   if (!ext) throw new AppError("Usa una imagen JPG, PNG o WebP")
   const dir = uploadsDir()
   await mkdir(dir, { recursive: true })
@@ -53,8 +72,8 @@ export async function brandLogoUrl() {
 export async function saveBrandLogo(ctx: TenantContext, file: File) {
   assertCan(ctx, "settings")
   if (!file || file.size === 0) throw new AppError("Elige una imagen de logo")
-  if (file.size > 2_000_000) throw new AppError("El logo supera 2 MB")
-  const ext = EXTENSIONS[file.type]
+  if (file.size > LOGO_MAX_BYTES) throw new AppError("El logo supera 2 MB. Usa una imagen más liviana.")
+  const ext = extensionFor(file)
   if (!ext) throw new AppError("Usa una imagen JPG, PNG o WebP")
   const dir = uploadsDir()
   await mkdir(dir, { recursive: true })
