@@ -7,7 +7,8 @@ delete process.env.DB_PATH
 process.env.DATABASE_URL = "file:./prisma/build.db"
 process.env.NODE_ENV = "production"
 process.env.NEXT_TELEMETRY_DISABLED = "1"
-process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, "--max-old-space-size=400"].filter(Boolean).join(" ")
+// El servicio en runtime usa 400 MB; el build de Next necesita más heap.
+process.env.NODE_OPTIONS = "--max-old-space-size=1536"
 if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 16) {
   process.env.AUTH_SECRET = "render-build-placeholder-secret"
 }

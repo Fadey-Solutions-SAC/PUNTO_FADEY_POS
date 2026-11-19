@@ -2,6 +2,11 @@ import { spawnSync } from "node:child_process"
 import { mkdirSync } from "node:fs"
 import path from "node:path"
 
+// Heap bajo solo al correr (plan starter ~512 MB). El build usa más en build-render.mjs.
+process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, "--max-old-space-size=400"]
+  .filter(Boolean)
+  .join(" ")
+
 const configured = process.env.DB_PATH?.trim()
 if (configured) {
   const file = path.resolve(configured)
