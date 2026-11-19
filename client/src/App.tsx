@@ -6,6 +6,7 @@ import { CashHistoryPage } from "./pages/CashHistoryPage"
 import { CashPage } from "./pages/CashPage"
 import { CatalogPage } from "./pages/CatalogPage"
 import { CloseCashPage } from "./pages/CloseCashPage"
+import { CustomersPage } from "./pages/CustomersPage"
 import { DashboardPage } from "./pages/DashboardPage"
 import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
@@ -98,6 +99,7 @@ export function App() {
           <Route path="caja/cierre" element={<CloseCashPage />} />
           <Route path="caja/historial" element={<CashHistoryPage />} />
           <Route path="productos" element={<CatalogPage />} />
+          <Route path="clientes" element={<CustomersPage />} />
           <Route path="pendiente/*" element={<PendingPage />} />
         </Route>
       ) : (

@@ -265,3 +265,36 @@ export function getCatalog() {
     }[]
   }>("/api/catalog")
 }
+
+export function getCustomers() {
+  return request<{
+    currency: string
+    customers: {
+      id: string
+      name: string
+      document: string
+      phone: string
+      email: string
+      address: string
+      debt: string
+      limit: string
+      creditLimitAmount: string
+      isActive: boolean
+    }[]
+  }>("/api/customers")
+}
+
+export function saveCustomer(input: {
+  id?: string
+  name: string
+  document?: string
+  phone?: string
+  email?: string
+  address?: string
+  creditLimit?: string
+}) {
+  return request<{ ok: true; id: string }>("/api/customers", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
