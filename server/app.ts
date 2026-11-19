@@ -10,6 +10,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { applyDatabaseEnv } from "../lib/storage"
 import { registerAuthRoutes } from "./routes/auth"
+import { registerCashRoutes } from "./routes/cash"
 import { APP_VERSION, formatAppVersion } from "../lib/version"
 
 applyDatabaseEnv()
@@ -49,6 +50,7 @@ app.get("/api/version", (_req, res) => {
 })
 
 registerAuthRoutes(app)
+registerCashRoutes(app)
 
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist))

@@ -15,6 +15,6 @@ body,
 body {
   margin: 0;
   font-family: "Segoe UI", system-ui, sans-serif;
-  background: var(--pf-canvas);
-  color: #e2e8f0;
+  background: #f3f6fb;
+  color: #0f172a;
 }

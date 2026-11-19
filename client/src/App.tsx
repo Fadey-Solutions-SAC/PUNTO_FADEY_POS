@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react"
 import { Navigate, Route, Routes } from "react-router-dom"
-import { getBootstrap, getMe, getVersion } from "./api"
-import { HomePage } from "./pages/HomePage"
+import { getBootstrap, getMe, getPanelBootstrap, getVersion, type PanelBootstrap } from "./api"
+import { Shell } from "./layout/Shell"
+import { CashHistoryPage } from "./pages/CashHistoryPage"
+import { CashPage } from "./pages/CashPage"
+import { DashboardPage } from "./pages/DashboardPage"
 import { LoginPage } from "./pages/LoginPage"
+import { PendingPage } from "./pages/PendingPage"
 
 type Me = Awaited<ReturnType<typeof getMe>>
 
@@ -10,6 +14,7 @@ export function App() {
   const [ready, setReady] = useState(false)
   const [versionLabel, setVersionLabel] = useState("v…")
   const [me, setMe] = useState<Me | null>(null)
+  const [panel, setPanel] = useState<PanelBootstrap | null>(null)
   const [bootError, setBootError] = useState("")
 
   useEffect(() => {
@@ -21,9 +26,15 @@ export function App() {
         setVersionLabel(version.label || bootstrap.version)
         try {
           const session = await getMe()
-          if (!cancelled) setMe(session)
+          if (cancelled) return
+          setMe(session)
+          const panelData = await getPanelBootstrap()
+          if (!cancelled) setPanel(panelData)
         } catch {
-          if (!cancelled) setMe(null)
+          if (!cancelled) {
+            setMe(null)
+            setPanel(null)
+          }
         }
       } catch (err) {
         if (!cancelled) setBootError(err instanceof Error ? err.message : "Sin API")
@@ -61,13 +72,26 @@ export function App() {
             <LoginPage
               versionLabel={versionLabel}
               onSuccess={async () => {
-                setMe(await getMe())
+                const session = await getMe()
+                setMe(session)
+                setPanel(await getPanelBootstrap())
               }}
             />
           )
         }
       />
-      <Route path="/" element={me ? <HomePage me={me} /> : <Navigate to="/login" replace />} />
+
+      {me && panel ? (
+        <Route element={<Shell panel={panel} />}>
+          <Route index element={<DashboardPage panel={panel} />} />
+          <Route path="caja" element={<CashPage />} />
+          <Route path="caja/historial" element={<CashHistoryPage />} />
+          <Route path="pendiente/*" element={<PendingPage />} />
+        </Route>
+      ) : (
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      )}
+
       <Route path="*" element={<Navigate to={me ? "/" : "/login"} replace />} />
     </Routes>
   )
