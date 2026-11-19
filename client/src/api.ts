@@ -119,3 +119,63 @@ export function getCashHistory() {
     }[]
   }>("/api/cash/history")
 }
+
+export type ClosePreview = {
+  currency: string
+  denoms: { key: string; label: string; value: number; kind: "bill" | "coin" }[]
+  registerName: string
+  opening: MoneyOut
+  expectedCash: MoneyOut
+  income: MoneyOut
+  expense: MoneyOut
+  byMethod: Record<string, MoneyOut>
+  posRows: { code: string; label: string; expected: MoneyOut }[]
+}
+
+export function getClosePreview() {
+  return request<ClosePreview>("/api/cash/close-preview")
+}
+
+export function closeCash(input: {
+  counted: string
+  notes?: string
+  arqueoDetail?: string
+  denominations?: Record<string, string>
+}) {
+  return request<{ ok: true }>("/api/cash/close", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export type SaleProduct = {
+  id: string
+  name: string
+  code: string
+  presentationId: string
+  presentationName: string
+  unitPriceCents: number
+  unitPriceLabel: string
+}
+
+export function getSaleStatus() {
+  return request<{ currency: string; cashOpen: boolean; registerName: string | null }>("/api/sales/status")
+}
+
+export function searchSaleProducts(q: string) {
+  return request<{ currency: string; products: SaleProduct[] }>(
+    `/api/sales/products?q=${encodeURIComponent(q)}`,
+  )
+}
+
+export function confirmSale(input: {
+  idempotencyKey: string
+  discount?: string
+  lines: { productId: string; presentationId: string; quantity: string }[]
+  payments: { method: string; amount: string }[]
+}) {
+  return request<{ ok: true; saleId: string; total: string; totalAmount: string }>("/api/sales/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}

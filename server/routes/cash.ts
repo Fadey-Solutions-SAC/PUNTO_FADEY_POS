@@ -1,14 +1,17 @@
 import type { Express } from "express"
 import {
   addMovement,
+  closeSession,
   currentSession,
   listSessions,
   openSession,
   summarizeSession,
 } from "../../lib/cash"
+import { CASH_DENOMS, denomTotalCents } from "../../lib/denominations"
 import { errorMessage } from "../../lib/errors"
 import { CASH_LABEL } from "../../lib/labels"
 import { formatDate, formatMoney, fromMoneyInt } from "../../lib/money"
+import { listPaymentMethods } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
 import { can } from "../../lib/roles"
 import { navigation } from "../../lib/nav"
@@ -163,6 +166,64 @@ export function registerCashRoutes(app: Express) {
       })
     } catch (error) {
       res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/cash/close-preview", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "cashClose", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso de cierre" })
+        return
+      }
+      const session = await currentSession(ctx)
+      if (!session) {
+        res.status(400).json({ error: "No hay una caja abierta" })
+        return
+      }
+      const [summary, methods] = await Promise.all([summarizeSession(ctx, session.id), listPaymentMethods(ctx)])
+      const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
+      const posRows = Object.entries(summary.byMethod)
+        .filter(([code, amount]) => code !== "CASH" && code !== "CREDIT" && amount > 0)
+        .map(([code, expected]) => ({
+          code,
+          label: labels[code] ?? code,
+          expected: moneyOut(expected, ctx.currency),
+        }))
+      res.json({
+        currency: ctx.currency,
+        denoms: CASH_DENOMS,
+        registerName: session.register.name,
+        opening: moneyOut(summary.session.openingAmount, ctx.currency),
+        expectedCash: moneyOut(summary.expected, ctx.currency),
+        income: moneyOut(summary.income, ctx.currency),
+        expense: moneyOut(summary.expense, ctx.currency),
+        byMethod: Object.fromEntries(
+          Object.entries(summary.byMethod).map(([method, amount]) => [method, moneyOut(amount, ctx.currency)]),
+        ),
+        posRows,
+      })
+    } catch (error) {
+      res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/cash/close", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      let counted = String(req.body?.counted ?? "").trim()
+      const denoms = req.body?.denominations
+      if ((!counted || counted === "0") && denoms && typeof denoms === "object") {
+        counted = fromMoneyInt(denomTotalCents(denoms as Record<string, string>)).toFixed(2)
+      }
+      await closeSession(ctx, {
+        counted,
+        notes: String(req.body?.notes ?? ""),
+        arqueoDetail: String(req.body?.arqueoDetail ?? ""),
+      })
+      res.json({ ok: true })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
     }
   })
 }

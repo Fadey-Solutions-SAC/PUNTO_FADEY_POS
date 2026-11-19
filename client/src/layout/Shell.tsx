@@ -5,10 +5,11 @@ import { formatAppPath } from "../nav"
 
 const VITE_HREF: Record<string, string> = {
   "/": "/",
-  "/ventas": "/caja",
+  "/ventas": "/ventas",
   "/caja": "/caja",
   "/caja/historial": "/caja/historial",
   "/caja/movimientos": "/caja",
+  "/caja/cierre": "/caja/cierre",
 }
 
 export function Shell({ panel }: { panel: PanelBootstrap }) {

@@ -75,9 +75,14 @@ export function CashPage() {
           <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Caja</h1>
           <p className="mt-1 text-sm text-slate-500">Apertura, esperado y movimientos de la sesión abierta.</p>
         </div>
-        <Link to="/caja/historial" className="text-sm font-medium text-[var(--pf-accent)] hover:underline">
-          Historial
-        </Link>
+        <div className="flex gap-3">
+          <Link to="/caja/cierre" className="text-sm font-medium text-[var(--pf-accent)] hover:underline">
+            Cierre
+          </Link>
+          <Link to="/caja/historial" className="text-sm font-medium text-[var(--pf-accent)] hover:underline">
+            Historial
+          </Link>
+        </div>
       </div>
 
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}

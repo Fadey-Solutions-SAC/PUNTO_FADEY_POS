@@ -4,9 +4,11 @@ import { getBootstrap, getMe, getPanelBootstrap, getVersion, type PanelBootstrap
 import { Shell } from "./layout/Shell"
 import { CashHistoryPage } from "./pages/CashHistoryPage"
 import { CashPage } from "./pages/CashPage"
+import { CloseCashPage } from "./pages/CloseCashPage"
 import { DashboardPage } from "./pages/DashboardPage"
 import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
+import { SalesPage } from "./pages/SalesPage"
 
 type Me = Awaited<ReturnType<typeof getMe>>
 
@@ -84,7 +86,9 @@ export function App() {
       {me && panel ? (
         <Route element={<Shell panel={panel} />}>
           <Route index element={<DashboardPage panel={panel} />} />
+          <Route path="ventas" element={<SalesPage />} />
           <Route path="caja" element={<CashPage />} />
+          <Route path="caja/cierre" element={<CloseCashPage />} />
           <Route path="caja/historial" element={<CashHistoryPage />} />
           <Route path="pendiente/*" element={<PendingPage />} />
         </Route>
