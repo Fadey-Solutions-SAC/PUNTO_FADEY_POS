@@ -4,6 +4,7 @@ import { summarizeSession } from "@/lib/cash";
 import { dashboardData } from "@/lib/dashboard";
 import { PAYMENT_LABEL } from "@/lib/labels";
 import { formatMoney, formatQty } from "@/lib/money";
+import { paymentMethodLabels } from "@/lib/payment-methods";
 import { can } from "@/lib/roles";
 import { requireTenant } from "@/lib/tenant";
 import PackagePlus from "lucide-react/icons/package-plus";
@@ -23,7 +24,7 @@ const PAY_COLORS: Record<string, string> = {
 
 export default async function DashboardPage() {
   const ctx = await requireTenant();
-  const data = await dashboardData(ctx);
+  const [data, payLabels] = await Promise.all([dashboardData(ctx), paymentMethodLabels(ctx)]);
   const boxes = await Promise.all(data.openSessions.map((session) => summarizeSession(ctx, session.id)));
   const max = Math.max(...data.days.map((day) => Math.max(day.total, 0)), 1);
   const hasSalesChart = data.days.some((day) => day.total !== 0);
@@ -63,7 +64,7 @@ export default async function DashboardPage() {
         ))}
       </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         {cards.map((card) => (
           <Card key={card.label}>
             <p className="text-sm text-slate-500">{card.label}</p>
@@ -135,7 +136,7 @@ export default async function DashboardPage() {
                 {Object.entries(data.payMix).filter(([, value]) => value > 0).map(([method, value]) => (
                   <li key={method} className="flex items-center gap-2">
                     <span className="size-2 rounded-full" style={{ background: PAY_COLORS[method] }} />
-                    <span className="flex-1">{PAYMENT_LABEL[method] ?? method}</span>
+                    <span className="flex-1">{payLabels[method] ?? PAYMENT_LABEL[method] ?? method}</span>
                     <span>{Math.round((value / payTotal) * 100)}%</span>
                   </li>
                 ))}
@@ -162,7 +163,7 @@ export default async function DashboardPage() {
                       <td className="py-2">{sell || reports ? <Link href={`/ventas/${sale.id}`}>{sale.id.slice(-6).toUpperCase()}</Link> : sale.id.slice(-6).toUpperCase()}</td>
                       <td className="py-2 text-slate-600">{sale.customer?.name ?? "Público"}</td>
                       <td className="py-2">{formatMoney(sale.total, ctx.currency)}</td>
-                      <td className="py-2 text-slate-500">{sale.payments.map((payment) => PAYMENT_LABEL[payment.method] ?? payment.method).join(", ") || "—"}</td>
+                      <td className="py-2 text-slate-500">{sale.payments.map((payment) => payLabels[payment.method] ?? PAYMENT_LABEL[payment.method] ?? payment.method).join(", ") || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

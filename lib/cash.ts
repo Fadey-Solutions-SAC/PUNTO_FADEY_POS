@@ -51,13 +51,13 @@ export async function summarizeSession(ctx: TenantContext, sessionId: string) {
   const payments = await prisma.salePayment.findMany({
     where: { sale: { sessionId: session.id, businessId: ctx.businessId, status: "COMPLETED" } },
   })
-  const byMethod = { CASH: 0, CARD: 0, TRANSFER: 0, OTHER: 0, CREDIT: 0 }
+  const byMethod: Record<string, number> = { CASH: 0, CARD: 0, TRANSFER: 0, OTHER: 0, CREDIT: 0 }
   for (const payment of payments) {
-    if (payment.method in byMethod) byMethod[payment.method as keyof typeof byMethod] += payment.amount
+    byMethod[payment.method] = (byMethod[payment.method] ?? 0) + payment.amount
   }
   const income = session.movements.filter((item) => INCOME.has(item.type)).reduce((sum, item) => sum + item.amount, 0)
   const expense = session.movements.filter((item) => EXPENSE.has(item.type)).reduce((sum, item) => sum + item.amount, 0)
-  const expected = session.openingAmount + byMethod.CASH + income - expense
+  const expected = session.openingAmount + (byMethod.CASH ?? 0) + income - expense
   return { session, byMethod, income, expense, expected }
 }
 

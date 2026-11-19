@@ -393,6 +393,7 @@ export async function adjustStock(
 export async function sendTransfer(
   ctx: TenantContext,
   input: {
+    fromWarehouseId?: string
     toWarehouseId: string
     notes?: string
     lines: { productId: string; presentationId?: string; quantity: string }[]
@@ -400,8 +401,9 @@ export async function sendTransfer(
 ) {
   assertCan(ctx, "transfer")
   if (!input.lines.length) throw new AppError("Agrega productos a la transferencia")
-  if (input.toWarehouseId === ctx.warehouseId) throw new AppError("El destino debe ser otro almacén")
-  await assertWarehouse(ctx, ctx.warehouseId)
+  const fromWarehouseId = input.fromWarehouseId?.trim() || ctx.warehouseId
+  if (input.toWarehouseId === fromWarehouseId) throw new AppError("El destino debe ser otro almacén")
+  await assertWarehouse(ctx, fromWarehouseId)
   await assertWarehouse(ctx, input.toWarehouseId)
 
   return prisma.$transaction(async (tx) => {
@@ -413,7 +415,7 @@ export async function sendTransfer(
     const transfer = await tx.stockTransfer.create({
       data: {
         businessId: ctx.businessId,
-        fromWarehouseId: ctx.warehouseId,
+        fromWarehouseId,
         toWarehouseId: input.toWarehouseId,
         userId: ctx.userId,
         status: "SENT",
@@ -425,7 +427,7 @@ export async function sendTransfer(
     for (const line of prepared) {
       await applyStock(tx, {
         businessId: ctx.businessId,
-        warehouseId: ctx.warehouseId,
+        warehouseId: fromWarehouseId,
         productId: line.productId,
         userId: ctx.userId,
         direction: "OUT",

@@ -2,6 +2,7 @@
 
 import Badge from "lucide-react/icons/badge";
 import Building2 from "lucide-react/icons/building-2";
+import CreditCard from "lucide-react/icons/credit-card";
 import Download from "lucide-react/icons/download";
 import FileText from "lucide-react/icons/file-text";
 import History from "lucide-react/icons/history";
@@ -21,6 +22,7 @@ const ICONS: Record<string, Icon> = {
   logo: Badge,
   portada: ImageIcon,
   negocio: Store,
+  pagos: CreditCard,
   sucursales: Warehouse,
   otro: Building2,
   usuarios: Users,

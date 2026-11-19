@@ -9,6 +9,7 @@ import { loadCatalog } from "@/lib/catalog";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { formatDate, formatMoney, fromMoneyInt, fromPercentInt } from "@/lib/money";
+import { listPaymentMethods } from "@/lib/payment-methods";
 import { can } from "@/lib/roles";
 import { readDraft } from "@/lib/sales";
 import { requireTenant } from "@/lib/tenant";
@@ -63,7 +64,7 @@ export default async function SalePage({ searchParams }: { searchParams: Promise
     );
   }
 
-  const [products, categories, customers, lists, draft] = sell
+  const [products, categories, customers, lists, draft, paymentMethods] = sell
     ? await Promise.all([
         loadCatalog(ctx),
         prisma.category.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
@@ -75,8 +76,9 @@ export default async function SalePage({ searchParams }: { searchParams: Promise
               throw error;
             })
           : Promise.resolve(null),
+        listPaymentMethods(ctx),
       ])
-    : [[], [], [], [], null];
+    : [[], [], [], [], null, []];
 
   const options = [
     sell ? { href: "/ventas/pendientes", label: "Ventas pendientes" } : null,
@@ -113,6 +115,7 @@ export default async function SalePage({ searchParams }: { searchParams: Promise
               allowCredit={ctx.allowCredit}
               canCredit={can(ctx.role, "credit", ctx.grants)}
               sessionOpen
+              paymentMethods={paymentMethods.map((method) => ({ value: method.code, label: method.label }))}
               draft={draft ?? undefined}
             />
           </Suspense>

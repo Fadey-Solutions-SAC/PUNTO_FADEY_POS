@@ -2,11 +2,13 @@ import { createBranchAction, createRegisterAction, createUserAction, deleteRegis
 import { AppearancePicker } from "@/components/appearance-picker";
 import { SimpleForm } from "@/components/forms";
 import { NewBusinessForm } from "@/components/new-business";
+import { PaymentMethodsSettings } from "@/components/payment-methods-settings";
 import { PrintingSettings } from "@/components/printing-settings";
 import { SettingsBoard, type SettingsItem } from "@/components/settings-board";
 import { AuditSettings, BackupSettings, BillingSettings } from "@/components/settings-extra";
 import { Card, Field, Forbidden, Label, PageHeader, Select } from "@/components/ui";
 import { fromPercentInt } from "@/lib/money";
+import { listPaymentMethods } from "@/lib/payment-methods";
 import { can, PERMISSIONS, PERMISSION_LABEL } from "@/lib/roles";
 import { readTheme } from "@/lib/appearance";
 import { brandLogoUrl, loginCoverUrl } from "@/lib/cover";
@@ -18,13 +20,20 @@ export const instant = false;
 export default async function SettingsPage() {
   const ctx = await requireTenant();
   if (!can(ctx.role, "settings", ctx.grants)) return <Forbidden />;
-  const [{ business, branches, users }, cover, logo, theme] = await Promise.all([businessSnapshot(ctx), loginCoverUrl(), brandLogoUrl(), readTheme(ctx.businessId)]);
+  const [{ business, branches, users }, cover, logo, theme, paymentMethods] = await Promise.all([
+    businessSnapshot(ctx),
+    loginCoverUrl(),
+    brandLogoUrl(),
+    readTheme(ctx.businessId),
+    listPaymentMethods(ctx),
+  ]);
   const registers = branches.flatMap((branch) => branch.registers.filter((register) => register.isActive).map((register) => ({ ...register, branch })));
   const items: SettingsItem[] = [
     { id: "apariencia", group: "Apariencia", label: "Color" },
     { id: "logo", group: "Apariencia", label: "Logo" },
     { id: "portada", group: "Apariencia", label: "Portada" },
     { id: "negocio", group: "Negocio", label: "Datos del negocio" },
+    { id: "pagos", group: "Negocio", label: "Métodos de pago" },
     { id: "sucursales", group: "Negocio", label: "Sucursales" },
     { id: "otro", group: "Negocio", label: "Otro negocio" },
     { id: "usuarios", group: "Equipo", label: "Usuarios" },
@@ -84,6 +93,7 @@ export default async function SettingsPage() {
         </SimpleForm>
       </Card>
           ),
+          pagos: <PaymentMethodsSettings methods={paymentMethods} />,
           sucursales: (
       <Card>
         <h2 className="mb-3 font-medium">Sucursales</h2>

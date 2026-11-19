@@ -219,7 +219,7 @@ async function receiveInside(tx: Tx, ctx: TenantContext, purchaseId: string) {
   })
 }
 
-async function payInside(tx: Tx, ctx: TenantContext, purchaseId: string, amount: number, method: "CASH" | "CARD" | "TRANSFER" | "OTHER") {
+async function payInside(tx: Tx, ctx: TenantContext, purchaseId: string, amount: number, method: string) {
   const purchase = await tx.purchase.findFirst({ where: { id: purchaseId, businessId: ctx.businessId } })
   if (!purchase) throw new AppError("Compra no encontrada")
   if (purchase.status === "CANCELLED") throw new AppError("La compra está anulada")
@@ -263,7 +263,7 @@ export async function receivePurchase(ctx: TenantContext, purchaseId: string) {
   })
 }
 
-export async function payPurchase(ctx: TenantContext, purchaseId: string, amount: string, method: "CASH" | "CARD" | "TRANSFER" | "OTHER") {
+export async function payPurchase(ctx: TenantContext, purchaseId: string, amount: string, method: string) {
   assertCan(ctx, "purchases")
   const value = toMoneyInt(amount)
   return prisma.$transaction(async (tx) => {

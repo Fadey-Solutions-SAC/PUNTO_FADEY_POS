@@ -105,10 +105,10 @@ export async function dashboardData(ctx: TenantContext) {
 
   const returnsYesterday = weekReturns.filter((item) => item.createdAt >= yesterday && item.createdAt < today)
   const yesterdaySales = salesYesterday.reduce((sum, sale) => sum + sale.total, 0) - returnsYesterday.reduce((sum, item) => sum + item.total, 0)
-  const payMix = { CASH: 0, CARD: 0, TRANSFER: 0, OTHER: 0, CREDIT: 0 }
+  const payMix: Record<string, number> = { CASH: 0, CARD: 0, TRANSFER: 0, OTHER: 0, CREDIT: 0 }
   for (const sale of salesToday) {
     for (const payment of sale.payments) {
-      if (payment.method in payMix) payMix[payment.method as keyof typeof payMix] += payment.amount
+      payMix[payment.method] = (payMix[payment.method] ?? 0) + payment.amount
     }
   }
 

@@ -12,6 +12,7 @@ import { eraseAllData } from "@/lib/backup"
 import { saveBrandLogo, saveLoginCover } from "@/lib/cover"
 import { assertAttempts, assertNoCode, configPasswordOk, noteAttempt } from "@/lib/guard"
 import { assertCan } from "@/lib/roles"
+import { createPaymentMethod, deletePaymentMethod } from "@/lib/payment-methods"
 import { createBranch, createWarehouse, deleteWarehouse, updateBusiness } from "@/lib/settings"
 import { createUser, deleteMember, updateMember } from "@/lib/setup"
 import { clearSession, readSession, signSession } from "@/lib/session"
@@ -185,7 +186,7 @@ export async function adjustAction(_prev: { error: string }, formData: FormData)
   }
 }
 
-export async function transferAction(input: { toWarehouseId: string; notes?: string; lines: { productId: string; presentationId?: string; quantity: string }[] }) {
+export async function transferAction(input: { fromWarehouseId?: string; toWarehouseId: string; notes?: string; lines: { productId: string; presentationId?: string; quantity: string }[] }) {
   try {
     const ctx = await requireTenant()
     await sendTransfer(ctx, input)
@@ -243,8 +244,7 @@ export async function saveCustomerAction(_prev: { error: string }, formData: For
 export async function abonoAction(_prev: { error: string }, formData: FormData) {
   try {
     const ctx = await requireTenant()
-    const rawMethod = String(formData.get("method") ?? "CASH")
-    const method = rawMethod === "CARD" || rawMethod === "TRANSFER" || rawMethod === "OTHER" ? rawMethod : "CASH"
+    const method = String(formData.get("method") ?? "CASH").trim() || "CASH"
     await registerAbono(
       ctx,
       String(formData.get("customerId") ?? ""),
@@ -438,5 +438,31 @@ export async function deleteRegisterAction(_prev: { error: string }, formData: F
     return { error: "" }
   } catch (error) {
     return formError(error)
+  }
+}
+
+export async function createPaymentMethodAction(label: string) {
+  try {
+    const ctx = await requireTenant()
+    await createPaymentMethod(ctx, label)
+    revalidatePath("/configuracion")
+    revalidatePath("/ventas")
+    return { ok: true as const }
+  } catch (error) {
+    unstable_rethrow(error)
+    return { ok: false as const, error: errorMessage(error) }
+  }
+}
+
+export async function deletePaymentMethodAction(id: string) {
+  try {
+    const ctx = await requireTenant()
+    await deletePaymentMethod(ctx, id)
+    revalidatePath("/configuracion")
+    revalidatePath("/ventas")
+    return { ok: true as const }
+  } catch (error) {
+    unstable_rethrow(error)
+    return { ok: false as const, error: errorMessage(error) }
   }
 }

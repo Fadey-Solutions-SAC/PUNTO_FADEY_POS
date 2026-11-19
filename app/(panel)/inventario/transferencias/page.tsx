@@ -14,7 +14,7 @@ export default async function TransfersPage() {
   if (!can(ctx.role, "transfer", ctx.grants)) return <Forbidden />;
   const [products, warehouses, transfers] = await Promise.all([
     loadCatalog(ctx),
-    prisma.warehouse.findMany({ where: { businessId: ctx.businessId, isActive: true, id: { not: ctx.warehouseId } }, orderBy: { name: "asc" } }),
+    prisma.warehouse.findMany({ where: { businessId: ctx.businessId, isActive: true }, orderBy: { name: "asc" } }),
     prisma.stockTransfer.findMany({
       where: { businessId: ctx.businessId },
       include: { fromWarehouse: true, toWarehouse: true, user: true, lines: { include: { product: true } } },
@@ -24,10 +24,11 @@ export default async function TransfersPage() {
   ]);
   return (
     <div className="space-y-6">
-      <PageHeader title="Transferencias" description={`Origen actual: ${ctx.warehouseName}. Al enviar sale del origen; al recibir entra al destino.`} />
+      <PageHeader title="Transferencias" description="Elige el almacén de origen y el destino. Al enviar sale del origen; al recibir entra al destino." />
       <TransferForm
         products={products.filter((product) => product.isActive && !product.hasVariants)}
         warehouses={warehouses}
+        currentWarehouseId={ctx.warehouseId}
       />
       <Table
         columns={["Fecha", "Ruta", "Estado", "Responsable", "Detalle", ""]}

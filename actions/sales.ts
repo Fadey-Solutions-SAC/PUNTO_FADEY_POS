@@ -47,12 +47,13 @@ export async function saveDraftAction(input: SaleDraftInput) {
   }
 }
 
-export async function voidSaleAction(saleId: string) {
+export async function voidSaleAction(saleId: string, reason: string, stockMode: "restore" | "keep" = "restore") {
   try {
     const ctx = await requireTenant()
-    await voidSale(ctx, saleId)
+    await voidSale(ctx, saleId, reason, stockMode)
     revalidatePath("/ventas")
     revalidatePath("/inventario")
+    revalidatePath("/")
     return { ok: true as const }
   } catch (error) {
     return fail(error)

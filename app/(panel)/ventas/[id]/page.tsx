@@ -40,6 +40,9 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
             <li key={payment.id}>{PAYMENT_LABEL[payment.method] ?? payment.method}: {formatMoney(payment.amount, ctx.currency)}</li>
           ))}
         </ul>
+        {sale.status === "VOIDED" && sale.notes ? (
+          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{sale.notes}</p>
+        ) : null}
         <div className="no-print mt-4 flex flex-wrap gap-2">
           {sale.status === "DRAFT" ? <Link href={`/ventas?draft=${sale.id}&cobro=1`} className={actionLink.primary}>Cobrar</Link> : null}
           {sale.status === "DRAFT" ? <Link href={`/ventas?draft=${sale.id}`} className={actionLink.secondary}>Retomar</Link> : null}

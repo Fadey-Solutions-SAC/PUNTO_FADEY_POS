@@ -102,8 +102,7 @@ export async function payPurchaseAction(_prev: { error: string }, formData: Form
   try {
     const ctx = await requireTenant()
     const id = String(formData.get("purchaseId") ?? "")
-    const rawMethod = String(formData.get("method") ?? "CASH")
-    const method = rawMethod === "CARD" || rawMethod === "TRANSFER" || rawMethod === "OTHER" ? rawMethod : "CASH"
+    const method = String(formData.get("method") ?? "CASH").trim() || "CASH"
     await payPurchase(ctx, id, String(formData.get("amount") ?? ""), method)
     revalidatePath(`/compras/${id}`)
     revalidatePath("/caja")

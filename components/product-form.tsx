@@ -186,7 +186,10 @@ export function ProductForm({
         <Button type="button" variant="secondary" className="mt-2" onClick={() => patch({ presentations: [...values.presentations, { ...emptyPresentation, isDefault: false, name: "" }] })}>Otra presentación</Button>
       </div>
       <ErrorText>{error}</ErrorText>
-      <Button type="button" disabled={pending} onClick={submit}>{pending ? "Guardando…" : "Guardar producto"}</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" disabled={pending} onClick={submit}>{pending ? "Guardando…" : "Guardar producto"}</Button>
+        <Button type="button" variant="ghost" disabled={pending} onClick={() => router.push("/productos")}>Salir</Button>
+      </div>
     </Card>
   );
 }

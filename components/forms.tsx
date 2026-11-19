@@ -169,12 +169,16 @@ export function SetStockForm({
 export function TransferForm({
   products,
   warehouses,
+  currentWarehouseId,
 }: {
   products: StockProduct[];
   warehouses: { id: string; name: string }[];
+  currentWarehouseId: string;
 }) {
   const [lines, setLines] = useState<{ productId: string; quantity: string }[]>([]);
-  const [toWarehouseId, setToWarehouseId] = useState(warehouses[0]?.id ?? "");
+  const [fromWarehouseId, setFromWarehouseId] = useState(currentWarehouseId);
+  const destinations = warehouses.filter((warehouse) => warehouse.id !== fromWarehouseId);
+  const [toWarehouseId, setToWarehouseId] = useState(destinations[0]?.id ?? "");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -189,9 +193,13 @@ export function TransferForm({
       add(found.id);
     }
   }
+  function changeOrigin(next: string) {
+    setFromWarehouseId(next);
+    setToWarehouseId((current) => (current === next ? (warehouses.find((warehouse) => warehouse.id !== next)?.id ?? "") : current));
+  }
   async function submit() {
     setPending(true);
-    const result = await transferAction({ toWarehouseId, notes, lines });
+    const result = await transferAction({ fromWarehouseId, toWarehouseId, notes, lines });
     setPending(false);
     if (!result.ok) setError(result.error);
     else {
@@ -204,9 +212,15 @@ export function TransferForm({
     <div className="max-w-xl space-y-3">
       <div className="flex gap-2"><CodeField onCode={onCode} /><ScannerButton onCode={onCode} /></div>
       <div>
+        <Label>Origen</Label>
+        <Select value={fromWarehouseId} onChange={(event) => changeOrigin(event.target.value)}>
+          {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+        </Select>
+      </div>
+      <div>
         <Label>Destino</Label>
         <Select value={toWarehouseId} onChange={(event) => setToWarehouseId(event.target.value)}>
-          {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+          {destinations.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
         </Select>
       </div>
       <div>
@@ -251,14 +265,50 @@ export function TransferActions({ id, status }: { id: string; status: string }) 
 
 export function VoidButton({ saleId }: { saleId: string }) {
   const [error, setError] = useState("");
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [stockMode, setStockMode] = useState<"restore" | "keep">("restore");
+  const [pending, setPending] = useState(false);
+  async function confirm() {
+    setPending(true);
+    const result = await voidSaleAction(saleId, reason, stockMode);
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    window.location.reload();
+  }
   return (
     <div>
-      <Button type="button" variant="danger" onClick={async () => {
-        const result = await voidSaleAction(saleId);
-        if (!result.ok) setError(result.error);
-        else window.location.reload();
-      }}>Anular venta</Button>
+      <Button type="button" variant="danger" onClick={() => { setOpen(true); setError(""); }}>Anular venta</Button>
       <ErrorText>{error}</ErrorText>
+      {open ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/50 p-4" role="dialog" aria-modal="true" aria-label="Anular venta" onMouseDown={(event) => { if (event.target === event.currentTarget && !pending) setOpen(false); }}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-[var(--pf-shadow)]">
+            <h3 className="font-semibold text-navy">Anular venta</h3>
+            <p className="mt-1 text-sm text-slate-500">Queda con etiqueta Anulada y no suma en ventas ni caja. Elige qué hacer con el stock.</p>
+            <label className="mt-3 block text-sm text-slate-700">Motivo
+              <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Ej. cobro duplicado, error de producto…" />
+            </label>
+            <fieldset className="mt-3 space-y-2 text-sm text-slate-700">
+              <legend className="font-medium text-navy">Stock</legend>
+              <label className="flex items-start gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                <input type="radio" name="stockMode" className="mt-1" checked={stockMode === "restore"} onChange={() => setStockMode("restore")} />
+                <span><span className="font-medium">Devolver stock</span><span className="block text-xs text-slate-500">Regresa los productos al almacén de la venta.</span></span>
+              </label>
+              <label className="flex items-start gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                <input type="radio" name="stockMode" className="mt-1" checked={stockMode === "keep"} onChange={() => setStockMode("keep")} />
+                <span><span className="font-medium">Mantener stock</span><span className="block text-xs text-slate-500">No mueve inventario; el descuento de la venta se conserva.</span></span>
+              </label>
+            </fieldset>
+            <div className="mt-3 flex gap-2">
+              <Button type="button" variant="danger" disabled={pending} onClick={confirm}>{pending ? "Anulando…" : "Confirmar anulación"}</Button>
+              <Button type="button" variant="ghost" disabled={pending} onClick={() => setOpen(false)}>Cancelar</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

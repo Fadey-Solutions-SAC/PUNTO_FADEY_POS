@@ -37,6 +37,7 @@ export function QuickSale({
   allowCredit,
   canCredit,
   sessionOpen,
+  paymentMethods,
   draft,
 }: {
   products: CatalogProduct[];
@@ -48,6 +49,7 @@ export function QuickSale({
   allowCredit: boolean;
   canCredit: boolean;
   sessionOpen: boolean;
+  paymentMethods?: { value: string; label: string }[];
   draft?: LoadedDraft;
 }) {
   const router = useRouter();
@@ -457,6 +459,7 @@ export function QuickSale({
               currency={currency}
               payments={payments}
               onPayments={setPayments}
+              methods={paymentMethods}
               allowCredit={allowCredit && canCredit}
               saleType={saleType}
               onSaleType={setSaleType}

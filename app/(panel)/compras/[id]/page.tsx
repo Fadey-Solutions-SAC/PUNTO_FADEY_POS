@@ -5,6 +5,7 @@ import { SimpleForm } from "@/components/forms";
 import { Card, Forbidden, PageHeader } from "@/components/ui";
 import { PURCHASE_LABEL } from "@/lib/labels";
 import { formatMoney, formatQty } from "@/lib/money";
+import { listPaymentMethods } from "@/lib/payment-methods";
 import { getPurchase } from "@/lib/purchases";
 import { can } from "@/lib/roles";
 import { requireTenant } from "@/lib/tenant";
@@ -15,7 +16,10 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
   const ctx = await requireTenant();
   if (!can(ctx.role, "purchases", ctx.grants)) return <Forbidden />;
   const { id } = await params;
-  const purchase = await getPurchase(ctx, id).catch(() => null);
+  const [purchase, paymentMethods] = await Promise.all([
+    getPurchase(ctx, id).catch(() => null),
+    listPaymentMethods(ctx),
+  ]);
   if (!purchase) notFound();
   const due = purchase.total - purchase.paid;
   return (
@@ -49,7 +53,12 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
       {due > 0 && purchase.status !== "CANCELLED" ? (
         <Card>
           <h2 className="mb-3 font-medium">Cuenta por pagar</h2>
-          <PurchaseCharge purchaseId={purchase.id} amountCents={due} currency={ctx.currency} />
+          <PurchaseCharge
+            purchaseId={purchase.id}
+            amountCents={due}
+            currency={ctx.currency}
+            methods={paymentMethods.map((method) => ({ value: method.code, label: method.label }))}
+          />
         </Card>
       ) : null}
     </div>

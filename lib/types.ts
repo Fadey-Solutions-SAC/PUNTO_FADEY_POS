@@ -74,5 +74,5 @@ export type SaleDraftInput = {
 export type SaleConfirmInput = SaleDraftInput & {
   draftId?: string
   saleType: "CASH" | "CREDIT"
-  payments: { method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | "CREDIT"; amount: string; reference?: string }[]
+  payments: { method: string; amount: string; reference?: string }[]
 }

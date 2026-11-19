@@ -254,8 +254,16 @@ export async function confirmSale(ctx: TenantContext, input: SaleConfirmInput) {
   }
 }
 
-export async function voidSale(ctx: TenantContext, saleId: string) {
+export async function voidSale(
+  ctx: TenantContext,
+  saleId: string,
+  reasonRaw: string,
+  stockMode: "restore" | "keep" = "restore",
+) {
   assertCan(ctx, "voidSale")
+  const reason = reasonRaw.trim().slice(0, 200)
+  if (reason.length < 3) throw new AppError("Indica el motivo de la anulación")
+  if (stockMode !== "restore" && stockMode !== "keep") throw new AppError("Elige qué hacer con el stock")
   return prisma.$transaction(async (tx) => {
     const sale = await tx.sale.findFirst({
       where: { id: saleId, businessId: ctx.businessId },
@@ -264,19 +272,21 @@ export async function voidSale(ctx: TenantContext, saleId: string) {
     if (!sale) throw new AppError("Venta no encontrada")
     if (sale.status !== "COMPLETED") throw new AppError("Solo se anula una venta confirmada")
     if (sale.returns.length > 0) throw new AppError("La venta tiene devoluciones. Registra la devolución pendiente, no la anules.")
-    for (const line of sale.lines) {
-      await applyStock(tx, {
-        businessId: ctx.businessId,
-        warehouseId: sale.warehouseId,
-        productId: line.productId,
-        userId: ctx.userId,
-        direction: "IN",
-        type: "SALE_VOID",
-        quantity: line.baseQuantity,
-        reason: "Anulación de venta",
-        referenceType: "SALE",
-        referenceId: sale.id,
-      })
+    if (stockMode === "restore") {
+      for (const line of sale.lines) {
+        await applyStock(tx, {
+          businessId: ctx.businessId,
+          warehouseId: sale.warehouseId,
+          productId: line.productId,
+          userId: ctx.userId,
+          direction: "IN",
+          type: "SALE_VOID",
+          quantity: line.baseQuantity,
+          reason: `Anulación: ${reason}`,
+          referenceType: "SALE",
+          referenceId: sale.id,
+        })
+      }
     }
     if (sale.saleType === "CREDIT" && sale.customerId) {
       const updated = await tx.customer.updateMany({
@@ -285,7 +295,16 @@ export async function voidSale(ctx: TenantContext, saleId: string) {
       })
       if (updated.count !== 1) throw new AppError("El cliente ya abonó esta deuda. Usa una devolución.")
     }
-    return tx.sale.update({ where: { id: sale.id }, data: { status: "VOIDED", voidedAt: new Date() } })
+    const stockNote = stockMode === "restore" ? "Stock: devuelto al almacén" : "Stock: mantenido (sin movimiento)"
+    const voidNote = `Anulada · ${reason} · ${stockNote}`
+    return tx.sale.update({
+      where: { id: sale.id },
+      data: {
+        status: "VOIDED",
+        voidedAt: new Date(),
+        notes: sale.notes ? `${sale.notes}\n${voidNote}` : voidNote,
+      },
+    })
   })
 }
 

@@ -7,9 +7,11 @@ import { AccountCharge } from "@/components/account-charge";
 export function CreditCharge({
   currency,
   accounts,
+  methods,
 }: {
   currency: string;
   accounts: { saleId: string; customerId: string; due: number }[];
+  methods?: { value: string; label: string }[];
 }) {
   const cuenta = useSearchParams().get("cuenta") ?? "";
   const account = accounts.find((item) => item.saleId === cuenta);
@@ -19,6 +21,7 @@ export function CreditCharge({
       key={account.saleId}
       amountCents={account.due}
       currency={currency}
+      methods={methods}
       onSubmit={async (method, amount) => {
         const data = new FormData();
         data.set("customerId", account.customerId);

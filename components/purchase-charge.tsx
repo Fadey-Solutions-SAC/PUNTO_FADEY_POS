@@ -7,15 +7,18 @@ export function PurchaseCharge({
   purchaseId,
   amountCents,
   currency,
+  methods,
 }: {
   purchaseId: string;
   amountCents: number;
   currency: string;
+  methods?: { value: string; label: string }[];
 }) {
   return (
     <AccountCharge
       amountCents={amountCents}
       currency={currency}
+      methods={methods}
       onSubmit={async (method, amount) => {
         const data = new FormData();
         data.set("purchaseId", purchaseId);

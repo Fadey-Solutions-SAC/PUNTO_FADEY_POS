@@ -8,16 +8,18 @@ import { fromMoneyInt } from "@/lib/money";
 export function AccountCharge({
   amountCents,
   currency,
+  methods,
   onSubmit,
   onClose,
 }: {
   amountCents: number;
   currency: string;
+  methods?: { value: string; label: string }[];
   onSubmit: (method: ChargeMethod, amount: string) => Promise<string>;
   onClose?: () => void;
 }) {
   const router = useRouter();
-  const [method, setMethod] = useState<ChargeMethod>("CASH");
+  const [method, setMethod] = useState<ChargeMethod>(methods?.[0]?.value ?? "CASH");
   const [amount, setAmount] = useState(fromMoneyInt(amountCents).toFixed(2));
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -48,6 +50,7 @@ export function AccountCharge({
         setMethod(payments[0]?.method ?? "CASH");
         setAmount(payments[0]?.amount ?? "");
       }}
+      methods={methods}
       allowSplit={false}
       pending={pending}
       error={error}

@@ -4,6 +4,7 @@ import { CreditCharge } from "@/components/credit-charge";
 import { Forbidden, PageHeader, Table } from "@/components/ui";
 import { prisma } from "@/lib/db";
 import { formatDate, formatMoney } from "@/lib/money";
+import { listPaymentMethods } from "@/lib/payment-methods";
 import { can } from "@/lib/roles";
 import { requireTenant } from "@/lib/tenant";
 
@@ -12,11 +13,14 @@ export const instant = false;
 export default async function CreditsPage() {
   const ctx = await requireTenant();
   if (!can(ctx.role, "customers", ctx.grants)) return <Forbidden />;
-  const sales = await prisma.sale.findMany({
-    where: { businessId: ctx.businessId, saleType: "CREDIT", status: "COMPLETED" },
-    include: { customer: true, abonos: true, returns: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const [sales, paymentMethods] = await Promise.all([
+    prisma.sale.findMany({
+      where: { businessId: ctx.businessId, saleType: "CREDIT", status: "COMPLETED" },
+      include: { customer: true, abonos: true, returns: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    listPaymentMethods(ctx),
+  ]);
   const open = sales
     .map((sale) => {
       const paid = sale.abonos.reduce((sum, item) => sum + item.amount, 0);
@@ -26,10 +30,11 @@ export default async function CreditsPage() {
     .filter((item) => item.due > 0 && item.sale.customerId);
   return (
     <div className="space-y-4">
-      <PageHeader title="Cuentas por cobrar" description="El cobro usa la misma ventana: efectivo, tarjeta, transferencia u otro. Solo el efectivo entra a la caja." />
+      <PageHeader title="Cuentas por cobrar" description="El cobro usa los métodos configurados. Solo el efectivo entra a la caja." />
       <Suspense fallback={null}>
         <CreditCharge
           currency={ctx.currency}
+          methods={paymentMethods.map((method) => ({ value: method.code, label: method.label }))}
           accounts={open.flatMap(({ sale, due }) => sale.customerId ? [{ saleId: sale.id, customerId: sale.customerId, due }] : [])}
         />
       </Suspense>

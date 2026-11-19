@@ -43,7 +43,7 @@ export async function registerAbono(
   customerId: string,
   amount: string,
   saleId?: string,
-  method: "CASH" | "CARD" | "TRANSFER" | "OTHER" = "CASH",
+  method: string = "CASH",
 ) {
   assertCan(ctx, "customers")
   const value = toMoneyInt(amount)
