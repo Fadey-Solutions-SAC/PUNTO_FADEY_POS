@@ -1,3 +1,5 @@
+# PRODUCCIÓN sigue en Next (start:server). Vite+Express se migra por partes en /client y /server.
+# Cuando el corte esté listo: build = build:vite + prisma; start = start:api
 services:
   - type: web
     name: punto-fadey

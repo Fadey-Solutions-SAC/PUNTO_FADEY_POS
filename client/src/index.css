@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+:root {
+  --pf-navy: #0c2340;
+  --pf-accent: #148a84;
+  --pf-canvas: #0c1222;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--pf-canvas);
+  color: #e2e8f0;
+}
