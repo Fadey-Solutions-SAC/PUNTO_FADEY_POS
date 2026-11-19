@@ -475,3 +475,166 @@ export function getInventoryKardex(producto?: string) {
     }[]
   }>(`/api/inventory/kardex${q}`)
 }
+
+export function getInventoryTransfers() {
+  return request<{
+    currentWarehouseId: string
+    products: { id: string; name: string; barcodes: string[] }[]
+    warehouses: { id: string; name: string }[]
+    transfers: {
+      id: string
+      createdAtLabel: string
+      route: string
+      status: string
+      statusLabel: string
+      userName: string
+      detail: string
+      canReceive: boolean
+    }[]
+  }>("/api/inventory/transfers")
+}
+
+export function sendInventoryTransfer(input: {
+  fromWarehouseId: string
+  toWarehouseId: string
+  notes?: string
+  lines: { productId: string; quantity: string }[]
+}) {
+  return request<{ ok: true; id: string }>("/api/inventory/transfers", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function receiveInventoryTransfer(id: string) {
+  return request<{ ok: true }>(`/api/inventory/transfers/${id}/receive`, { method: "POST" })
+}
+
+export function cancelInventoryTransfer(id: string) {
+  return request<{ ok: true }>(`/api/inventory/transfers/${id}/cancel`, { method: "POST" })
+}
+
+export function getInventoryAdjustments() {
+  return request<{
+    warehouseName: string
+    products: {
+      id: string
+      code: string
+      name: string
+      brand: string
+      category: string
+      stock: string
+      unit: string
+      min: string
+      presentationId: string
+      trackLots: boolean
+    }[]
+  }>("/api/inventory/adjustments")
+}
+
+export function postInventoryAdjustment(input: {
+  productId: string
+  presentationId?: string
+  quantity: string
+  reason: string
+  lotCode?: string
+  expiresAt?: string
+}) {
+  return request<{ ok: true }>("/api/inventory/adjustments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function getSuppliers() {
+  return request<{
+    suppliers: {
+      id: string
+      tradeName: string
+      taxId: string
+      phone: string
+      email: string
+      isActive: boolean
+    }[]
+  }>("/api/purchases/suppliers")
+}
+
+export function saveSupplier(input: {
+  tradeName: string
+  legalName?: string
+  taxId?: string
+  contact?: string
+  phone?: string
+  email?: string
+  address?: string
+}) {
+  return request<{ ok: true; id: string }>("/api/purchases/suppliers", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function getPurchaseHistory() {
+  return request<{
+    currency: string
+    purchases: {
+      id: string
+      createdAtLabel: string
+      supplierName: string
+      documentNumber: string
+      statusLabel: string
+      total: string
+      debt: string
+    }[]
+  }>("/api/purchases/history")
+}
+
+export function getPurchaseRequirement() {
+  return request<{
+    warehouseName: string
+    products: {
+      productId: string
+      name: string
+      categoryName: string | null
+      unit: string
+      stock: string
+      minStock: string
+      maxStock: string | null
+      quantity: string
+    }[]
+  }>("/api/purchases/requirement")
+}
+
+export function savePurchaseRequirement(lines: { productId: string; quantity: string }[]) {
+  return request<{ ok: true }>("/api/purchases/requirement", {
+    method: "POST",
+    body: JSON.stringify({ lines }),
+  })
+}
+
+export function getPurchaseReception() {
+  return request<{
+    suppliers: { id: string; tradeName: string }[]
+    lines: {
+      productId: string
+      name: string
+      unit: string
+      quantity: string
+      unitCost: string
+      presentationId: string
+      presentations: { id: string; name: string; unitCost: string }[]
+    }[]
+  }>("/api/purchases/reception")
+}
+
+export function postPurchaseReception(input: {
+  supplierId: string
+  documentNumber?: string
+  idempotencyKey: string
+  lines: { productId: string; presentationId?: string; quantity: string; unitCost: string }[]
+}) {
+  return request<{ ok: true; id: string }>("/api/purchases/reception", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}

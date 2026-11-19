@@ -1,0 +1,121 @@
+import { useEffect, useMemo, useState } from "react"
+import { getInventoryAdjustments, postInventoryAdjustment } from "../api"
+
+export function AdjustmentsPage() {
+  const [data, setData] = useState<Awaited<ReturnType<typeof getInventoryAdjustments>> | null>(null)
+  const [error, setError] = useState("")
+  const [reason, setReason] = useState("Conteo físico")
+  const [quantities, setQuantities] = useState<Record<string, string>>({})
+  const [pendingId, setPendingId] = useState("")
+
+  async function reload() {
+    const payload = await getInventoryAdjustments()
+    setData(payload)
+    setQuantities(Object.fromEntries(payload.products.map((product) => [product.id, product.stock])))
+  }
+
+  useEffect(() => {
+    reload().catch((err: unknown) => setError(err instanceof Error ? err.message : "Error"))
+  }, [])
+
+  const groups = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof data>["products"]>()
+    for (const product of data?.products ?? []) {
+      const rows = map.get(product.category) ?? []
+      rows.push(product)
+      map.set(product.category, rows)
+    }
+    return [...map.entries()].sort(([a], [b]) => {
+      if (a === "Sin categoría") return 1
+      if (b === "Sin categoría") return -1
+      return a.localeCompare(b, "es")
+    })
+  }, [data])
+
+  async function save(productId: string, presentationId: string) {
+    setPendingId(productId)
+    setError("")
+    try {
+      await postInventoryAdjustment({
+        productId,
+        presentationId,
+        quantity: quantities[productId] ?? "0",
+        reason,
+      })
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo ajustar")
+    } finally {
+      setPendingId("")
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Ajustes</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Escribe el stock real en {data?.warehouseName ?? "el almacén"}. La diferencia queda en el kardex.
+        </p>
+      </div>
+      {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+      <input
+        className="max-w-xs rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        placeholder="Motivo"
+      />
+      {groups.map(([category, products]) => (
+        <div key={category} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <h2 className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {category}
+          </h2>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-3 py-2 font-medium">Producto</th>
+                <th className="px-3 py-2 font-medium">Stock</th>
+                <th className="px-3 py-2 font-medium">Contado</th>
+                <th className="px-3 py-2 font-medium" />
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <tr key={product.id} className="border-t border-slate-100">
+                  <td className="px-3 py-2">
+                    <span className="font-medium text-[var(--pf-navy)]">{product.name}</span>
+                    <span className="block text-xs text-slate-500">
+                      {product.code || "—"} · {product.brand}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {product.stock} {product.unit}
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      className="w-24 rounded-xl border border-slate-200 px-3 py-2"
+                      value={quantities[product.id] ?? product.stock}
+                      onChange={(event) =>
+                        setQuantities((current) => ({ ...current, [product.id]: event.target.value }))
+                      }
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      type="button"
+                      disabled={pendingId === product.id}
+                      onClick={() => save(product.id, product.presentationId)}
+                      className="rounded-xl bg-[var(--pf-navy)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      {pendingId === product.id ? "…" : "Guardar"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  )
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Navigate, Route, Routes } from "react-router-dom"
 import { getBootstrap, getMe, getPanelBootstrap, getVersion, type PanelBootstrap } from "./api"
 import { Shell } from "./layout/Shell"
+import { AdjustmentsPage } from "./pages/AdjustmentsPage"
 import { AlertsPage } from "./pages/AlertsPage"
 import { BarcodesPage } from "./pages/BarcodesPage"
 import { CashHistoryPage } from "./pages/CashHistoryPage"
@@ -17,11 +18,16 @@ import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
 import { PresentationsPage } from "./pages/PresentationsPage"
 import { PricesPage } from "./pages/PricesPage"
+import { PurchaseHistoryPage } from "./pages/PurchaseHistoryPage"
+import { ReceptionPage } from "./pages/ReceptionPage"
+import { RequirementPage } from "./pages/RequirementPage"
 import { ReturnsPage } from "./pages/ReturnsPage"
 import { SaleDetailPage } from "./pages/SaleDetailPage"
 import { SalesHistoryPage } from "./pages/SalesHistoryPage"
 import { SalesPage } from "./pages/SalesPage"
+import { SuppliersPage } from "./pages/SuppliersPage"
 import { TicketPage } from "./pages/TicketPage"
+import { TransfersPage } from "./pages/TransfersPage"
 import { UnitsPage } from "./pages/UnitsPage"
 import { WarehousesPage } from "./pages/WarehousesPage"
 
@@ -120,6 +126,12 @@ export function App() {
           <Route path="inventario/alertas" element={<AlertsPage />} />
           <Route path="inventario/almacenes" element={<WarehousesPage />} />
           <Route path="inventario/kardex" element={<KardexPage />} />
+          <Route path="inventario/transferencias" element={<TransfersPage />} />
+          <Route path="inventario/ajustes" element={<AdjustmentsPage />} />
+          <Route path="compras/proveedores" element={<SuppliersPage />} />
+          <Route path="compras/requerimiento" element={<RequirementPage />} />
+          <Route path="compras/recepcion" element={<ReceptionPage />} />
+          <Route path="compras/historial" element={<PurchaseHistoryPage />} />
           <Route path="pendiente/*" element={<PendingPage />} />
         </Route>
       ) : (

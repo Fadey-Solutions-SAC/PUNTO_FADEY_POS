@@ -15,6 +15,7 @@ import { registerCatalogRoutes } from "./routes/catalog"
 import { registerCatalogExtraRoutes } from "./routes/catalog-extra"
 import { registerCustomersRoutes } from "./routes/customers"
 import { registerInventoryRoutes } from "./routes/inventory"
+import { registerPurchasesRoutes } from "./routes/purchases"
 import { registerSalesRoutes } from "./routes/sales"
 import { APP_VERSION, formatAppVersion } from "../lib/version"
 
@@ -61,6 +62,7 @@ registerCatalogRoutes(app)
 registerCatalogExtraRoutes(app)
 registerCustomersRoutes(app)
 registerInventoryRoutes(app)
+registerPurchasesRoutes(app)
 
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist))
