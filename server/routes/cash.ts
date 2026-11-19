@@ -48,6 +48,7 @@ export function registerCashRoutes(app: Express) {
           cash: can(ctx.role, "cash", ctx.grants),
           cashClose: can(ctx.role, "cashClose", ctx.grants),
           sell: can(ctx.role, "sell", ctx.grants),
+          voidSale: can(ctx.role, "voidSale", ctx.grants),
         },
       })
     } catch (error) {

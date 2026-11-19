@@ -6,6 +6,8 @@ import { formatAppPath } from "../nav"
 const VITE_HREF: Record<string, string> = {
   "/": "/",
   "/ventas": "/ventas",
+  "/ventas/historial": "/ventas/historial",
+  "/ventas/anulaciones": "/ventas/historial?status=VOIDED",
   "/caja": "/caja",
   "/caja/historial": "/caja/historial",
   "/caja/movimientos": "/caja",

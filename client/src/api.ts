@@ -200,3 +200,49 @@ export function getSaleTicket(saleId: string) {
     payments: { label: string; amount: string }[]
   }>(`/api/sales/${saleId}/ticket`)
 }
+
+export function getSalesHistory(status?: "VOIDED") {
+  const q = status ? `?status=${status}` : ""
+  return request<{
+    currency: string
+    canVoid: boolean
+    sales: {
+      id: string
+      code: string
+      status: string
+      statusLabel: string
+      createdAtLabel: string
+      customerName: string
+      userName: string
+      total: string
+      payments: string
+    }[]
+  }>(`/api/sales/history${q}`)
+}
+
+export function getSaleDetail(saleId: string) {
+  return request<{
+    id: string
+    code: string
+    status: string
+    statusLabel: string
+    createdAtLabel: string
+    customerName: string
+    userName: string
+    notes: string | null
+    currency: string
+    subtotal: string
+    discount: string
+    total: string
+    canVoid: boolean
+    lines: { id: string; description: string; quantityLabel: string; unitPrice: string; total: string }[]
+    payments: { method: string; label: string; amount: string }[]
+  }>(`/api/sales/${saleId}`)
+}
+
+export function voidSale(saleId: string, reason: string, stockMode: "restore" | "keep") {
+  return request<{ ok: true }>(`/api/sales/${saleId}/void`, {
+    method: "POST",
+    body: JSON.stringify({ reason, stockMode }),
+  })
+}

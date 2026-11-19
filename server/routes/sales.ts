@@ -2,12 +2,13 @@ import type { Express } from "express"
 import { randomUUID } from "node:crypto"
 import { currentSession } from "../../lib/cash"
 import { errorMessage } from "../../lib/errors"
-import { formatMoney, formatQty, fromMoneyInt } from "../../lib/money"
+import { formatDate, formatMoney, formatQty, fromMoneyInt } from "../../lib/money"
 import { listPaymentMethods } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
 import { resolveUnitPriceCents } from "../../lib/pricing"
 import { can } from "../../lib/roles"
-import { confirmSale, getSale } from "../../lib/sales"
+import { PAYMENT_LABEL } from "../../lib/labels"
+import { confirmSale, getSale, voidSale } from "../../lib/sales"
 import { buildTicketText, type TicketSale } from "../../lib/ticket-text"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
 
@@ -92,6 +93,48 @@ export function registerSalesRoutes(app: Express) {
     }
   })
 
+  app.get("/api/sales/history", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "sell", ctx.grants) && !can(ctx.role, "reports", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso" })
+        return
+      }
+      const onlyVoided = String(req.query.status ?? "") === "VOIDED"
+      const sales = await prisma.sale.findMany({
+        where: {
+          businessId: ctx.businessId,
+          status: onlyVoided ? "VOIDED" : { not: "DRAFT" },
+        },
+        include: { user: true, customer: true, payments: true },
+        orderBy: { createdAt: "desc" },
+        take: 150,
+      })
+      const methods = await listPaymentMethods(ctx)
+      const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
+      res.json({
+        currency: ctx.currency,
+        canVoid: can(ctx.role, "voidSale", ctx.grants),
+        sales: sales.map((sale) => ({
+          id: sale.id,
+          code: sale.id.slice(-6).toUpperCase(),
+          status: sale.status,
+          statusLabel: sale.status === "VOIDED" ? "Anulada" : "Confirmada",
+          createdAt: sale.createdAt.toISOString(),
+          createdAtLabel: formatDate(sale.createdAt),
+          customerName: sale.customer?.name ?? "Público",
+          userName: sale.user.name,
+          total: formatMoney(sale.total, ctx.currency),
+          payments: sale.payments
+            .map((payment) => labels[payment.method] ?? PAYMENT_LABEL[payment.method] ?? payment.method)
+            .join(", "),
+        })),
+      })
+    } catch (error) {
+      res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
   app.post("/api/sales/confirm", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
@@ -120,6 +163,55 @@ export function registerSalesRoutes(app: Express) {
         total: formatMoney(sale.total, ctx.currency),
         totalAmount: fromMoneyInt(sale.total).toFixed(2),
       })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/sales/:id", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const sale = await getSale(ctx, String(req.params.id))
+      const methods = await listPaymentMethods(ctx)
+      const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
+      res.json({
+        id: sale.id,
+        code: sale.id.slice(-6).toUpperCase(),
+        status: sale.status,
+        statusLabel: sale.status === "VOIDED" ? "Anulada" : sale.status === "COMPLETED" ? "Confirmada" : sale.status,
+        createdAtLabel: formatDate(sale.createdAt),
+        customerName: sale.customer?.name ?? "Público",
+        userName: sale.user.name,
+        notes: sale.notes,
+        currency: ctx.currency,
+        subtotal: formatMoney(sale.subtotal, ctx.currency),
+        discount: formatMoney(sale.discount, ctx.currency),
+        total: formatMoney(sale.total, ctx.currency),
+        canVoid: can(ctx.role, "voidSale", ctx.grants) && sale.status === "COMPLETED",
+        lines: sale.lines.map((line) => ({
+          id: line.id,
+          description: line.description,
+          quantityLabel: formatQty(line.quantity),
+          unitPrice: formatMoney(line.unitPrice, ctx.currency),
+          total: formatMoney(line.total, ctx.currency),
+        })),
+        payments: sale.payments.map((payment) => ({
+          method: payment.method,
+          label: labels[payment.method] ?? PAYMENT_LABEL[payment.method] ?? payment.method,
+          amount: formatMoney(payment.amount, ctx.currency),
+        })),
+      })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/sales/:id/void", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const stockMode = String(req.body?.stockMode ?? "restore") === "keep" ? "keep" : "restore"
+      await voidSale(ctx, String(req.params.id), String(req.body?.reason ?? ""), stockMode)
+      res.json({ ok: true })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
     }

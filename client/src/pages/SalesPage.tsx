@@ -136,12 +136,17 @@ export function SalesPage() {
   return (
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <section className="space-y-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Venta rápida</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {registerName ? `Caja ${registerName} · ` : ""}
-            Descuento, varios pagos y ticket.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Venta rápida</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {registerName ? `Caja ${registerName} · ` : ""}
+              Descuento, varios pagos y ticket.
+            </p>
+          </div>
+          <Link to="/ventas/historial" className="text-sm font-medium text-[var(--pf-accent)] hover:underline">
+            Historial
+          </Link>
         </div>
         <input
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
