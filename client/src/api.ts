@@ -638,3 +638,104 @@ export function postPurchaseReception(input: {
     body: JSON.stringify(input),
   })
 }
+
+export function getBilling() {
+  return request<{
+    currency: string
+    sales: { id: string; label: string }[]
+    accepted: { id: string; label: string }[]
+    documents: {
+      id: string
+      issuedAtLabel: string
+      label: string
+      customerName: string
+      status: string
+      statusLabel: string
+      total: string
+    }[]
+  }>("/api/billing")
+}
+
+export function issueBillingDocument(input: { saleId: string; docType: string; relatedId?: string }) {
+  return request<{ ok: true; id: string }>("/api/billing/issue", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function getReport(params: {
+  area: string
+  grupo: string
+  desde?: string
+  hasta?: string
+}) {
+  const query = new URLSearchParams({ area: params.area, grupo: params.grupo })
+  if (params.desde) query.set("desde", params.desde)
+  if (params.hasta) query.set("hasta", params.hasta)
+  return request<{
+    description: string
+    chartTitle: string
+    kpis: { label: string; value: string }[]
+    columns: string[]
+    rows: string[][]
+    chart: { label: string; value: number; text: string }[]
+  }>(`/api/reports?${query}`)
+}
+
+export function getSettings() {
+  return request<{
+    version: string
+    versionLabel: string
+    business: {
+      name: string
+      legalName: string
+      taxId: string
+      currency: string
+      discountLimitPct: string
+      allowCredit: boolean
+    }
+    branches: { id: string; name: string; warehouses: number; registers: number }[]
+    users: { id: string; name: string; email: string; role: string }[]
+    paymentMethods: { id: string; code: string; label: string; locked: boolean }[]
+    hardwareReader: boolean
+  }>("/api/settings")
+}
+
+export function saveSettingsBusiness(input: {
+  name: string
+  legalName?: string
+  taxId?: string
+  currency: string
+  discountLimitPct: string
+  allowCredit: boolean
+}) {
+  return request<{ ok: true }>("/api/settings/business", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function createSettingsBranch(name: string, address?: string) {
+  return request<{ ok: true; id: string }>("/api/settings/branches", {
+    method: "POST",
+    body: JSON.stringify({ name, address }),
+  })
+}
+
+export function createSettingsPaymentMethod(label: string) {
+  return request<{ ok: true }>("/api/settings/payment-methods", {
+    method: "POST",
+    body: JSON.stringify({ label }),
+  })
+}
+
+export function deleteSettingsPaymentMethod(id: string) {
+  return request<{ ok: true }>(`/api/settings/payment-methods/${id}`, { method: "DELETE" })
+}
+
+export function saveSettingsHardwareReader(enabled: boolean) {
+  return request<{ ok: true }>("/api/settings/hardware-reader", {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  })
+}

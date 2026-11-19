@@ -5,6 +5,7 @@ import { Shell } from "./layout/Shell"
 import { AdjustmentsPage } from "./pages/AdjustmentsPage"
 import { AlertsPage } from "./pages/AlertsPage"
 import { BarcodesPage } from "./pages/BarcodesPage"
+import { BillingPage } from "./pages/BillingPage"
 import { CashHistoryPage } from "./pages/CashHistoryPage"
 import { CashPage } from "./pages/CashPage"
 import { CatalogPage } from "./pages/CatalogPage"
@@ -20,8 +21,10 @@ import { PresentationsPage } from "./pages/PresentationsPage"
 import { PricesPage } from "./pages/PricesPage"
 import { PurchaseHistoryPage } from "./pages/PurchaseHistoryPage"
 import { ReceptionPage } from "./pages/ReceptionPage"
+import { ReportsPage } from "./pages/ReportsPage"
 import { RequirementPage } from "./pages/RequirementPage"
 import { ReturnsPage } from "./pages/ReturnsPage"
+import { SettingsPage } from "./pages/SettingsPage"
 import { SaleDetailPage } from "./pages/SaleDetailPage"
 import { SalesHistoryPage } from "./pages/SalesHistoryPage"
 import { SalesPage } from "./pages/SalesPage"
@@ -132,6 +135,9 @@ export function App() {
           <Route path="compras/requerimiento" element={<RequirementPage />} />
           <Route path="compras/recepcion" element={<ReceptionPage />} />
           <Route path="compras/historial" element={<PurchaseHistoryPage />} />
+          <Route path="facturacion" element={<BillingPage />} />
+          <Route path="informes" element={<ReportsPage />} />
+          <Route path="configuracion" element={<SettingsPage />} />
           <Route path="pendiente/*" element={<PendingPage />} />
         </Route>
       ) : (
