@@ -159,7 +159,13 @@ export type SaleProduct = {
 }
 
 export function getSaleStatus() {
-  return request<{ currency: string; cashOpen: boolean; registerName: string | null }>("/api/sales/status")
+  return request<{
+    currency: string
+    cashOpen: boolean
+    registerName: string | null
+    discountLimitPct: number
+    methods: { code: string; label: string }[]
+  }>("/api/sales/status")
 }
 
 export function searchSaleProducts(q: string) {
@@ -171,11 +177,26 @@ export function searchSaleProducts(q: string) {
 export function confirmSale(input: {
   idempotencyKey: string
   discount?: string
+  notes?: string
   lines: { productId: string; presentationId: string; quantity: string }[]
-  payments: { method: string; amount: string }[]
+  payments: { method: string; amount: string; reference?: string }[]
 }) {
   return request<{ ok: true; saleId: string; total: string; totalAmount: string }>("/api/sales/confirm", {
     method: "POST",
     body: JSON.stringify(input),
   })
+}
+
+export function getSaleTicket(saleId: string) {
+  return request<{
+    saleId: string
+    code: string
+    currency: string
+    subtotal: string
+    discount: string
+    total: string
+    text: string
+    lines: { description: string; quantityLabel: string; unitPrice: string; total: string }[]
+    payments: { label: string; amount: string }[]
+  }>(`/api/sales/${saleId}/ticket`)
 }

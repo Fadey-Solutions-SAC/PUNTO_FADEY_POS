@@ -1,13 +1,15 @@
 import type { Express } from "express"
+import { randomUUID } from "node:crypto"
+import { currentSession } from "../../lib/cash"
 import { errorMessage } from "../../lib/errors"
-import { formatMoney, fromMoneyInt } from "../../lib/money"
+import { formatMoney, formatQty, fromMoneyInt } from "../../lib/money"
+import { listPaymentMethods } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
 import { resolveUnitPriceCents } from "../../lib/pricing"
 import { can } from "../../lib/roles"
-import { confirmSale } from "../../lib/sales"
-import { currentSession } from "../../lib/cash"
+import { confirmSale, getSale } from "../../lib/sales"
+import { buildTicketText, type TicketSale } from "../../lib/ticket-text"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
-import { randomUUID } from "node:crypto"
 
 export function registerSalesRoutes(app: Express) {
   app.get("/api/sales/status", requireApiTenant, async (req: AuthedRequest, res) => {
@@ -17,11 +19,15 @@ export function registerSalesRoutes(app: Express) {
         res.status(403).json({ error: "Sin permiso de venta" })
         return
       }
-      const session = await currentSession(ctx)
+      const [session, methods] = await Promise.all([currentSession(ctx), listPaymentMethods(ctx)])
       res.json({
         currency: ctx.currency,
         cashOpen: Boolean(session),
         registerName: session?.register.name ?? null,
+        discountLimitPct: ctx.discountLimitPct,
+        methods: methods
+          .filter((item) => item.code !== "CREDIT")
+          .map((item) => ({ code: item.code, label: item.label })),
       })
     } catch (error) {
       res.status(500).json({ error: errorMessage(error) })
@@ -113,6 +119,65 @@ export function registerSalesRoutes(app: Express) {
         saleId: sale.id,
         total: formatMoney(sale.total, ctx.currency),
         totalAmount: fromMoneyInt(sale.total).toFixed(2),
+      })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/sales/:id/ticket", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const sale = await getSale(ctx, String(req.params.id))
+      const [business, methods] = await Promise.all([
+        prisma.business.findFirst({ where: { id: ctx.businessId } }),
+        listPaymentMethods(ctx),
+      ])
+      const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
+      const ticket: TicketSale = {
+        businessName: business?.name || ctx.businessName,
+        legalName: business?.legalName,
+        taxId: business?.taxId,
+        address: null,
+        code: sale.id.slice(-6).toUpperCase(),
+        createdAt: sale.createdAt,
+        cashier: sale.user.name,
+        customer: sale.customer?.name ?? null,
+        currency: ctx.currency,
+        lines: sale.lines.map((line) => ({
+          description: line.description,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          total: line.total,
+        })),
+        subtotal: sale.subtotal,
+        discount: sale.discount,
+        total: sale.total,
+        payments: sale.payments.map((payment) => ({
+          label: labels[payment.method] ?? payment.method,
+          amount: payment.amount,
+        })),
+        voided: sale.status === "VOIDED",
+      }
+      const width = Number(req.query.width ?? 58)
+      res.json({
+        saleId: sale.id,
+        code: ticket.code,
+        currency: ctx.currency,
+        subtotal: formatMoney(sale.subtotal, ctx.currency),
+        discount: formatMoney(sale.discount, ctx.currency),
+        total: formatMoney(sale.total, ctx.currency),
+        text: buildTicketText(ticket, Number.isFinite(width) ? width : 58),
+        lines: ticket.lines.map((line) => ({
+          description: line.description,
+          quantityLabel: formatQty(line.quantity),
+          unitPrice: formatMoney(line.unitPrice, ctx.currency),
+          total: formatMoney(line.total, ctx.currency),
+        })),
+        payments: ticket.payments.map((payment) => ({
+          label: payment.label,
+          amount: formatMoney(payment.amount, ctx.currency),
+        })),
       })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })

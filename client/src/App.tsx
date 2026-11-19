@@ -9,6 +9,7 @@ import { DashboardPage } from "./pages/DashboardPage"
 import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
 import { SalesPage } from "./pages/SalesPage"
+import { TicketPage } from "./pages/TicketPage"
 
 type Me = Awaited<ReturnType<typeof getMe>>
 
@@ -87,6 +88,7 @@ export function App() {
         <Route element={<Shell panel={panel} />}>
           <Route index element={<DashboardPage panel={panel} />} />
           <Route path="ventas" element={<SalesPage />} />
+          <Route path="ventas/:saleId/ticket" element={<TicketPage />} />
           <Route path="caja" element={<CashPage />} />
           <Route path="caja/cierre" element={<CloseCashPage />} />
           <Route path="caja/historial" element={<CashHistoryPage />} />
