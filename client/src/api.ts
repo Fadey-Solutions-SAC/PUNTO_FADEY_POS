@@ -44,20 +44,61 @@ export function getVersion() {
   return request<{ version: string; label: string; nextStillPrimary?: boolean }>("/api/version")
 }
 
+export type MoneyOut = { cents: number; label: string; amount: string }
+
 export type PanelBootstrap = {
   user: { id: string; name: string; role: string; configMode: boolean }
   business: { id: string; name: string; currency: string }
   branch: { id: string; name: string }
   warehouse: { id: string; name: string }
   nav: { title: string; items: { href: string; label: string }[] }[]
-  permissions: { cash: boolean; cashClose: boolean; sell: boolean }
+  permissions: {
+    cash: boolean
+    cashClose: boolean
+    sell: boolean
+    voidSale?: boolean
+    purchases?: boolean
+    reports?: boolean
+    catalogWrite?: boolean
+  }
+}
+
+export type DashboardPayload = {
+  currency: string
+  salesTotal: MoneyOut
+  operations: number
+  yesterdaySales: MoneyOut
+  yesterdayOperations: number
+  income: MoneyOut
+  expense: MoneyOut
+  profit: MoneyOut
+  products: number
+  low: number
+  empty: number
+  payMix: Record<string, MoneyOut & { label: string }>
+  days: { label: string; total: MoneyOut }[]
+  attention: { name: string; quantityLabel: string; minStockLabel: string }[]
+  openBoxes: {
+    id: string
+    registerName: string
+    userName: string
+    opening: MoneyOut
+    cashSales: MoneyOut
+    income: MoneyOut
+    expense: MoneyOut
+    expected: MoneyOut
+  }[]
+  lastSales: { id: string; code: string; customerName: string; total: MoneyOut; payments: string }[]
+  lastPurchases: { id: string; supplierName: string; total: MoneyOut }[]
+}
+
+export function getDashboard() {
+  return request<DashboardPayload>("/api/panel/dashboard")
 }
 
 export function getPanelBootstrap() {
   return request<PanelBootstrap>("/api/panel/bootstrap")
 }
-
-export type MoneyOut = { cents: number; label: string; amount: string }
 
 export type CashStatus = {
   currency: string
@@ -156,6 +197,8 @@ export type SaleProduct = {
   presentationName: string
   unitPriceCents: number
   unitPriceLabel: string
+  categoryId?: string | null
+  unit?: string
 }
 
 export function getSaleStatus() {
@@ -163,15 +206,29 @@ export function getSaleStatus() {
     currency: string
     cashOpen: boolean
     registerName: string | null
+    openedAtLabel: string | null
+    openingLabel: string | null
     discountLimitPct: number
+    hardwareReader: boolean
+    canSell: boolean
+    categories: { id: string; name: string }[]
+    accesses: { href: string; label: string }[]
     methods: { code: string; label: string }[]
   }>("/api/sales/status")
 }
 
-export function searchSaleProducts(q: string) {
+export function searchSaleProducts(q: string, categoryId?: string) {
+  const params = new URLSearchParams()
+  if (q) params.set("q", q)
+  if (categoryId) params.set("categoryId", categoryId)
+  const query = params.toString()
   return request<{ currency: string; products: SaleProduct[] }>(
-    `/api/sales/products?q=${encodeURIComponent(q)}`,
+    `/api/sales/products${query ? `?${query}` : ""}`,
   )
+}
+
+export function lookupSaleProduct(code: string) {
+  return request<{ product: SaleProduct | null }>(`/api/sales/lookup?code=${encodeURIComponent(code)}`)
 }
 
 export function confirmSale(input: {

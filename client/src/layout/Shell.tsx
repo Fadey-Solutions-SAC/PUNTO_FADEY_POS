@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import type { PanelBootstrap } from "../api"
 import { logout } from "../api"
@@ -37,9 +38,45 @@ const VITE_HREF: Record<string, string> = {
 }
 
 export function Shell({ panel }: { panel: PanelBootstrap }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   async function onLogout() {
     await logout().catch(() => undefined)
     window.location.assign("/login")
+  }
+
+  function NavGroups({ onNavigate }: { onNavigate?: () => void }) {
+    return (
+      <>
+        {panel.nav.map((group) => (
+          <div key={group.title}>
+            <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{group.title}</p>
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const to = VITE_HREF[item.href] ?? formatAppPath(item.href)
+                const migrated = Boolean(VITE_HREF[item.href])
+                return (
+                  <NavLink
+                    key={item.href}
+                    to={to}
+                    end={to === "/"}
+                    onClick={onNavigate}
+                    className={({ isActive }) =>
+                      `block rounded-xl px-3 py-2 text-sm ${
+                        isActive ? "bg-white/15 font-medium text-white" : "text-slate-300 hover:bg-white/10"
+                      } ${migrated ? "" : "opacity-60"}`
+                    }
+                    title={migrated ? undefined : "Pendiente de migrar"}
+                  >
+                    {item.label}
+                  </NavLink>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </>
+    )
   }
 
   return (
@@ -53,33 +90,7 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
           </div>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-          {panel.nav.map((group) => (
-            <div key={group.title}>
-              <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{group.title}</p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const to = VITE_HREF[item.href] ?? formatAppPath(item.href)
-                  const migrated = Boolean(VITE_HREF[item.href])
-                  return (
-                    <NavLink
-                      key={item.href}
-                      to={to}
-                      end={to === "/"}
-                      className={({ isActive }) =>
-                        `block rounded-xl px-3 py-2 text-sm ${
-                          isActive ? "bg-white/15 font-medium text-white" : "text-slate-300 hover:bg-white/10"
-                        } ${migrated ? "" : "opacity-60"}`
-                      }
-                      title={migrated ? undefined : "Pendiente de migrar a Vite"}
-                    >
-                      {item.label}
-                      {!migrated ? <span className="ml-1 text-[10px] text-slate-500">Next</span> : null}
-                    </NavLink>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
+          <NavGroups />
         </nav>
         <div className="border-t border-white/10 px-4 py-3 text-xs text-slate-300">
           <p className="truncate font-medium text-white">{panel.user.name}</p>
@@ -94,14 +105,24 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:px-6">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Express + Vite</p>
-            <p className="font-semibold text-[var(--pf-navy)]">{panel.business.name}</p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="grid size-10 place-items-center rounded-xl border border-slate-200 text-lg md:hidden"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Abrir menú"
+            >
+              ☰
+            </button>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Punto Fadey</p>
+              <p className="font-semibold text-[var(--pf-navy)]">{panel.business.name}</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onLogout}
-            className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-700 md:hidden"
+            className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-700"
           >
             Salir
           </button>
@@ -110,6 +131,23 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
           <Outlet />
         </main>
       </div>
+
+      {menuOpen ? (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button type="button" className="absolute inset-0 bg-black/50" aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-[var(--pf-navy)] text-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+              <p className="font-semibold">Menú</p>
+              <button type="button" className="text-sm text-slate-300" onClick={() => setMenuOpen(false)}>
+                Cerrar
+              </button>
+            </div>
+            <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
+              <NavGroups onNavigate={() => setMenuOpen(false)} />
+            </nav>
+          </aside>
+        </div>
+      ) : null}
     </div>
   )
 }

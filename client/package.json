@@ -1,7 +1,7 @@
 {
   "name": "punto-fadey-client",
   "private": true,
-  "version": "1.0.3.9",
+  "version": "1.0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.9.4"

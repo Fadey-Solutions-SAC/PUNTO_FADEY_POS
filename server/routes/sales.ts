@@ -5,6 +5,7 @@ import { errorMessage } from "../../lib/errors"
 import { formatDate, formatMoney, formatQty, fromMoneyInt } from "../../lib/money"
 import { listPaymentMethods } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
+import { readPosSettings } from "../../lib/pos-settings"
 import { resolveUnitPriceCents } from "../../lib/pricing"
 import { can } from "../../lib/roles"
 import { PAYMENT_LABEL } from "../../lib/labels"
@@ -16,19 +17,95 @@ export function registerSalesRoutes(app: Express) {
   app.get("/api/sales/status", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
-      if (!can(ctx.role, "sell", ctx.grants)) {
+      if (!can(ctx.role, "sell", ctx.grants) && !can(ctx.role, "cash", ctx.grants)) {
         res.status(403).json({ error: "Sin permiso de venta" })
         return
       }
-      const [session, methods] = await Promise.all([currentSession(ctx), listPaymentMethods(ctx)])
+      const [session, methods, pos, categories] = await Promise.all([
+        currentSession(ctx),
+        listPaymentMethods(ctx),
+        readPosSettings(ctx.businessId),
+        prisma.category.findMany({
+          where: { businessId: ctx.businessId },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        }),
+      ])
+      const accesses = [
+        can(ctx.role, "sell", ctx.grants) ? { href: "/ventas/historial", label: "Historial ventas" } : null,
+        can(ctx.role, "cash", ctx.grants) ? { href: "/caja", label: "Movimientos" } : null,
+        can(ctx.role, "cash", ctx.grants) ? { href: "/caja/historial", label: "Historial caja" } : null,
+        can(ctx.role, "cashClose", ctx.grants) ? { href: "/caja/cierre", label: "Cierre" } : null,
+      ].filter((item): item is { href: string; label: string } => item !== null)
+
       res.json({
         currency: ctx.currency,
         cashOpen: Boolean(session),
         registerName: session?.register.name ?? null,
+        openedAtLabel: session ? formatDate(session.openedAt) : null,
+        openingLabel: session ? formatMoney(session.openingAmount, ctx.currency) : null,
         discountLimitPct: ctx.discountLimitPct,
+        hardwareReader: pos.hardwareReader,
+        canSell: can(ctx.role, "sell", ctx.grants),
+        categories,
+        accesses,
         methods: methods
           .filter((item) => item.code !== "CREDIT")
           .map((item) => ({ code: item.code, label: item.label })),
+      })
+    } catch (error) {
+      res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/sales/lookup", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "sell", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso de venta" })
+        return
+      }
+      const code = String(req.query.code ?? "").trim()
+      if (!code) {
+        res.status(400).json({ error: "Código vacío" })
+        return
+      }
+      const product = await prisma.product.findFirst({
+        where: {
+          businessId: ctx.businessId,
+          isActive: true,
+          OR: [{ internalCode: code }, { barcodes: { some: { code } } }],
+        },
+        include: {
+          presentations: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] },
+          barcodes: { where: { code }, take: 1 },
+        },
+      })
+      if (!product || product.presentations.length === 0) {
+        res.json({ product: null })
+        return
+      }
+      const fromBarcode = product.barcodes[0]?.presentationId
+      const presentation =
+        product.presentations.find((item) => item.id === fromBarcode) ??
+        product.presentations.find((item) => item.isDefault) ??
+        product.presentations[0]
+      const unitPrice = resolveUnitPriceCents({
+        product,
+        presentation,
+        mode: "SALE",
+        listItems: null,
+      })
+      res.json({
+        product: {
+          id: product.id,
+          name: product.name,
+          code: product.internalCode,
+          presentationId: presentation.id,
+          presentationName: presentation.name,
+          unitPriceCents: unitPrice,
+          unitPriceLabel: formatMoney(unitPrice, ctx.currency),
+        },
       })
     } catch (error) {
       res.status(500).json({ error: errorMessage(error) })
@@ -43,41 +120,77 @@ export function registerSalesRoutes(app: Express) {
         return
       }
       const q = String(req.query.q ?? "").trim().toLowerCase()
+      const categoryId = String(req.query.categoryId ?? "").trim()
       const products = await prisma.product.findMany({
         where: {
           businessId: ctx.businessId,
           isActive: true,
+          parentId: null,
+          ...(categoryId ? { categoryId } : {}),
           ...(q
             ? {
                 OR: [
                   { name: { contains: q } },
                   { internalCode: { contains: q } },
                   { barcodes: { some: { code: { contains: q } } } },
+                  { variants: { some: { name: { contains: q }, isActive: true } } },
                 ],
               }
             : {}),
         },
         include: {
           presentations: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] },
-          variants: { where: { isActive: true }, select: { id: true }, take: 1 },
+          variants: {
+            where: { isActive: true },
+            include: {
+              presentations: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] },
+            },
+            orderBy: { name: "asc" },
+          },
+          baseUnit: { select: { symbol: true } },
         },
         orderBy: { name: "asc" },
-        take: q ? 40 : 30,
+        take: q ? 40 : 40,
       })
 
       res.json({
         currency: ctx.currency,
-        products: products
-          .filter((product) => product.variants.length === 0 && product.presentations.length > 0)
-          .map((product) => {
-            const presentation = product.presentations.find((item) => item.isDefault) ?? product.presentations[0]
-            const unitPrice = resolveUnitPriceCents({
-              product,
-              presentation,
-              mode: "SALE",
-              listItems: null,
-            })
-            return {
+        products: products.flatMap((product) => {
+          if (product.variants.length > 0) {
+            return product.variants
+              .filter((variant) => variant.presentations.length > 0)
+              .map((variant) => {
+                const presentation =
+                  variant.presentations.find((item) => item.isDefault) ?? variant.presentations[0]
+                const unitPrice = resolveUnitPriceCents({
+                  product: variant,
+                  presentation,
+                  mode: "SALE",
+                  listItems: null,
+                })
+                return {
+                  id: variant.id,
+                  name: `${product.name} · ${variant.variantName || variant.name}`,
+                  code: variant.internalCode,
+                  presentationId: presentation.id,
+                  presentationName: presentation.name,
+                  unitPriceCents: unitPrice,
+                  unitPriceLabel: formatMoney(unitPrice, ctx.currency),
+                  categoryId: product.categoryId,
+                  unit: product.baseUnit.symbol,
+                }
+              })
+          }
+          if (product.presentations.length === 0) return []
+          const presentation = product.presentations.find((item) => item.isDefault) ?? product.presentations[0]
+          const unitPrice = resolveUnitPriceCents({
+            product,
+            presentation,
+            mode: "SALE",
+            listItems: null,
+          })
+          return [
+            {
               id: product.id,
               name: product.name,
               code: product.internalCode,
@@ -85,8 +198,11 @@ export function registerSalesRoutes(app: Express) {
               presentationName: presentation.name,
               unitPriceCents: unitPrice,
               unitPriceLabel: formatMoney(unitPrice, ctx.currency),
-            }
-          }),
+              categoryId: product.categoryId,
+              unit: product.baseUnit.symbol,
+            },
+          ]
+        }),
       })
     } catch (error) {
       res.status(500).json({ error: errorMessage(error) })

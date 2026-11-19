@@ -11,9 +11,12 @@ import { CASH_DENOMS, denomTotalCents } from "../../lib/denominations"
 import { errorMessage } from "../../lib/errors"
 import { CASH_LABEL } from "../../lib/labels"
 import { formatDate, formatMoney, fromMoneyInt } from "../../lib/money"
-import { listPaymentMethods } from "../../lib/payment-methods"
+import { dashboardData } from "../../lib/dashboard"
+import { listPaymentMethods, paymentMethodLabels } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
 import { can } from "../../lib/roles"
+import { formatQty } from "../../lib/money"
+import { PAYMENT_LABEL } from "../../lib/labels"
 import { navigation } from "../../lib/nav"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
 
@@ -49,7 +52,69 @@ export function registerCashRoutes(app: Express) {
           cashClose: can(ctx.role, "cashClose", ctx.grants),
           sell: can(ctx.role, "sell", ctx.grants),
           voidSale: can(ctx.role, "voidSale", ctx.grants),
+          purchases: can(ctx.role, "purchases", ctx.grants),
+          reports: can(ctx.role, "reports", ctx.grants),
+          catalogWrite: can(ctx.role, "catalogWrite", ctx.grants),
         },
+      })
+    } catch (error) {
+      res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/panel/dashboard", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const [data, payLabels] = await Promise.all([dashboardData(ctx), paymentMethodLabels(ctx)])
+      const boxes = await Promise.all(data.openSessions.map((session) => summarizeSession(ctx, session.id)))
+      res.json({
+        currency: ctx.currency,
+        salesTotal: moneyOut(data.salesTotal, ctx.currency),
+        operations: data.operations,
+        yesterdaySales: moneyOut(data.yesterdaySales, ctx.currency),
+        yesterdayOperations: data.yesterdayOperations,
+        income: moneyOut(data.income, ctx.currency),
+        expense: moneyOut(data.expense, ctx.currency),
+        profit: moneyOut(data.profit, ctx.currency),
+        products: data.products,
+        low: data.low,
+        empty: data.empty,
+        payMix: Object.fromEntries(
+          Object.entries(data.payMix).map(([method, cents]) => [
+            method,
+            { ...moneyOut(cents, ctx.currency), label: payLabels[method] ?? PAYMENT_LABEL[method] ?? method },
+          ]),
+        ),
+        days: data.days.map((day) => ({ label: day.label, total: moneyOut(day.total, ctx.currency) })),
+        attention: data.attention.map((item) => ({
+          name: item.name,
+          quantityLabel: formatQty(item.quantity),
+          minStockLabel: formatQty(item.minStock),
+        })),
+        openBoxes: boxes.map((box) => ({
+          id: box.session.id,
+          registerName: box.session.register.name,
+          userName: box.session.user.name,
+          opening: moneyOut(box.session.openingAmount, ctx.currency),
+          cashSales: moneyOut(box.byMethod.CASH ?? 0, ctx.currency),
+          income: moneyOut(box.income, ctx.currency),
+          expense: moneyOut(box.expense, ctx.currency),
+          expected: moneyOut(box.expected, ctx.currency),
+        })),
+        lastSales: data.lastSales.map((sale) => ({
+          id: sale.id,
+          code: sale.id.slice(-6).toUpperCase(),
+          customerName: sale.customer?.name ?? "Público",
+          total: moneyOut(sale.total, ctx.currency),
+          payments: sale.payments
+            .map((payment) => payLabels[payment.method] ?? PAYMENT_LABEL[payment.method] ?? payment.method)
+            .join(", ") || "—",
+        })),
+        lastPurchases: data.lastPurchases.map((purchase) => ({
+          id: purchase.id,
+          supplierName: purchase.supplier.tradeName,
+          total: moneyOut(purchase.total, ctx.currency),
+        })),
       })
     } catch (error) {
       res.status(500).json({ error: errorMessage(error) })
