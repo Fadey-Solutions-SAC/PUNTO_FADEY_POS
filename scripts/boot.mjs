@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync } from "node:fs"
 import path from "node:path"
+import { normalizeRawSqliteTables } from "./normalize-raw-sqlite.mjs"
 
 // Heap bajo solo al correr (plan starter ~512 MB).
 process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, "--max-old-space-size=400"]
@@ -13,6 +14,13 @@ if (configured) {
   mkdirSync(path.dirname(file), { recursive: true })
   mkdirSync(path.join(path.dirname(file), "uploads"), { recursive: true })
   process.env.DATABASE_URL = `file:${file.replaceAll("\\", "/")}`
+}
+
+try {
+  await normalizeRawSqliteTables()
+} catch (error) {
+  console.error("[boot] normalize-raw-sqlite falló:", error)
+  process.exit(1)
 }
 
 const push = spawnSync("npx", ["prisma", "db", "push", "--skip-generate"], {

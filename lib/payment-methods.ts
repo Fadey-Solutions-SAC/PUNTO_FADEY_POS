@@ -26,9 +26,13 @@ async function ensureTable() {
       code TEXT NOT NULL,
       label TEXT NOT NULL,
       locked INTEGER NOT NULL DEFAULT 0,
-      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(businessId, code)
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
+  `)
+  // Índice nombrado (estilo Prisma). Evita UNIQUE(...) → sqlite_autoindex_* que db push no puede dropear.
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "BusinessPaymentMethod_businessId_code_key"
+    ON "BusinessPaymentMethod"("businessId", "code")
   `)
 }
 
