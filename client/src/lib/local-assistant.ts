@@ -9,6 +9,10 @@ export const ASSISTANT_DOWNLOAD_URL =
   (import.meta.env.VITE_ASSISTANT_DOWNLOAD_URL as string | undefined) ||
   "https://github.com/Fadey-Solutions-SAC/RESTO_FADEY_POS/releases/latest/download/Fadey.Impresion.Setup.exe"
 
+/** El asistente (programa Resto FADEY) se pone «en espera» y cierra sus puertos cuando Resto Fadey no tiene usuarios. */
+export const ASSISTANT_HELP =
+  "No se encontró el asistente en esta PC. Si el ícono de Resto FADEY junto al reloj dice «en espera», haz clic derecho sobre él y elige «Reintentar servicio de impresión»."
+
 export type PrintPrefs = { autoPrint: boolean; paperWidth: 58 | 80 }
 
 export type PrintPayload = {
@@ -84,7 +88,7 @@ export async function discover() {
 
 async function assistant() {
   const origin = await discover()
-  if (!origin) throw new Error("No se encontró el asistente de impresión en esta PC. Ábrelo o instálalo.")
+  if (!origin) throw new Error(ASSISTANT_HELP)
   return origin
 }
 

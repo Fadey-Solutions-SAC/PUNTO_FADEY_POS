@@ -153,7 +153,14 @@ function PrintingPanel() {
 
       {link === "sin-asistente" ? (
         <div className="rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-900">
-          No responde en esta PC. Abre Fadey Impresión desde el menú de Windows (junto al reloj) o instálalo.
+          <p className="font-semibold">El asistente no responde en esta PC.</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            <li>
+              Si el ícono de <b>Resto FADEY</b> junto al reloj dice <b>«en espera (sin usuarios en el sistema)»</b>: haz clic derecho sobre él y elige{" "}
+              <b>«Reintentar servicio de impresión»</b>. Luego pulsa «Buscar de nuevo».
+            </li>
+            <li>Si no aparece el ícono, abre Resto FADEY desde el menú de Windows o instálalo.</li>
+          </ul>
           <div className="mt-2 flex flex-wrap gap-2">
             <a href={ASSISTANT_DOWNLOAD_URL} className="inline-flex h-9 items-center rounded-lg bg-[var(--pf-accent)] px-3 text-sm font-semibold text-white">
               Descargar asistente

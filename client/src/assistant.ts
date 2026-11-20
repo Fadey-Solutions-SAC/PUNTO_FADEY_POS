@@ -9,7 +9,7 @@ import {
   releaseAssistantEmit,
   saveAssistantEmitResult,
 } from "./api"
-import { efactReachable, emitWithLocalBot, printText, readPrefs } from "./lib/local-assistant"
+import { ASSISTANT_HELP, efactReachable, emitWithLocalBot, printText, readPrefs } from "./lib/local-assistant"
 import { qrDataUrl } from "./lib/qr-image"
 
 export async function printSaleTicket(saleId: string) {
@@ -60,7 +60,7 @@ function trimResult(data: Record<string, unknown>): AssistantResult {
 /** Firma y envía a SUNAT con el asistente de esta PC. Solo termina bien si SUNAT aceptó (CDR válido). */
 export async function emitDocument(documentId: string, onStatus: (message: string) => void) {
   onStatus("Buscando el asistente en esta PC…")
-  if (!(await efactReachable())) throw new Error("No se encontró el asistente en esta PC. Ábrelo y vuelve a intentar.")
+  if (!(await efactReachable())) throw new Error(ASSISTANT_HELP)
   onStatus("Firmando y enviando a SUNAT…")
   const prepared = await prepareAssistantEmit(documentId)
   let data: Record<string, unknown>
