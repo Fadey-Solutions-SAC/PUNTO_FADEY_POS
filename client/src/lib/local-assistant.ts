@@ -118,23 +118,51 @@ export async function listPrinters() {
     .filter(Boolean)
 }
 
+/**
+ * El asistente es compartido con Resto Fadey (módulos «caja», «cocina», «bar»).
+ * Punto Fadey guarda y usa su propio módulo «punto» para no cambiar la configuración de Resto.
+ * Mientras «punto» no exista, imprime con la impresora de «caja» sin modificarla.
+ */
+export const PRINT_MODULE = "punto"
+const FALLBACK_MODULE = "caja"
+
+type ModuleConfig = { nombre?: string; anchoPapel?: number; paperWidth?: number; tipo?: string; ip?: string; puerto?: number }
+
+async function readPrintingConfig() {
+  return ((await send("/api/printing/config")) ?? {}) as Record<string, ModuleConfig | undefined>
+}
+
+function configured(cfg: ModuleConfig | undefined) {
+  return Boolean(cfg && (cfg.tipo === "red" ? cfg.ip : cfg.nombre))
+}
+
+/** Módulo con el que imprime Punto Fadey: el propio si ya se configuró; si no, el de caja (solo lectura). */
+async function activeModule() {
+  const all = await readPrintingConfig()
+  return configured(all[PRINT_MODULE]) ? PRINT_MODULE : FALLBACK_MODULE
+}
+
 export async function readCashierPrinter() {
-  const data = (await send("/api/printing/config")) as { caja?: { nombre?: string; anchoPapel?: number; paperWidth?: number; tipo?: string; ip?: string; puerto?: number } } | null
-  const caja = data?.caja ?? {}
+  const all = await readPrintingConfig()
+  const own = configured(all[PRINT_MODULE])
+  const cfg = (own ? all[PRINT_MODULE] : all[FALLBACK_MODULE]) ?? {}
   return {
-    tipo: caja.tipo === "red" ? "red" : "usb",
-    nombre: caja.nombre ?? "",
-    ip: caja.ip ?? "",
-    puerto: caja.puerto ?? 9100,
-    paperWidth: (caja.anchoPapel ?? caja.paperWidth) === 58 ? 58 : 80,
+    tipo: cfg.tipo === "red" ? "red" : "usb",
+    nombre: cfg.nombre ?? "",
+    ip: cfg.ip ?? "",
+    puerto: cfg.puerto ?? 9100,
+    paperWidth: (cfg.anchoPapel ?? cfg.paperWidth) === 58 ? 58 : 80,
+    /** false = todavía usa la impresora de caja de Resto Fadey. */
+    own,
   } as const
 }
 
 export async function saveCashierPrinter(input: { tipo: "usb" | "red"; nombre: string; ip: string; puerto: number; paperWidth: 58 | 80 }) {
+  // Solo se envía el módulo «punto»: el asistente lo une a lo existente sin tocar caja/cocina/bar de Resto.
   await send("/api/printing/config", {
     method: "PUT",
     body: JSON.stringify({
-      caja: {
+      [PRINT_MODULE]: {
         tipo: input.tipo,
         nombre: input.nombre,
         ip: input.ip,
@@ -149,12 +177,12 @@ export async function saveCashierPrinter(input: { tipo: "usb" | "red"; nombre: s
 }
 
 export async function printerStatus() {
-  const data = (await send("/api/printing/status/caja")) as { connected?: boolean; status?: string } | null
+  const data = (await send(`/api/printing/status/${await activeModule()}`)) as { connected?: boolean; status?: string } | null
   return { connected: data?.connected === true, label: String(data?.status ?? "") }
 }
 
 export async function testPrint() {
-  await send("/api/printing/test/caja", { method: "POST", body: "{}" })
+  await send(`/api/printing/test/${await activeModule()}`, { method: "POST", body: "{}" })
 }
 
 function absolute(url: string | null | undefined) {
@@ -173,7 +201,7 @@ export async function printText(text: string, options: { brand?: string; logo?: 
     logoUrl: absolute(options.logo),
     ...(options.qrDataUrl ? { footerImageUrl: options.qrDataUrl, footerImageMaxDots: width === 58 ? 240 : 320 } : {}),
   }
-  await send("/api/printing/print/caja", { method: "POST", body: JSON.stringify(payload) }, 30000)
+  await send(`/api/printing/print/${await activeModule()}`, { method: "POST", body: JSON.stringify(payload) }, 30000)
 }
 
 export async function efactReachable() {

@@ -52,6 +52,7 @@ function PrintingPanel() {
   const [autoPrint, setAutoPrint] = useState(true)
   const [efact, setEfact] = useState<boolean | null>(null)
   const [status, setStatus] = useState("")
+  const [ownPrinter, setOwnPrinter] = useState(true)
   const [message, setMessage] = useState("")
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -91,6 +92,7 @@ function PrintingPanel() {
       setIp(current.ip)
       setPuerto(String(current.puerto || 9100))
       setPaper(current.paperWidth)
+      setOwnPrinter(current.own)
       setStatus(state?.label ?? "")
     } catch (error) {
       setFailed(true)
@@ -112,7 +114,8 @@ function PrintingPanel() {
       await saveCashierPrinter({ tipo, nombre, ip, puerto: Number(puerto) || 9100, paperWidth: paper })
       const state = await printerStatus().catch(() => null)
       setStatus(state?.label ?? "")
-      setMessage("Impresora guardada en el asistente")
+      setOwnPrinter(true)
+      setMessage("Impresora de Punto Fadey guardada en el asistente (no cambia la de Resto Fadey)")
     } catch (error) {
       setFailed(true)
       setMessage(error instanceof Error ? error.message : "No se pudo guardar")
@@ -184,6 +187,13 @@ function PrintingPanel() {
         <p className="-mt-2 text-xs text-slate-500">
           En uso: {origin}
           {status ? ` · Ticketera: ${status}` : ""}
+        </p>
+      ) : null}
+
+      {link === "conectado" ? (
+        <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          El asistente es el mismo de Resto Fadey. Punto Fadey guarda su propia impresora y no cambia la de caja, cocina ni bar de Resto.
+          {!ownPrinter ? " Por ahora usa la impresora de caja de Resto; guarda una aquí si quieres otra." : ""}
         </p>
       ) : null}
 
