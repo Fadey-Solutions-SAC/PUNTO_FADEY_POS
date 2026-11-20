@@ -4,8 +4,10 @@ services:
     name: punto-fadey
     runtime: node
     plan: starter
-    buildCommand: npm install --include=dev && node scripts/build-render.mjs
+    # Solo dependencias de producción en la raíz (sin Next/ESLint); el cliente Vite instala las suyas.
+    buildCommand: npm install --omit=dev --no-audit --no-fund && node scripts/build-render.mjs
     startCommand: npm run start:server
+    healthCheckPath: /api/healthz
     envVars:
       - key: NODE_VERSION
         value: "20.19.0"

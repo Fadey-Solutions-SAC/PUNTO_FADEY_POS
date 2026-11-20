@@ -16,6 +16,7 @@ if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 16) {
 mkdirSync("prisma", { recursive: true })
 
 function run(label, command, args) {
+  const started = Date.now()
   console.log(`\n[build-render] ${label}`)
   const result = spawnSync(command, args, {
     stdio: "inherit",
@@ -30,6 +31,7 @@ function run(label, command, args) {
     console.error(`[build-render] falló ${label} (exit ${result.status})`)
     process.exit(result.status ?? 1)
   }
+  console.log(`[build-render] ${label}: ${((Date.now() - started) / 1000).toFixed(1)} s`)
 }
 
 const bin = (name) =>
@@ -38,18 +40,23 @@ const bin = (name) =>
 const required = [
   "node_modules/prisma/package.json",
   "node_modules/express/package.json",
-  "node_modules/tsx/package.json",
+  "node_modules/esbuild/package.json",
 ]
 
 for (const file of required) {
   if (!existsSync(file)) {
-    console.error(`[build-render] falta ${file}. Revisa el Build Command: npm install --include=dev`)
+    console.error(`[build-render] falta ${file}. Revisa el Build Command (npm install).`)
     process.exit(1)
   }
 }
 
 run("prisma generate", bin("prisma"), ["generate"])
-run("vite client deps", "npm", ["install", "--prefix", "client", "--include=dev"])
+
+// Cliente Vite: sus devDependencies (vite, tailwind) sí hacen falta para compilar.
+const clientInstall = existsSync(path.join("client", "node_modules", ".bin", "vite"))
+  ? ["install", "--prefix", "client", "--include=dev", "--no-audit", "--no-fund", "--prefer-offline"]
+  : ["ci", "--prefix", "client", "--include=dev", "--no-audit", "--no-fund"]
+run("vite client deps", "npm", clientInstall)
 run("vite build", "npm", ["run", "build", "--prefix", "client"])
 
 if (!existsSync(path.join("client", "dist", "index.html"))) {
@@ -57,4 +64,21 @@ if (!existsSync(path.join("client", "dist", "index.html"))) {
   process.exit(1)
 }
 
-console.log("\n[build-render] listo: Express + Vite (sin Next build)")
+// Servidor: un solo archivo JS. Evita compilar TypeScript con tsx en cada arranque.
+run("server bundle", bin("esbuild"), [
+  "server/app.ts",
+  "--bundle",
+  "--platform=node",
+  "--format=esm",
+  "--target=node20",
+  "--packages=external",
+  "--outfile=dist/server.mjs",
+  "--log-level=warning",
+])
+
+if (!existsSync(path.join("dist", "server.mjs"))) {
+  console.error("[build-render] falta dist/server.mjs tras el bundle")
+  process.exit(1)
+}
+
+console.log("\n[build-render] listo: Express (dist/server.mjs) + Vite (client/dist)")
