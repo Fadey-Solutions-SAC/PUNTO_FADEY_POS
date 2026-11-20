@@ -1,4 +1,5 @@
 import type { Express } from "express"
+import { saleTicket } from "../../lib/ticket-data"
 import { randomUUID } from "node:crypto"
 import { currentSession } from "../../lib/cash"
 import { errorMessage } from "../../lib/errors"
@@ -455,40 +456,12 @@ export function registerSalesRoutes(app: Express) {
   app.get("/api/sales/:id/ticket", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
-      const sale = await getSale(ctx, String(req.params.id))
-      const [business, methods] = await Promise.all([
-        prisma.business.findFirst({ where: { id: ctx.businessId } }),
-        listPaymentMethods(ctx),
-      ])
-      const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
-      const ticket: TicketSale = {
-        businessName: business?.name || ctx.businessName,
-        legalName: business?.legalName,
-        taxId: business?.taxId,
-        address: null,
-        code: sale.id.slice(-6).toUpperCase(),
-        createdAt: sale.createdAt,
-        cashier: sale.user.name,
-        customer: sale.customer?.name ?? null,
-        currency: ctx.currency,
-        lines: sale.lines.map((line) => ({
-          description: line.description,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          total: line.total,
-        })),
-        subtotal: sale.subtotal,
-        discount: sale.discount,
-        total: sale.total,
-        payments: sale.payments.map((payment) => ({
-          label: labels[payment.method] ?? payment.method,
-          amount: payment.amount,
-        })),
-        voided: sale.status === "VOIDED",
-      }
+      const { sale, data: ticket, logo } = await saleTicket(ctx, String(req.params.id))
       const width = Number(req.query.width ?? 58)
       res.json({
         saleId: sale.id,
+        brand: ticket.businessName,
+        logo,
         code: ticket.code,
         currency: ctx.currency,
         subtotal: formatMoney(sale.subtotal, ctx.currency),

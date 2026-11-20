@@ -336,9 +336,11 @@ export function confirmSale(input: {
   })
 }
 
-export function getSaleTicket(saleId: string) {
+export function getSaleTicket(saleId: string, width?: number) {
   return request<{
     saleId: string
+    brand?: string
+    logo?: string | null
     code: string
     currency: string
     subtotal: string
@@ -347,7 +349,7 @@ export function getSaleTicket(saleId: string) {
     text: string
     lines: { description: string; quantityLabel: string; unitPrice: string; total: string }[]
     payments: { label: string; amount: string }[]
-  }>(`/api/sales/${saleId}/ticket`)
+  }>(`/api/sales/${saleId}/ticket${width ? `?width=${width}` : ""}`)
 }
 
 export function getSalesHistory(status?: "VOIDED") {
@@ -897,12 +899,21 @@ export function getBilling() {
       attempts?: number
       lastError?: string
       hasCdr?: boolean
+      hasPdf?: boolean
+      docType?: string
     }[]
   }>("/api/billing")
 }
 
-export function issueBillingDocument(input: { saleId: string; docType: string; relatedId?: string; buyerDocument?: string; buyerName?: string }) {
-  return request<{ ok: true; id: string }>("/api/billing/issue", {
+export function issueBillingDocument(input: {
+  saleId: string
+  docType: string
+  relatedId?: string
+  buyerDocument?: string
+  buyerName?: string
+  buyerAddress?: string
+}) {
+  return request<{ ok: true; id: string; status: string }>("/api/billing/issue", {
     method: "POST",
     body: JSON.stringify(input),
   })
@@ -1375,6 +1386,7 @@ export type BillingConfig = {
   environment: string
   igvRate: string
   hasToken: boolean
+  assistantReady: boolean
   configured: boolean
   series: { docType: string; label: string; series: string; nextNumber: number; locked: boolean }[]
 }
@@ -1480,4 +1492,50 @@ export function closeCount(id: string, uncounted: "KEEP" | "ZERO") {
 
 export function cancelCount(id: string) {
   return request<{ ok: true }>(`/api/inventory/counts/${id}/cancel`, { method: "POST" })
+}
+
+// ---- Asistente local (Fadey Impresión): ticketera y SUNAT ----
+export type AssistantBilling = {
+  tradeName: string
+  address: string
+  ubigeo: string
+  department: string
+  province: string
+  district: string
+  phone: string
+  email: string
+  solUser: string
+  hasSolPassword: boolean
+  certName: string
+  hasCertPassword: boolean
+  ready: boolean
+}
+
+export function getAssistantBilling() {
+  return request<AssistantBilling>("/api/assistant/billing")
+}
+
+export function saveAssistantBilling(input: Record<string, string>) {
+  return request<{ ok: true; ready: boolean }>("/api/assistant/billing", { method: "POST", body: JSON.stringify(input) })
+}
+
+export function getDocumentTicket(id: string, width: number) {
+  return request<{ text: string; brand: string; logo: string | null; qr: string; accepted: boolean; saleId: string }>(
+    `/api/billing/${id}/ticket?width=${width}`,
+  )
+}
+
+export function prepareAssistantEmit(id: string) {
+  return request<{ ok: true; sale: unknown }>(`/api/billing/${id}/assistant/prepare`, { method: "POST" })
+}
+
+export function saveAssistantEmitResult(id: string, result: unknown) {
+  return request<{ ok: true; status: string; error: string }>(`/api/billing/${id}/assistant/result`, {
+    method: "POST",
+    body: JSON.stringify(result),
+  })
+}
+
+export function releaseAssistantEmit(id: string, reason: string) {
+  return request<{ ok: true }>(`/api/billing/${id}/assistant/release`, { method: "POST", body: JSON.stringify({ reason }) })
 }

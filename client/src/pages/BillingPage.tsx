@@ -11,6 +11,8 @@ import {
   type BillingConfig,
 } from "../api"
 import { DocumentLookup } from "../components/DocumentLookup"
+import { emitDocument, printDocumentTicket } from "../assistant"
+import { readPrefs } from "../lib/local-assistant"
 
 type Data = Awaited<ReturnType<typeof getBilling>>
 type Doc = Data["documents"][number]
@@ -78,6 +80,23 @@ export function BillingPage() {
     }
   }
 
+  async function onEmit(doc: Doc) {
+    setBusy(true)
+    setError("")
+    setMessage("")
+    try {
+      await emitDocument(doc.id, setMessage)
+      setMessage(`SUNAT aceptó ${doc.label}`)
+      if (readPrefs().autoPrint) await printDocumentTicket(doc.id).catch(() => undefined)
+    } catch (err) {
+      setMessage("")
+      setError(err instanceof Error ? err.message : "No se pudo emitir")
+    } finally {
+      await reload().catch(() => undefined)
+      setBusy(false)
+    }
+  }
+
   async function onPrint(doc: Doc) {
     if (!doc.saleId) return
     try {
@@ -126,7 +145,7 @@ export function BillingPage() {
         </div>
       </div>
 
-      {config && (!config.taxIdValid || !config.configured) ? (
+      {config && (!config.taxIdValid || (!config.configured && !config.assistantReady)) ? (
         <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {!config.taxIdValid ? (
             <p>
@@ -137,9 +156,13 @@ export function BillingPage() {
               para poder emitir.
             </p>
           ) : null}
-          {!config.configured ? (
+          {!config.configured && !config.assistantReady ? (
             <p>
-              <b>Proveedor no configurado.</b> Los comprobantes se generan y numeran, pero quedan en cola hasta que configures el envío en la pestaña Configuración.
+              <b>Falta configurar el envío a SUNAT.</b> Completa los datos del asistente local en{" "}
+              <Link to="/configuracion?m=impresion" className="font-semibold underline">
+                Configuración → Impresión y SUNAT
+              </Link>{" "}
+              (o un proveedor externo en la pestaña Configuración). Mientras tanto los comprobantes quedan en cola.
             </p>
           ) : null}
         </div>
@@ -186,7 +209,18 @@ export function BillingPage() {
                         <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{doc.total}</td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap justify-end gap-1 text-xs font-semibold">
-                            {doc.status !== "ACCEPTED" ? (
+                            {doc.status !== "ACCEPTED" && (doc.docType === "BOLETA" || doc.docType === "FACTURA") ? (
+                              <button
+                                type="button"
+                                disabled={busy || (doc.attempts ?? 0) >= 5}
+                                onClick={() => void onEmit(doc)}
+                                className="rounded-lg bg-emerald-600 px-2 py-1 text-white disabled:opacity-50"
+                                title="Firmar y enviar a SUNAT con el asistente de esta PC"
+                              >
+                                {doc.attempts ? "Reintentar (asistente)" : "Emitir (asistente)"}
+                              </button>
+                            ) : null}
+                            {doc.status !== "ACCEPTED" && config?.configured ? (
                               <button
                                 type="button"
                                 disabled={busy || (doc.attempts ?? 0) >= 5}
@@ -195,6 +229,21 @@ export function BillingPage() {
                               >
                                 {doc.attempts ? "Reintentar" : "Enviar"}
                               </button>
+                            ) : null}
+                            {doc.saleId ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void run(() => printDocumentTicket(doc.id), "Enviado a la ticketera")}
+                                className="rounded-lg px-2 py-1 text-teal-700 hover:bg-teal-50"
+                              >
+                                Ticketera
+                              </button>
+                            ) : null}
+                            {doc.hasPdf ? (
+                              <a href={`/api/billing/${doc.id}/pdf`} className="rounded-lg px-2 py-1 text-rose-700 hover:bg-rose-50">
+                                PDF
+                              </a>
                             ) : null}
                             <a href={`/api/billing/${doc.id}/xml`} className="rounded-lg px-2 py-1 text-[var(--pf-accent)] hover:bg-slate-100">
                               XML
@@ -349,6 +398,22 @@ function ConfigPanel({ config, busy, run }: { config: BillingConfig; busy: boole
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 lg:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-[var(--pf-navy)]">Asistente local (Fadey Impresión)</h2>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${config.assistantReady ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+            {config.assistantReady ? "Listo para emitir" : "Faltan datos"}
+          </span>
+        </div>
+        <p className="text-sm text-slate-600">
+          Es el camino principal: el asistente de la PC de caja firma con tu certificado y envía a SUNAT. Sus datos (dirección fiscal, ubigeo, usuario y clave SOL,
+          certificado) están en{" "}
+          <Link to="/configuracion?m=impresion" className="font-semibold text-[var(--pf-accent)] underline">
+            Configuración → Impresión y SUNAT
+          </Link>
+          . El ambiente y el IGV de abajo valen para los dos caminos.
+        </p>
+      </div>
       <form
         onSubmit={(event) => {
           event.preventDefault()
@@ -359,7 +424,7 @@ function ConfigPanel({ config, busy, run }: { config: BillingConfig; busy: boole
         }}
         className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
       >
-        <h2 className="font-semibold text-[var(--pf-navy)]">Proveedor de facturación (OSE / PSE)</h2>
+        <h2 className="font-semibold text-[var(--pf-navy)]">Ambiente y proveedor externo (opcional)</h2>
         <label className="block text-sm font-medium text-slate-700">
           URL de envío
           <input

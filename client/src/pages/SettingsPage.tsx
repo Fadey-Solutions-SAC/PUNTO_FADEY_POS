@@ -7,6 +7,7 @@ import {
   ImageIcon,
   Info,
   Palette,
+  Printer,
   ScanBarcode,
   Store,
   Users,
@@ -26,9 +27,10 @@ import { shrinkImage } from "../image"
 import { UsersPanel } from "../components/UsersPanel"
 import { BackupsPanel } from "../components/BackupsPanel"
 import { PlacesPanel } from "../components/PlacesPanel"
+import { AssistantSettings } from "../components/AssistantSettings"
 
 type Settings = Awaited<ReturnType<typeof getSettings>>
-type ModuleId = "negocio" | "apariencia" | "marca" | "pagos" | "sucursales" | "usuarios" | "copias" | "lector" | "sistema"
+type ModuleId = "negocio" | "apariencia" | "marca" | "pagos" | "sucursales" | "usuarios" | "impresion" | "copias" | "lector" | "sistema"
 
 const MODULES: { id: ModuleId; label: string; hint: string; icon: LucideIcon; color: string }[] = [
   { id: "negocio", label: "Negocio", hint: "Nombre, RUC y moneda", icon: Building2, color: "#0d9488" },
@@ -37,6 +39,7 @@ const MODULES: { id: ModuleId; label: string; hint: string; icon: LucideIcon; co
   { id: "pagos", label: "Métodos de pago", hint: "Efectivo, Yape, tarjeta…", icon: CreditCard, color: "#6366f1" },
   { id: "sucursales", label: "Sucursales y cajas", hint: "Locales, almacenes y cajas", icon: Store, color: "#f59e0b" },
   { id: "usuarios", label: "Usuarios y permisos", hint: "Accesos, roles y contraseñas", icon: Users, color: "#0ea5e9" },
+  { id: "impresion", label: "Impresión y SUNAT", hint: "Asistente local: ticketera y comprobantes", icon: Printer, color: "#0f766e" },
   { id: "copias", label: "Copias de seguridad", hint: "Respaldo de toda la información", icon: DatabaseBackup, color: "#334155" },
   { id: "lector", label: "Lector de código", hint: "Escáner USB o Bluetooth", icon: ScanBarcode, color: "#10b981" },
   { id: "sistema", label: "Sistema", hint: "Versión instalada", icon: Info, color: "#64748b" },
@@ -105,6 +108,7 @@ export function SettingsPage() {
     pagos: data ? `${data.paymentMethods.length} métodos` : "…",
     sucursales: data ? `${data.branches.length} sucursal${data.branches.length === 1 ? "" : "es"}` : "…",
     usuarios: data ? `${data.users.length} usuario${data.users.length === 1 ? "" : "s"}` : "…",
+    impresion: "Ticketera y facturación",
     copias: "Descargar y automáticas",
     lector: data ? (data.hardwareReader ? "Activado" : "Desactivado") : "…",
     sistema: data?.versionLabel ?? "…",
@@ -320,6 +324,8 @@ export function SettingsPage() {
           {data && active === "sucursales" ? <PlacesPanel branches={data.branches} onChanged={reload} /> : null}
 
           {data && active === "usuarios" ? <UsersPanel /> : null}
+
+          {data && active === "impresion" ? <AssistantSettings /> : null}
 
           {data && active === "copias" ? <BackupsPanel /> : null}
 

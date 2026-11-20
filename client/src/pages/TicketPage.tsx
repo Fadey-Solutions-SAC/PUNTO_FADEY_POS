@@ -1,10 +1,35 @@
 import { useEffect, useState } from "react"
 import { Link, useLocation, useParams } from "react-router-dom"
 import { getSaleTicket } from "../api"
+import { printDocumentTicket, printSaleTicket } from "../assistant"
 
 export function TicketPage() {
   const { saleId = "" } = useParams()
-  const change = (useLocation().state ?? null) as { received: string; change: string; currency: string } | null
+  const state = (useLocation().state ?? null) as {
+    received?: string
+    change?: string
+    currency?: string
+    documentId?: string
+    documentOk?: boolean
+    documentError?: string
+  } | null
+  const change = state?.change ? (state as { received: string; change: string; currency: string }) : null
+  const [printing, setPrinting] = useState(false)
+  const [printMessage, setPrintMessage] = useState<{ text: string; ok: boolean } | null>(null)
+
+  async function toTicketPrinter() {
+    setPrinting(true)
+    setPrintMessage(null)
+    try {
+      if (state?.documentId) await printDocumentTicket(state.documentId)
+      else await printSaleTicket(saleId)
+      setPrintMessage({ text: "Enviado a la ticketera", ok: true })
+    } catch (err) {
+      setPrintMessage({ text: err instanceof Error ? err.message : "No se pudo imprimir", ok: false })
+    } finally {
+      setPrinting(false)
+    }
+  }
   const [text, setText] = useState("")
   const [meta, setMeta] = useState<{ code: string; total: string; subtotal: string; discount: string } | null>(null)
   const [error, setError] = useState("")
@@ -68,13 +93,21 @@ export function TicketPage() {
           <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Ticket {meta.code}</h1>
           <p className="mt-1 text-sm text-slate-500">Total {meta.total}</p>
         </div>
-        <div className="flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 text-sm">
+          <button
+            type="button"
+            disabled={printing}
+            onClick={() => void toTicketPrinter()}
+            className="h-11 rounded-xl bg-teal-600 px-4 font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-60"
+          >
+            {printing ? "Imprimiendo…" : "Ticketera"}
+          </button>
           <button
             type="button"
             onClick={printTicket}
             className="h-11 rounded-xl border border-slate-200 bg-white px-4 font-medium text-[var(--pf-navy)] shadow-sm hover:bg-slate-50"
           >
-            Imprimir
+            Imprimir en esta PC
           </button>
           <Link
             to="/ventas"
@@ -85,6 +118,20 @@ export function TicketPage() {
           </Link>
         </div>
       </div>
+      {printMessage ? (
+        <p className={`rounded-xl px-3 py-2 text-sm ${printMessage.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{printMessage.text}</p>
+      ) : null}
+      {state?.documentOk ? (
+        <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">✓ SUNAT aceptó el comprobante. Quedó en Facturación con su CDR y PDF.</p>
+      ) : null}
+      {state?.documentError ? (
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {state.documentError}{" "}
+          <Link to="/facturacion" className="font-semibold underline">
+            Revisar o reintentar en Facturación
+          </Link>
+        </p>
+      ) : null}
       {change ? (
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">

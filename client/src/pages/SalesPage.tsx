@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
   getSaleStatus,
+  issueBillingDocument,
   isOfflineError,
   isServerReachable,
   lookupSaleProduct,
@@ -11,6 +12,9 @@ import {
   type SaleProduct,
 } from "../api"
 import { CustomerPicker } from "../components/CustomerPicker"
+import { CheckoutDocument, checkoutProblem, type CheckoutBuyer, type CheckoutKind } from "../components/CheckoutDocument"
+import { emitDocument, printDocumentTicket, printSafe, printSaleTicket } from "../assistant"
+import { readPrefs } from "../lib/local-assistant"
 import { dropParked, listParked, parkSale, PARKED_EVENT, takeParked, type ParkedSale } from "../parked"
 import {
   cacheProducts,
@@ -81,6 +85,9 @@ export function SalesPage() {
   const [parked, setParked] = useState<ParkedSale[]>(() => listParked())
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saleType, setSaleType] = useState<"CASH" | "CREDIT">("CASH")
+  const [docKind, setDocKind] = useState<CheckoutKind>("NOTA")
+  const [buyer, setBuyer] = useState<CheckoutBuyer>({ document: "", name: "", address: "" })
+  const [chargeStatus, setChargeStatus] = useState("")
   const [canCredit, setCanCredit] = useState(false)
   const [canCreateCustomer, setCanCreateCustomer] = useState(false)
 
@@ -316,9 +323,12 @@ export function SalesPage() {
     setPayKey(crypto.randomUUID())
     setSaleType("CASH")
     setPayments([{ method: methods[0]?.code ?? "CASH", amount: totalAmount }])
+    setDocKind("NOTA")
+    setBuyer({ document: customer?.document ?? "", name: customer?.name ?? "", address: "" })
+    setChargeStatus("")
     setSheetOpen(false)
     setPaying(true)
-  }, [cart.length, cashOpen, methods, totalAmount])
+  }, [cart.length, cashOpen, methods, totalAmount, customer])
 
   async function onCharge() {
     if (!cart.length || pending) return
@@ -337,6 +347,11 @@ export function SalesPage() {
     }
     if (!isCredit && changeInvalid) {
       setError("El vuelto solo puede salir del efectivo")
+      return
+    }
+    const docProblem = checkoutProblem(docKind, buyer, totalCents)
+    if (docProblem) {
+      setError(docProblem)
       return
     }
     setPending(true)
@@ -372,22 +387,61 @@ export function SalesPage() {
           currency,
         },
       )
+      const changeState = !isCredit && changeCents > 0 ? { received: money(paidCents), change: money(changeCents), currency } : {}
       setCart([])
       setDiscount("")
-      setPaying(false)
       setCustomer(null)
       setSaleType("CASH")
       if (result.offline) {
-        navigate(`/ventas/pendiente/${result.id}`)
+        setPaying(false)
+        navigate(`/ventas/pendiente/${result.id}`, {
+          state: docKind !== "NOTA" ? { documentError: "Sin conexión: la venta quedó guardada. Emite la boleta o factura en Facturación cuando vuelva internet." } : undefined,
+        })
         return
       }
-      navigate(`/ventas/${result.saleId}/ticket`, {
-        state: !isCredit && changeCents > 0 ? { received: money(paidCents), change: money(changeCents), currency } : undefined,
-      })
+      const saleId = result.saleId!
+      // Nota de venta: ticket a la ticketera por el asistente (si está activado imprimir al cobrar).
+      if (docKind === "NOTA") {
+        if (readPrefs().autoPrint) {
+          setChargeStatus("Imprimiendo ticket…")
+          await printSafe(printSaleTicket(saleId))
+        }
+        setPaying(false)
+        navigate(`/ventas/${saleId}/ticket`, { state: changeState })
+        return
+      }
+      // Boleta o factura: crear, emitir con el asistente local y luego imprimir.
+      let documentId = ""
+      try {
+        setChargeStatus("Creando comprobante…")
+        const issued = await issueBillingDocument({
+          saleId,
+          docType: docKind,
+          buyerDocument: buyer.document || undefined,
+          buyerName: buyer.name.trim() || undefined,
+          buyerAddress: buyer.address.trim() || undefined,
+        })
+        documentId = issued.id
+        await emitDocument(documentId, setChargeStatus)
+        setChargeStatus("Imprimiendo comprobante…")
+        await printSafe(printDocumentTicket(documentId))
+        setPaying(false)
+        navigate(`/ventas/${saleId}/ticket`, { state: { ...changeState, documentId, documentOk: true } })
+      } catch (docError) {
+        setPaying(false)
+        navigate(`/ventas/${saleId}/ticket`, {
+          state: {
+            ...changeState,
+            documentId,
+            documentError: `Venta cobrada. ${docError instanceof Error ? docError.message : "No se pudo emitir el comprobante"}`,
+          },
+        })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cobrar")
     } finally {
       setPending(false)
+      setChargeStatus("")
     }
   }
 
@@ -887,6 +941,17 @@ export function SalesPage() {
               </p>
             </div>
 
+            <CheckoutDocument
+              kind={docKind}
+              onKind={(kind) => {
+                setDocKind(kind)
+                setError("")
+              }}
+              buyer={buyer}
+              onBuyer={setBuyer}
+              disabled={pending}
+            />
+
             {canCredit ? (
               <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Tipo de venta">
                 {(
@@ -1055,6 +1120,7 @@ export function SalesPage() {
             </div>
 
             {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+            {chargeStatus ? <p className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">{chargeStatus}</p> : null}
             <button
               type="submit"
               disabled={pending || (isCredit ? creditBlocked : missingCents > 0 || changeInvalid)}
@@ -1062,7 +1128,9 @@ export function SalesPage() {
                 isCredit ? "bg-amber-500 text-white" : "bg-[#f5c518] text-[#1a1403]"
               }`}
             >
-              {pending ? "Registrando…" : isCredit ? "Registrar venta a crédito" : "Confirmar cobro"}
+              {pending
+                ? chargeStatus || "Registrando…"
+                : `${isCredit ? "Registrar venta a crédito" : "Confirmar cobro"}${docKind === "BOLETA" ? " y emitir boleta" : docKind === "FACTURA" ? " y emitir factura" : ""}`}
               {!pending ? <kbd className="ml-2 hidden rounded bg-black/10 px-1.5 text-[10px] font-medium sm:inline">Enter</kbd> : null}
             </button>
           </form>

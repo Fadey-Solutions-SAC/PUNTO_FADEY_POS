@@ -68,6 +68,25 @@ export async function readTicketHeader(businessId: string) {
   return { tradeName: row?.tradeName ?? null, address: row?.address ?? null }
 }
 
+/** ¿Están completos los datos que el asistente necesita para emitir? (sin revelar secretos) */
+export async function assistantBillingReady(businessId: string) {
+  const row = await readRow(businessId)
+  return Boolean(
+    row?.address && row.ubigeo && row.department && row.province && row.district && row.solUser && row.solPasswordCipher && row.certCipher && row.certPasswordCipher,
+  )
+}
+
+export async function assistantDocumentsWithPdf(businessId: string, ids: string[]) {
+  await ensureTables()
+  if (!ids.length) return new Set<string>()
+  const rows = await prisma.$queryRawUnsafe<{ documentId: string }[]>(
+    `SELECT documentId FROM AssistantDocument WHERE businessId = ? AND pdfBase64 IS NOT NULL AND documentId IN (${ids.map(() => "?").join(",")})`,
+    businessId,
+    ...ids,
+  )
+  return new Set(rows.map((row) => row.documentId))
+}
+
 export async function readAssistantBilling(ctx: TenantContext) {
   assertCan(ctx, "billing")
   const row = await readRow(ctx.businessId)
@@ -101,7 +120,8 @@ export async function saveAssistantBilling(
     solUser?: string
     solPassword?: string
     certPassword?: string
-    cert?: File | null
+    /** Archivo .pfx: File (formulario) o bytes ya leídos (API JSON). */
+    cert?: File | { name: string; bytes: Buffer } | null
   },
 ) {
   assertCan(ctx, "billing")
@@ -111,11 +131,15 @@ export async function saveAssistantBilling(
   if (solUser && !/^[A-Z0-9]{3,30}$/.test(solUser)) throw new AppError("El usuario SOL solo lleva letras y números")
   let certCipher: string | null = null
   let certName: string | null = null
-  if (input.cert && input.cert.size > 0) {
-    if (input.cert.size > MAX_CERT_BYTES) throw new AppError("El certificado pesa demasiado")
-    if (!/\.(pfx|p12)$/i.test(input.cert.name)) throw new AppError("El certificado debe ser .pfx o .p12")
-    certCipher = encryptSecret(Buffer.from(await input.cert.arrayBuffer()).toString("base64"))
-    certName = clean(input.cert.name, 80)
+  if (input.cert) {
+    const cert = input.cert as { name: string; bytes?: Buffer; arrayBuffer?: () => Promise<ArrayBuffer> }
+    const bytes = cert.bytes ?? Buffer.from(cert.arrayBuffer ? await cert.arrayBuffer() : new ArrayBuffer(0))
+    if (bytes.length > 0) {
+      if (bytes.length > MAX_CERT_BYTES) throw new AppError("El certificado pesa demasiado")
+      if (!/\.(pfx|p12)$/i.test(input.cert.name)) throw new AppError("El certificado debe ser .pfx o .p12")
+      certCipher = encryptSecret(bytes.toString("base64"))
+      certName = clean(input.cert.name, 80)
+    }
   }
   const current = await readRow(ctx.businessId)
   const solPassword = clean(input.solPassword, 100)
@@ -366,7 +390,7 @@ export async function saveBuyerAddress(ctx: TenantContext, documentId: string, a
 }
 
 export async function readAssistantDocument(ctx: TenantContext, documentId: string) {
-  assertCan(ctx, "billing")
+  assertCanAny(ctx, ["billing", "sell"])
   await ensureTables()
   const rows = await prisma.$queryRaw<{ hash: string | null; qr: string | null; pdfBase64: string | null }[]>`
     SELECT hash, qr, pdfBase64 FROM AssistantDocument WHERE documentId = ${documentId} AND businessId = ${ctx.businessId}

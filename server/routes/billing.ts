@@ -1,6 +1,8 @@
 import type { Express } from "express"
 import { getDocument, isDocType, issueDocument, listDocuments, saveBillingProfile, saveSeries, sendDocument, validRuc } from "../../lib/billing"
 import { AppError, errorMessage } from "../../lib/errors"
+import { assertNoCode } from "../../lib/guard"
+import { assistantBillingReady, assistantDocumentsWithPdf, saveBuyerAddress } from "../../lib/billing-assistant"
 import { DOC_LABEL } from "../../lib/labels"
 import { formatDate, formatMoney, fromPercentInt } from "../../lib/money"
 import { prisma } from "../../lib/db"
@@ -26,6 +28,7 @@ export function registerBillingRoutes(app: Express) {
           take: 50,
         }),
       ])
+      const withPdf = await assistantDocumentsWithPdf(ctx.businessId, documents.map((document) => document.id))
       res.json({
         currency: ctx.currency,
         sales: sales.map((sale) => ({
@@ -50,6 +53,8 @@ export function registerBillingRoutes(app: Express) {
           attempts: document.attempts,
           lastError: document.lastError ?? "",
           hasCdr: Boolean(document.cdrText),
+          hasPdf: withPdf.has(document.id),
+          docType: document.docType,
         })),
       })
     } catch (error) {
@@ -70,11 +75,15 @@ export function registerBillingRoutes(app: Express) {
         String(req.body?.saleId ?? ""),
         docType as (typeof DOC_TYPES)[number],
         req.body?.relatedId ? String(req.body.relatedId) : undefined,
-        req.body?.buyerDocument
-          ? { document: String(req.body.buyerDocument), name: String(req.body?.buyerName ?? "") }
+        req.body?.buyerDocument || req.body?.buyerName
+          ? { document: String(req.body?.buyerDocument ?? ""), name: String(req.body?.buyerName ?? "") }
           : undefined,
       )
-      res.json({ ok: true, id: document.id })
+      if (req.body?.buyerAddress) {
+        assertNoCode(String(req.body.buyerAddress))
+        await saveBuyerAddress(ctx, document.id, String(req.body.buyerAddress))
+      }
+      res.json({ ok: true, id: document.id, status: document.status })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
     }
@@ -101,6 +110,7 @@ export function registerBillingRoutes(app: Express) {
         environment: profile?.environment ?? "beta",
         igvRate: fromPercentInt(profile?.igvRate ?? 1800).toFixed(2),
         hasToken: Boolean(profile?.tokenCipher),
+        assistantReady: await assistantBillingReady(ctx.businessId),
         configured: Boolean(profile?.endpoint && profile?.tokenCipher),
         series: DOC_TYPES.map((docType) => {
           const row = series.find((item) => item.docType === docType)
