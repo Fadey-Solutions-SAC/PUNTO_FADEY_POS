@@ -75,7 +75,14 @@ export function App() {
   }, [])
 
   if (!ready) {
-    return <div className="fixed inset-0 grid place-items-center bg-black text-sm text-slate-400">Cargando…</div>
+    return (
+      <div className="fixed inset-0 grid place-items-center bg-[var(--pf-canvas)]">
+        <div className="flex flex-col items-center gap-3 text-sm text-slate-500">
+          <span className="size-9 animate-spin rounded-full border-[3px] border-slate-200 border-t-[var(--pf-accent)]" />
+          Cargando Punto Fadey…
+        </div>
+      </div>
+    )
   }
 
   if (bootError) {
@@ -114,6 +121,7 @@ export function App() {
           <Route path="ventas" element={<SalesPage />} />
           <Route path="ventas/historial" element={<SalesHistoryPage />} />
           <Route path="ventas/devoluciones" element={<ReturnsPage />} />
+          <Route path="ventas/anulaciones" element={<SalesHistoryPage voidedOnly />} />
           <Route path="ventas/:saleId/ticket" element={<TicketPage />} />
           <Route path="ventas/:saleId" element={<SaleDetailPage />} />
           <Route path="caja" element={<CashPage />} />

@@ -43,7 +43,7 @@ export function BillingPage() {
       <div>
         <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Facturación electrónica</h1>
         <p className="mt-1 text-sm text-slate-500">
-          El comprobante queda en cola hasta respuesta del proveedor. Detalle completo sigue en Next.
+          El comprobante queda en cola hasta recibir la respuesta (CDR) del proveedor.
         </p>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}

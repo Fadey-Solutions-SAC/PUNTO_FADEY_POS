@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
   confirmSale,
@@ -12,8 +12,31 @@ import { CodeField, playScanPit, ScannerButton } from "../components/Scanner"
 type CartLine = SaleProduct & { quantity: number; key: string }
 type PayRow = { method: string; amount: string }
 
+const LOW_STOCK = 5
+
+function money(cents: number) {
+  return (cents / 100).toFixed(2)
+}
+
+function toCents(value: string) {
+  const raw = Number(String(value).replace(",", ".") || 0)
+  return Number.isFinite(raw) ? Math.round(raw * 100) : 0
+}
+
+/** Billetes sugeridos por encima del total (en céntimos). */
+function quickCash(totalCents: number) {
+  const bills = [1000, 2000, 5000, 10000, 20000]
+  const out = new Set<number>([totalCents])
+  for (const bill of bills) {
+    const rounded = Math.ceil(totalCents / bill) * bill
+    if (rounded > totalCents) out.add(rounded)
+  }
+  return [...out].sort((a, b) => a - b).slice(0, 5)
+}
+
 export function SalesPage() {
   const navigate = useNavigate()
+  const searchRef = useRef<HTMLInputElement>(null)
   const [cashOpen, setCashOpen] = useState<boolean | null>(null)
   const [registerName, setRegisterName] = useState<string | null>(null)
   const [openedAtLabel, setOpenedAtLabel] = useState<string | null>(null)
@@ -27,13 +50,15 @@ export function SalesPage() {
   const [query, setQuery] = useState("")
   const [categoryId, setCategoryId] = useState("")
   const [products, setProducts] = useState<SaleProduct[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(true)
   const [cart, setCart] = useState<CartLine[]>([])
-  const [cartOpen, setCartOpen] = useState(false)
-  const [discount, setDiscount] = useState("0")
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [discount, setDiscount] = useState("")
   const [discountMode, setDiscountMode] = useState<"money" | "percent">("money")
   const [payments, setPayments] = useState<PayRow[]>([{ method: "CASH", amount: "" }])
   const [paying, setPaying] = useState(false)
-  const [message, setMessage] = useState("")
+  const [payKey, setPayKey] = useState("")
+  const [flash, setFlash] = useState<{ text: string; tone: "ok" | "warn" } | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
 
@@ -50,13 +75,13 @@ export function SalesPage() {
         setCategories(status.categories)
         setAccesses(status.accesses)
         setMethods(status.methods.length ? status.methods : [{ code: "CASH", label: "Efectivo" }])
-        setPayments([{ method: status.methods[0]?.code ?? "CASH", amount: "" }])
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Error"))
   }, [])
 
   useEffect(() => {
     if (!canSell) return
+    setLoadingProducts(true)
     const handle = window.setTimeout(() => {
       searchSaleProducts(query, categoryId || undefined)
         .then((data) => {
@@ -64,9 +89,16 @@ export function SalesPage() {
           setCurrency(data.currency)
         })
         .catch(() => setProducts([]))
+        .finally(() => setLoadingProducts(false))
     }, 180)
     return () => window.clearTimeout(handle)
   }, [query, categoryId, canSell])
+
+  useEffect(() => {
+    if (!flash) return
+    const handle = window.setTimeout(() => setFlash(null), 1800)
+    return () => window.clearTimeout(handle)
+  }, [flash])
 
   const subtotalCents = useMemo(
     () => cart.reduce((sum, line) => sum + line.unitPriceCents * line.quantity, 0),
@@ -76,60 +108,72 @@ export function SalesPage() {
   const discountCents = useMemo(() => {
     const raw = Number(discount.replace(",", ".") || 0)
     if (!Number.isFinite(raw) || raw <= 0) return 0
-    if (discountMode === "percent") return Math.min(subtotalCents, Math.round((subtotalCents * raw) / 100))
+    if (discountMode === "percent") return Math.min(subtotalCents, Math.round((subtotalCents * Math.min(raw, 100)) / 100))
     return Math.min(subtotalCents, Math.round(raw * 100))
   }, [discount, discountMode, subtotalCents])
 
   const totalCents = Math.max(0, subtotalCents - discountCents)
-  const totalAmount = (totalCents / 100).toFixed(2)
+  const totalAmount = money(totalCents)
   const cartUnits = cart.reduce((sum, line) => sum + line.quantity, 0)
+  const qtyInCart = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const line of cart) map.set(line.key, line.quantity)
+    return map
+  }, [cart])
 
-  useEffect(() => {
-    setPayments((current) => {
-      if (current.length === 1) return [{ ...current[0], amount: totalAmount }]
-      return current
-    })
-  }, [totalAmount])
+  const paidCents = payments.reduce((sum, row) => sum + toCents(row.amount), 0)
+  const cashCents = payments.filter((row) => row.method === "CASH").reduce((sum, row) => sum + toCents(row.amount), 0)
+  const missingCents = Math.max(0, totalCents - paidCents)
+  const changeCents = Math.max(0, paidCents - totalCents)
+  const changeInvalid = changeCents > 0 && cashCents < changeCents
 
   function addProduct(product: SaleProduct) {
+    const key = `${product.id}:${product.presentationId}`
     setCart((current) => {
-      const key = `${product.id}:${product.presentationId}`
       const existing = current.find((line) => line.key === key)
       if (existing) {
         return current.map((line) => (line.key === key ? { ...line, quantity: line.quantity + 1 } : line))
       }
       return [...current, { ...product, quantity: 1, key }]
     })
-    setCartOpen(true)
-    setMessage("")
+    const already = qtyInCart.get(key) ?? 0
+    const lowStock = typeof product.stock === "number" && product.stock < already + 1
+    setFlash(
+      lowStock
+        ? { text: `${product.name}: stock insuficiente (${product.stockLabel ?? 0})`, tone: "warn" }
+        : { text: `${product.name} agregado`, tone: "ok" },
+    )
   }
 
   async function onCode(code: string) {
-    setMessage("")
     try {
       const data = await lookupSaleProduct(code)
       if (!data.product) {
-        setMessage("Código no registrado")
+        setFlash({ text: `Código ${code} no registrado`, tone: "warn" })
         return
       }
       playScanPit()
       addProduct(data.product)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "No se pudo leer el código")
+      setFlash({ text: err instanceof Error ? err.message : "No se pudo leer el código", tone: "warn" })
     }
   }
 
   function commitSearch(raw?: string) {
     const text = (raw ?? query).trim()
     if (!text) return
-    if (/^\d{6,}$/.test(text) || text.length >= 4) {
-      void onCode(text).then(() => setQuery(""))
+    const lower = text.toLowerCase()
+    const exact = products.filter(
+      (item) => item.code?.toLowerCase() === lower || item.name.toLowerCase() === lower,
+    )
+    const pick = exact.length === 1 ? exact[0] : products.length === 1 ? products[0] : null
+    if (pick) {
+      addProduct(pick)
+      setQuery("")
       return
     }
-    if (products.length === 1) {
-      addProduct(products[0])
-      setQuery("")
-    }
+    // Sin coincidencia única: probablemente es un código de barras.
+    void onCode(text).then(() => setQuery(""))
   }
 
   function changeQty(key: string, quantity: number) {
@@ -144,16 +188,33 @@ export function SalesPage() {
     setPayments((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   }
 
+  const openPay = useCallback(() => {
+    if (!cart.length || cashOpen !== true) return
+    setError("")
+    setPayKey(crypto.randomUUID())
+    setPayments([{ method: methods[0]?.code ?? "CASH", amount: totalAmount }])
+    setSheetOpen(false)
+    setPaying(true)
+  }, [cart.length, cashOpen, methods, totalAmount])
+
   async function onCharge() {
-    if (!cart.length) return
+    if (!cart.length || pending) return
+    if (missingCents > 0) {
+      setError(`Falta cubrir ${money(missingCents)} ${currency}`)
+      return
+    }
+    if (changeInvalid) {
+      setError("El vuelto solo puede salir del efectivo")
+      return
+    }
     setPending(true)
     setError("")
     try {
-      const payRows = payments.filter((row) => Number(row.amount || 0) > 0)
+      const payRows = payments.filter((row) => toCents(row.amount) > 0)
       const rows = payRows.length ? payRows : [{ method: "CASH", amount: totalAmount }]
       const result = await confirmSale({
-        idempotencyKey: crypto.randomUUID(),
-        discount: (discountCents / 100).toFixed(2),
+        idempotencyKey: payKey || crypto.randomUUID(),
+        discount: money(discountCents),
         lines: cart.map((line) => ({
           productId: line.id,
           presentationId: line.presentationId,
@@ -162,15 +223,37 @@ export function SalesPage() {
         payments: rows,
       })
       setCart([])
-      setDiscount("0")
+      setDiscount("")
       setPaying(false)
-      navigate(`/ventas/${result.saleId}/ticket`)
+      navigate(`/ventas/${result.saleId}/ticket`, {
+        state: changeCents > 0 ? { received: money(paidCents), change: money(changeCents), currency } : undefined,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cobrar")
     } finally {
       setPending(false)
     }
   }
+
+  // Atajos: F2 cobra, F3 o "/" busca, Esc cierra.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null
+      const typing = target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")
+      if (event.key === "F2") {
+        event.preventDefault()
+        if (!paying) openPay()
+      } else if (event.key === "F3" || (event.key === "/" && !typing)) {
+        event.preventDefault()
+        searchRef.current?.focus()
+      } else if (event.key === "Escape") {
+        if (paying && !pending) setPaying(false)
+        else setSheetOpen(false)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [openPay, paying, pending])
 
   if (cashOpen === false) {
     return (
@@ -182,22 +265,7 @@ export function SalesPage() {
             Ir a caja
           </Link>
         </div>
-        {accesses.length > 0 ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-[var(--pf-navy)]">Accesos de caja</h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {accesses.map((item) => (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-[var(--pf-navy)]"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
+        <Accesses items={accesses} />
       </div>
     )
   }
@@ -206,228 +274,331 @@ export function SalesPage() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-slate-500">No tienes permiso de venta.</p>
-        {accesses.length > 0 ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {accesses.map((item) => (
-              <Link key={item.href} to={item.href} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-medium">
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        ) : null}
+        <Accesses items={accesses} />
       </div>
     )
   }
 
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 pb-6">
-      <p className="text-sm text-slate-500">
-        {registerName ? `${registerName} abierta` : "Caja abierta"}
-        {openedAtLabel ? ` · ${openedAtLabel}` : ""}
-        {openingLabel ? ` · efectivo inicial ${openingLabel}` : ""}
-      </p>
-
-      <div className="flex gap-2">
-        <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm">
-          <span className="shrink-0 text-slate-400">⌕</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                commitSearch(event.currentTarget.value)
-              }
+  const cartPanel = (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <div>
+          <h2 className="font-semibold text-[var(--pf-navy)]">Carrito</h2>
+          <p className="text-xs text-slate-500">
+            {cartUnits} {cartUnits === 1 ? "unidad" : "unidades"} · {cart.length} {cart.length === 1 ? "producto" : "productos"}
+          </p>
+        </div>
+        {cart.length > 0 ? (
+          <button
+            type="button"
+            className="rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+            onClick={() => {
+              if (window.confirm("¿Vaciar el carrito?")) setCart([])
             }}
-            placeholder="Buscar producto…"
-            className="min-w-0 flex-1 bg-transparent outline-none"
-          />
-        </label>
-        <ScannerButton onCode={onCode} />
-      </div>
-      {hardwareReader ? <CodeField onCode={onCode} autoFocus placeholder="Lector USB o Bluetooth" /> : null}
-      {message ? <p className="text-sm text-amber-700">{message}</p> : null}
-
-      <div className="overflow-hidden rounded-2xl border border-[var(--pf-accent)]/20 bg-white shadow-sm">
-        <button
-          type="button"
-          onClick={() => setCartOpen((open) => !open)}
-          className="flex w-full items-center gap-3 bg-[var(--pf-accent)] px-4 py-3 text-left text-white"
-          aria-expanded={cartOpen}
-        >
-          <span className="flex-1 font-semibold">Carrito de compras</span>
-          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-medium">
-            {cartUnits} producto{cartUnits === 1 ? "" : "s"}
-          </span>
-          <span className={`transition ${cartOpen ? "rotate-180" : ""}`}>▾</span>
-        </button>
-        {cartOpen ? (
-          <div className="space-y-3 p-4">
-            {cart.length === 0 ? <p className="text-sm text-slate-500">Sin productos</p> : null}
-            {cart.map((line) => (
-              <div key={line.key}>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium text-[var(--pf-navy)]">
-                    {line.name} · {line.presentationName}
-                  </p>
-                  <button
-                    type="button"
-                    className="text-xs text-red-700"
-                    onClick={() => setCart((current) => current.filter((item) => item.key !== line.key))}
-                  >
-                    Quitar
-                  </button>
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={line.quantity}
-                    onChange={(event) => changeQty(line.key, Math.max(1, Number(event.target.value) || 1))}
-                    className="h-9 w-20 rounded-xl border border-slate-200 px-2 text-sm"
-                  />
-                  <span className="text-sm text-slate-500">{line.unitPriceLabel}</span>
-                  <span className="ml-auto text-sm font-medium">
-                    {((line.unitPriceCents * line.quantity) / 100).toFixed(2)} {currency}
-                  </span>
-                </div>
-              </div>
-            ))}
-            <div className="space-y-2 border-t pt-3 text-sm">
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <label className="block">
-                  Descuento
-                  <input
-                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3"
-                    value={discount}
-                    onChange={(event) => setDiscount(event.target.value)}
-                  />
-                </label>
-                <label className="block">
-                  Tipo
-                  <select
-                    className="mt-1 h-10 rounded-xl border border-slate-200 px-2"
-                    value={discountMode}
-                    onChange={(event) => setDiscountMode(event.target.value as "money" | "percent")}
-                  >
-                    <option value="money">S/</option>
-                    <option value="percent">%</option>
-                  </select>
-                </label>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Subtotal</span>
-                <span>
-                  {(subtotalCents / 100).toFixed(2)} {currency}
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Descuento</span>
-                <span>
-                  -{(discountCents / 100).toFixed(2)} {currency}
-                </span>
-              </div>
-              <div className="flex justify-between text-lg font-semibold text-[var(--pf-navy)]">
-                <span>Total</span>
-                <span>
-                  {totalAmount} {currency}
-                </span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={pending || cart.length === 0 || cashOpen !== true}
-                onClick={() => {
-                  setError("")
-                  setPaying(true)
-                  setPayments([{ method: methods[0]?.code ?? "CASH", amount: totalAmount }])
-                }}
-                className="h-12 flex-1 rounded-xl bg-[#f5c518] text-sm font-semibold text-[#1a1403] disabled:opacity-60"
-              >
-                Cobrar
-              </button>
-              <Link
-                to="/ventas/historial"
-                className="inline-flex h-12 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-[var(--pf-navy)]"
-              >
-                Historial
-              </Link>
-            </div>
-            {error && !paying ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-          </div>
+          >
+            Vaciar
+          </button>
         ) : null}
       </div>
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-2">
-          <h2 className="text-lg font-semibold text-[var(--pf-navy)]">Productos</h2>
-          <p className="text-xs text-slate-500">Catálogo disponible</p>
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => setCategoryId("")}
-            className={`rounded-full px-3 py-1.5 text-sm shadow-sm ${categoryId === "" ? "bg-[var(--pf-accent)] text-white" : "bg-white text-slate-700"}`}
-          >
-            Todos
-          </button>
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => setCategoryId(category.id)}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm shadow-sm ${
-                categoryId === category.id ? "bg-[var(--pf-accent)] text-white" : "bg-white text-slate-700"
-              }`}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-        <div className="space-y-2">
-          {products.map((product) => (
-            <div
-              key={`${product.id}-${product.presentationId}`}
-              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-[var(--pf-navy)]">{product.name}</p>
-                <p className="text-sm font-semibold text-[var(--pf-accent)]">{product.unitPriceLabel}</p>
-                <p className="text-xs text-slate-500">
-                  {product.presentationName}
-                  {product.unit ? ` · ${product.unit}` : ""} · {product.code}
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+        {cart.length === 0 ? (
+          <div className="grid place-items-center gap-1 py-10 text-center text-sm text-slate-400">
+            <span className="text-3xl" aria-hidden>
+              🛒
+            </span>
+            Toca un producto o escanea un código
+          </div>
+        ) : null}
+        {cart.map((line) => {
+          const short = typeof line.stock === "number" && line.quantity > line.stock
+          return (
+            <div key={line.key} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-[var(--pf-navy)]">{line.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {line.presentationName} · {line.unitPriceLabel}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm font-semibold tabular-nums text-[var(--pf-navy)]">
+                  {money(line.unitPriceCents * line.quantity)}
                 </p>
               </div>
-              <button
-                type="button"
-                aria-label={`Agregar ${product.name}`}
-                onClick={() => addProduct(product)}
-                className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--pf-accent)] text-lg font-bold text-white shadow-sm"
-              >
-                +
-              </button>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  <button
+                    type="button"
+                    aria-label={`Quitar uno de ${line.name}`}
+                    className="grid size-8 place-items-center text-lg text-slate-600 hover:bg-slate-100"
+                    onClick={() => changeQty(line.key, line.quantity - 1)}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    aria-label={`Cantidad de ${line.name}`}
+                    value={line.quantity}
+                    onChange={(event) => changeQty(line.key, Math.max(1, Math.floor(Number(event.target.value)) || 1))}
+                    className="h-8 w-12 border-x border-slate-200 text-center text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Agregar uno de ${line.name}`}
+                    className="grid size-8 place-items-center text-lg text-slate-600 hover:bg-slate-100"
+                    onClick={() => changeQty(line.key, line.quantity + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+                {short ? <span className="text-xs font-medium text-amber-700">Stock {line.stockLabel}</span> : null}
+                <button
+                  type="button"
+                  className="ml-auto text-xs text-slate-400 hover:text-red-700"
+                  onClick={() => changeQty(line.key, 0)}
+                >
+                  Quitar
+                </button>
+              </div>
             </div>
-          ))}
-          {products.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Sin productos para mostrar.</p> : null}
-        </div>
-      </section>
+          )
+        })}
+      </div>
 
-      {accesses.length > 0 ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--pf-navy)]">Accesos de caja</h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {accesses.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                className="rounded-2xl border border-slate-100 bg-slate-50 px-2 py-3 text-center text-xs font-medium text-[var(--pf-navy)] transition hover:border-[var(--pf-accent)]/30 hover:bg-white"
-              >
-                {item.label}
-              </Link>
+      <div className="space-y-2 border-t border-slate-100 px-4 py-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500">Descuento</span>
+          <div className="ml-auto flex overflow-hidden rounded-lg border border-slate-200">
+            <input
+              inputMode="decimal"
+              className="h-8 w-20 px-2 text-right tabular-nums outline-none"
+              value={discount}
+              placeholder="0"
+              onChange={(event) => setDiscount(event.target.value)}
+              aria-label="Descuento"
+            />
+            <select
+              className="h-8 border-l border-slate-200 bg-slate-50 px-1.5 text-xs"
+              value={discountMode}
+              onChange={(event) => setDiscountMode(event.target.value as "money" | "percent")}
+              aria-label="Tipo de descuento"
+            >
+              <option value="money">{currency === "PEN" ? "S/" : currency}</option>
+              <option value="percent">%</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-between text-slate-500">
+          <span>Subtotal</span>
+          <span className="tabular-nums">{money(subtotalCents)}</span>
+        </div>
+        {discountCents > 0 ? (
+          <div className="flex justify-between text-emerald-700">
+            <span>Descuento</span>
+            <span className="tabular-nums">−{money(discountCents)}</span>
+          </div>
+        ) : null}
+        <div className="flex items-baseline justify-between pt-1 text-[var(--pf-navy)]">
+          <span className="font-semibold">Total</span>
+          <span className="text-2xl font-bold tabular-nums">
+            {totalAmount} <span className="text-sm font-medium text-slate-500">{currency}</span>
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={pending || cart.length === 0 || cashOpen !== true}
+          onClick={openPay}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#f5c518] text-base font-semibold text-[#1a1403] shadow-sm transition hover:brightness-95 disabled:opacity-50"
+        >
+          Cobrar
+          <kbd className="hidden rounded bg-black/10 px-1.5 text-[10px] font-medium lg:inline">F2</kbd>
+        </button>
+        {error && !paying ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="mx-auto w-full max-w-7xl pb-24 lg:pb-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+          <span className="size-1.5 rounded-full bg-emerald-500" />
+          {registerName ? `${registerName} abierta` : "Caja abierta"}
+        </span>
+        <span className="text-xs text-slate-500">
+          {openedAtLabel ?? ""}
+          {openingLabel ? ` · efectivo inicial ${openingLabel}` : ""}
+        </span>
+        <Link to="/ventas/historial" className="ml-auto text-xs font-medium text-[var(--pf-accent)] hover:underline">
+          Historial de ventas
+        </Link>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="min-w-0 space-y-3">
+          <div className="flex gap-2">
+            <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm focus-within:border-[var(--pf-accent)] focus-within:ring-2 focus-within:ring-[var(--pf-accent)]/15">
+              <svg viewBox="0 0 24 24" className="size-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    commitSearch(event.currentTarget.value)
+                  }
+                }}
+                placeholder="Buscar por nombre o código y Enter…"
+                className="min-w-0 flex-1 bg-transparent outline-none"
+                aria-label="Buscar producto"
+              />
+              {query ? (
+                <button type="button" className="text-xs text-slate-400 hover:text-slate-600" onClick={() => setQuery("")}>
+                  Limpiar
+                </button>
+              ) : (
+                <kbd className="hidden rounded border border-slate-200 px-1.5 text-[10px] text-slate-400 sm:inline">F3</kbd>
+              )}
+            </label>
+            <ScannerButton onCode={onCode} />
+          </div>
+          {hardwareReader ? <CodeField onCode={onCode} autoFocus placeholder="Lector USB o Bluetooth" /> : null}
+
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            <Chip active={categoryId === ""} onClick={() => setCategoryId("")}>
+              Todos
+            </Chip>
+            {categories.map((category) => (
+              <Chip key={category.id} active={categoryId === category.id} onClick={() => setCategoryId(category.id)}>
+                {category.name}
+              </Chip>
             ))}
           </div>
-        </section>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+            {products.map((product) => {
+              const key = `${product.id}:${product.presentationId}`
+              const inCart = qtyInCart.get(key) ?? 0
+              const stock = product.stock
+              const out = typeof stock === "number" && stock <= 0
+              const low = typeof stock === "number" && stock > 0 && stock <= LOW_STOCK
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  onClick={() => addProduct(product)}
+                  aria-label={`Agregar ${product.name}`}
+                  className={`group relative flex min-h-28 flex-col rounded-2xl border bg-white p-3 text-left shadow-sm transition active:scale-[0.98] ${
+                    inCart > 0
+                      ? "border-[var(--pf-accent)] ring-2 ring-[var(--pf-accent)]/20"
+                      : "border-slate-200 hover:border-[var(--pf-accent)]/50 hover:shadow"
+                  } ${out ? "opacity-60" : ""}`}
+                >
+                  {inCart > 0 ? (
+                    <span className="absolute -right-1.5 -top-1.5 grid min-w-6 place-items-center rounded-full bg-[var(--pf-accent)] px-1.5 text-xs font-bold text-white shadow">
+                      {inCart}
+                    </span>
+                  ) : null}
+                  <span className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--pf-navy)]">{product.name}</span>
+                  <span className="mt-0.5 truncate text-[11px] text-slate-400">
+                    {product.code} · {product.presentationName}
+                  </span>
+                  <span className="mt-auto flex items-end justify-between gap-1 pt-2">
+                    <span className="text-base font-bold tabular-nums text-[var(--pf-accent)]">{product.unitPriceLabel}</span>
+                    {typeof stock === "number" ? (
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                          out ? "bg-red-50 text-red-700" : low ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {out ? "Agotado" : `${product.stockLabel} ${product.unit ?? ""}`.trim()}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              )
+            })}
+            {!loadingProducts && products.length === 0 ? (
+              <p className="col-span-full rounded-xl bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
+                {query ? `Sin resultados para “${query}”. Pulsa Enter para buscarlo como código.` : "Sin productos para mostrar."}
+              </p>
+            ) : null}
+            {loadingProducts && products.length === 0
+              ? Array.from({ length: 8 }, (_, i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />)
+              : null}
+          </div>
+
+          <Accesses items={accesses} />
+        </div>
+
+        <aside className="hidden lg:block">
+          <div className="sticky top-0 h-[calc(100dvh-7.5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {cartPanel}
+          </div>
+        </aside>
+      </div>
+
+      {/* Barra inferior en teléfono/tablet: no empuja la lista al agregar. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-3xl items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left"
+            aria-label="Ver carrito"
+          >
+            <span className="grid size-7 place-items-center rounded-full bg-[var(--pf-accent)] text-xs font-bold text-white">{cartUnits}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] leading-tight text-slate-500">Total</span>
+              <span className="block truncate text-lg font-bold leading-tight tabular-nums text-[var(--pf-navy)]">
+                {totalAmount} {currency}
+              </span>
+            </span>
+            <span className="text-xs font-medium text-[var(--pf-accent)]">Ver</span>
+          </button>
+          <button
+            type="button"
+            disabled={pending || cart.length === 0}
+            onClick={openPay}
+            className="h-12 rounded-xl bg-[#f5c518] px-6 text-sm font-semibold text-[#1a1403] disabled:opacity-50"
+          >
+            Cobrar
+          </button>
+        </div>
+      </div>
+
+      {sheetOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-end bg-[var(--pf-navy)]/50 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Carrito"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSheetOpen(false)
+          }}
+        >
+          <div className="h-[85dvh] w-full overflow-hidden rounded-t-3xl bg-white shadow-2xl">
+            <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-slate-200" />
+            {cartPanel}
+          </div>
+        </div>
+      ) : null}
+
+      {flash ? (
+        <div
+          role="status"
+          className={`pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-sm font-medium shadow-lg lg:bottom-6 ${
+            flash.tone === "ok" ? "bg-[var(--pf-navy)] text-white" : "bg-amber-500 text-white"
+          }`}
+        >
+          {flash.text}
+        </div>
       ) : null}
 
       {paying ? (
@@ -440,33 +611,50 @@ export function SalesPage() {
             if (event.target === event.currentTarget && !pending) setPaying(false)
           }}
         >
-          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg space-y-3 overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
+          <form
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void onCharge()
+            }}
+          >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-[var(--pf-navy)]">Cobrar</h2>
-              <button type="button" className="text-sm text-slate-500" disabled={pending} onClick={() => setPaying(false)}>
-                Cerrar
+              <button type="button" className="text-sm text-slate-500 hover:text-slate-800" disabled={pending} onClick={() => setPaying(false)}>
+                Cerrar <kbd className="ml-1 rounded border border-slate-200 px-1 text-[10px]">Esc</kbd>
               </button>
             </div>
-            <p className="text-2xl font-semibold text-[var(--pf-navy)]">
-              {totalAmount} {currency}
-            </p>
+
+            <div className="rounded-2xl bg-[var(--pf-navy)] px-4 py-3 text-white">
+              <p className="text-xs uppercase tracking-wide text-white/60">Total a cobrar</p>
+              <p className="text-3xl font-bold tabular-nums">
+                {totalAmount} <span className="text-base font-medium text-white/70">{currency}</span>
+              </p>
+            </div>
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Pagos</p>
+                <p className="text-sm font-medium text-slate-700">Pagos</p>
                 <button
                   type="button"
                   className="text-xs font-medium text-[var(--pf-accent)]"
-                  onClick={() => setPayments((current) => [...current, { method: methods[0]?.code ?? "CASH", amount: "" }])}
+                  onClick={() =>
+                    setPayments((current) => [
+                      ...current,
+                      { method: methods.find((item) => item.code !== "CASH")?.code ?? methods[0]?.code ?? "CASH", amount: money(Math.max(0, totalCents - current.reduce((s, r) => s + toCents(r.amount), 0))) },
+                    ])
+                  }
                 >
-                  + método
+                  + Pago mixto
                 </button>
               </div>
               {payments.map((row, index) => (
-                <div key={index} className="grid grid-cols-[1.2fr_1fr_auto] gap-2">
+                <div key={index} className="grid grid-cols-[1.2fr_1fr_auto] items-center gap-2">
                   <select
-                    className="rounded-xl border border-slate-200 px-2 py-2 text-sm"
+                    className="h-11 rounded-xl border border-slate-200 px-2 text-sm"
                     value={row.method}
                     onChange={(event) => updatePayment(index, { method: event.target.value })}
+                    aria-label="Medio de pago"
                   >
                     {methods.map((method) => (
                       <option key={method.code} value={method.code}>
@@ -475,33 +663,117 @@ export function SalesPage() {
                     ))}
                   </select>
                   <input
-                    className="rounded-xl border border-slate-200 px-2 py-2 text-right text-sm"
+                    autoFocus={index === 0}
+                    inputMode="decimal"
+                    className="h-11 rounded-xl border border-slate-200 px-3 text-right text-base tabular-nums outline-none focus:border-[var(--pf-accent)] focus:ring-2 focus:ring-[var(--pf-accent)]/15"
                     value={row.amount}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) => updatePayment(index, { amount: event.target.value })}
                     placeholder="0.00"
+                    aria-label="Monto recibido"
                   />
                   <button
                     type="button"
-                    className="text-xs text-slate-500"
-                    onClick={() => setPayments((current) => (current.length === 1 ? current : current.filter((_, i) => i !== index)))}
+                    className="text-xs text-slate-400 hover:text-red-700 disabled:invisible"
+                    disabled={payments.length === 1}
+                    onClick={() => setPayments((current) => current.filter((_, i) => i !== index))}
                   >
                     Quitar
                   </button>
                 </div>
               ))}
             </div>
+
+            {payments.length === 1 && payments[0].method === "CASH" ? (
+              <div>
+                <p className="mb-1.5 text-xs text-slate-500">Efectivo recibido</p>
+                <div className="flex flex-wrap gap-2">
+                  {quickCash(totalCents).map((cents) => (
+                    <button
+                      key={cents}
+                      type="button"
+                      onClick={() => updatePayment(0, { amount: money(cents) })}
+                      className={`h-10 rounded-xl border px-3 text-sm font-medium tabular-nums ${
+                        toCents(payments[0].amount) === cents
+                          ? "border-[var(--pf-accent)] bg-[var(--pf-accent)] text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-[var(--pf-accent)]/50"
+                      }`}
+                    >
+                      {cents === totalCents ? "Exacto" : money(cents)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-xl bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">Recibido</p>
+                <p className="text-lg font-semibold tabular-nums text-[var(--pf-navy)]">{money(paidCents)}</p>
+              </div>
+              {missingCents > 0 ? (
+                <div className="rounded-xl bg-red-50 px-3 py-2">
+                  <p className="text-xs text-red-700">Falta</p>
+                  <p className="text-lg font-semibold tabular-nums text-red-700">{money(missingCents)}</p>
+                </div>
+              ) : (
+                <div className={`rounded-xl px-3 py-2 ${changeInvalid ? "bg-red-50" : "bg-emerald-50"}`}>
+                  <p className={`text-xs ${changeInvalid ? "text-red-700" : "text-emerald-700"}`}>Vuelto</p>
+                  <p className={`text-2xl font-bold tabular-nums ${changeInvalid ? "text-red-700" : "text-emerald-700"}`}>
+                    {money(changeCents)}
+                  </p>
+                </div>
+              )}
+            </div>
+
             {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
             <button
-              type="button"
-              disabled={pending}
-              onClick={onCharge}
-              className="h-12 w-full rounded-xl bg-[#f5c518] text-sm font-semibold text-[#1a1403] disabled:opacity-60"
+              type="submit"
+              disabled={pending || missingCents > 0 || changeInvalid}
+              className="h-12 w-full rounded-xl bg-[#f5c518] text-base font-semibold text-[#1a1403] transition hover:brightness-95 disabled:opacity-50"
             >
               {pending ? "Cobrando…" : "Confirmar cobro"}
+              {!pending ? <kbd className="ml-2 rounded bg-black/10 px-1.5 text-[10px] font-medium">Enter</kbd> : null}
             </button>
-          </div>
+          </form>
         </div>
       ) : null}
     </div>
+  )
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium shadow-sm ring-1 transition ${
+        active
+          ? "bg-[var(--pf-accent)] text-white ring-[var(--pf-accent)]"
+          : "bg-white text-slate-700 ring-slate-200 hover:ring-[var(--pf-accent)]/40"
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Accesses({ items }: { items: { href: string; label: string }[] }) {
+  if (items.length === 0) return null
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--pf-navy)]">Accesos de caja</h2>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {items.map((item) => (
+          <Link
+            key={item.href}
+            to={item.href}
+            className="rounded-2xl border border-slate-100 bg-slate-50 px-2 py-3 text-center text-xs font-medium text-[var(--pf-navy)] transition hover:border-[var(--pf-accent)]/30 hover:bg-white"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
+    </section>
   )
 }

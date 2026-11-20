@@ -11,10 +11,13 @@ import { CASH_DENOMS, denomTotalCents } from "../../lib/denominations"
 import { errorMessage } from "../../lib/errors"
 import { CASH_LABEL } from "../../lib/labels"
 import { formatDate, formatMoney, fromMoneyInt } from "../../lib/money"
+import { readTheme } from "../../lib/appearance"
+import { brandLogoUrl } from "../../lib/cover"
 import { dashboardData } from "../../lib/dashboard"
 import { listPaymentMethods, paymentMethodLabels } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
-import { can } from "../../lib/roles"
+import { APP_VERSION, listNotices } from "../../lib/notices"
+import { can, ROLE_LABEL, type Role } from "../../lib/roles"
 import { formatQty } from "../../lib/money"
 import { PAYMENT_LABEL } from "../../lib/labels"
 import { navigation } from "../../lib/nav"
@@ -32,11 +35,18 @@ export function registerCashRoutes(app: Express) {
   app.get("/api/panel/bootstrap", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
+      const [theme, logo, notices] = await Promise.all([
+        readTheme(ctx.businessId),
+        brandLogoUrl(),
+        listNotices(ctx),
+      ])
       res.json({
         user: {
           id: ctx.userId,
           name: ctx.userName,
           role: ctx.role,
+          roleLabel: ROLE_LABEL[ctx.role as Role] ?? ctx.role,
+          detail: `${ctx.branchName} · ${ctx.warehouseName}`,
           configMode: ctx.configMode === true,
         },
         business: {
@@ -46,6 +56,16 @@ export function registerCashRoutes(app: Express) {
         },
         branch: { id: ctx.branchId, name: ctx.branchName },
         warehouse: { id: ctx.warehouseId, name: ctx.warehouseName },
+        theme,
+        logo,
+        version: APP_VERSION,
+        notices: notices.map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          title: item.title,
+          detail: item.detail,
+          href: item.href,
+        })),
         nav: navigation(ctx.role, ctx.grants),
         permissions: {
           cash: can(ctx.role, "cash", ctx.grants),

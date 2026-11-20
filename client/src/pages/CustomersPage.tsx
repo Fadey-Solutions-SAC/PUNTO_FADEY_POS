@@ -64,7 +64,7 @@ export function CustomersPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Clientes</h1>
-        <p className="mt-1 text-sm text-slate-500">Registro del negocio. Créditos e historial siguen en Next.</p>
+        <p className="mt-1 text-sm text-slate-500">Registro de clientes del negocio.</p>
       </div>
 
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}

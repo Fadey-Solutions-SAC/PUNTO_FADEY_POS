@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
+import {
+  AlertTriangle,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Boxes,
+  PackageX,
+  Receipt,
+  ShoppingCart,
+  TrendingUp,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react"
 import { getDashboard, type DashboardPayload, type PanelBootstrap } from "../api"
 
 const PAY_COLORS: Record<string, string> = {
@@ -53,7 +65,16 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
   }
 
   if (!data) {
-    return <p className="text-sm text-slate-500">Cargando panel…</p>
+    return (
+      <div className="space-y-4">
+        <div className="h-14 w-72 animate-pulse rounded-xl bg-slate-200/60" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   const salesTrend = change(data.salesTotal.cents, data.yesterdaySales.cents)
@@ -62,52 +83,83 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
   const maxDay = Math.max(...data.days.map((day) => Math.max(day.total.cents, 0)), 1)
   const hasSalesChart = data.days.some((day) => day.total.cents !== 0)
 
-  const cards = [
-    { label: "Ventas del día", value: data.salesTotal.label, trend: salesTrend, tone: "text-[var(--pf-accent)]" },
-    { label: "Operaciones", value: String(data.operations), trend: opsTrend, tone: "text-[var(--pf-navy)]" },
-    { label: "Ingresos", value: data.income.label, trend: null, tone: "text-emerald-700" },
-    { label: "Egresos", value: data.expense.label, trend: null, tone: "text-red-700" },
-    { label: "Ganancia estimada", value: data.profit.label, trend: null, tone: "text-[var(--pf-navy)]" },
-    { label: "Productos", value: String(data.products), trend: null, tone: "text-[var(--pf-navy)]" },
-    { label: "Stock bajo", value: String(data.low), trend: null, tone: "text-amber-700" },
-    { label: "Agotados", value: String(data.empty), trend: null, tone: "text-red-700" },
+  const cards: { label: string; value: string; trend: ReturnType<typeof change>; tone: string; icon: LucideIcon; tint: string; href?: string }[] = [
+    { label: "Ventas del día", value: data.salesTotal.label, trend: salesTrend, tone: "text-[var(--pf-accent)]", icon: TrendingUp, tint: "bg-teal-50 text-teal-700" },
+    { label: "Operaciones", value: String(data.operations), trend: opsTrend, tone: "text-[var(--pf-navy)]", icon: Receipt, tint: "bg-sky-50 text-sky-700" },
+    { label: "Ingresos de caja", value: data.income.label, trend: null, tone: "text-emerald-700", icon: ArrowDownCircle, tint: "bg-emerald-50 text-emerald-700" },
+    { label: "Egresos de caja", value: data.expense.label, trend: null, tone: "text-red-700", icon: ArrowUpCircle, tint: "bg-red-50 text-red-700" },
+    { label: "Ganancia estimada", value: data.profit.label, trend: null, tone: "text-[var(--pf-navy)]", icon: Wallet, tint: "bg-indigo-50 text-indigo-700" },
+    { label: "Productos", value: String(data.products), trend: null, tone: "text-[var(--pf-navy)]", icon: Boxes, tint: "bg-slate-100 text-slate-700", href: "/productos" },
+    { label: "Stock bajo", value: String(data.low), trend: null, tone: "text-amber-700", icon: AlertTriangle, tint: "bg-amber-50 text-amber-700", href: "/inventario/alertas" },
+    { label: "Agotados", value: String(data.empty), trend: null, tone: "text-red-700", icon: PackageX, tint: "bg-red-50 text-red-700", href: "/inventario/alertas" },
   ]
+
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches"
+  const today = new Date().toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" })
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Panel principal</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Hola, {panel.user.name}. Sucursal {panel.branch.name} · almacén {panel.warehouse.name}.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-500 first-letter:uppercase">{today}</p>
+          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">
+            {greeting}, {panel.user.name}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {panel.business.name} · sucursal {panel.branch.name} · almacén {panel.warehouse.name}
+          </p>
+        </div>
+        {shortcuts.length > 0 ? (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {shortcuts.map((item, index) => (
+              <Link
+                key={item.label}
+                to={item.href}
+                className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition ${
+                  index === 0
+                    ? "bg-[var(--pf-accent)] text-white hover:brightness-110"
+                    : "border border-slate-200 bg-white text-[var(--pf-navy)] hover:border-[var(--pf-accent)]/40"
+                }`}
+              >
+                {index === 0 ? <ShoppingCart size={16} /> : null}
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      {shortcuts.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {shortcuts.map((item) => (
-            <Link
-              key={item.label}
-              to={item.href}
-              className="inline-flex h-11 shrink-0 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-[var(--pf-navy)] shadow-sm"
-            >
-              {item.label}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {cards.map((card) => {
+          const Icon = card.icon
+          const body = (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm text-slate-500">{card.label}</p>
+                <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${card.tint}`}>
+                  <Icon size={16} strokeWidth={2} />
+                </span>
+              </div>
+              <p className={`mt-1 text-2xl font-semibold tracking-tight tabular-nums ${card.tone}`}>{card.value}</p>
+              {card.trend ? (
+                <p className={`mt-1 text-xs font-medium ${card.trend.up ? "text-emerald-700" : "text-red-700"}`}>
+                  {card.trend.text} vs. ayer
+                </p>
+              ) : null}
+            </>
+          )
+          const cls = "block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          return card.href ? (
+            <Link key={card.label} to={card.href} className={`${cls} transition hover:border-[var(--pf-accent)]/40 hover:shadow`}>
+              {body}
             </Link>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-3">
-        {cards.map((card) => (
-          <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">{card.label}</p>
-            <p className={`mt-1 text-2xl font-semibold tracking-tight ${card.tone}`}>{card.value}</p>
-            {card.trend ? (
-              <p className={`mt-1 text-xs font-medium ${card.trend.up ? "text-emerald-700" : "text-red-700"}`}>
-                {card.trend.text} vs. ayer
-              </p>
-            ) : null}
-          </div>
-        ))}
+          ) : (
+            <div key={card.label} className={cls}>
+              {body}
+            </div>
+          )
+        })}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)_minmax(16rem,0.8fr)]">

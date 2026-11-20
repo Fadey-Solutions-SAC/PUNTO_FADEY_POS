@@ -62,13 +62,13 @@ export function CatalogPage() {
 
       <div className="flex flex-wrap gap-2">
         <input
-          className="min-w-[12rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="h-11 min-w-[12rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"
           placeholder="Buscar nombre, código o marca…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
         <select
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+          className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
         >
@@ -97,22 +97,38 @@ export function CatalogPage() {
           <tbody>
             {filtered.map((product) => (
               <tr key={product.id} className="border-t border-slate-100">
-                <td className="px-3 py-2 text-slate-500">{product.code || "—"}</td>
+                <td className="px-3 py-2 font-mono text-xs text-slate-500">{product.code || "—"}</td>
                 <td className="px-3 py-2">
                   <span className="font-medium text-[var(--pf-navy)]">{product.name}</span>
                   {product.brandName ? <span className="block text-xs text-slate-500">{product.brandName}</span> : null}
                 </td>
                 <td className="px-3 py-2">{product.categoryName || "—"}</td>
-                <td className="px-3 py-2">{product.stock}</td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                      Number.parseFloat(String(product.stock)) > 0 ? "bg-slate-100 text-slate-700" : "bg-red-50 text-red-700"
+                    }`}
+                  >
+                    {Number.parseFloat(String(product.stock)) > 0 ? product.stock : `Agotado · ${product.stock}`}
+                  </span>
+                </td>
                 <td className="px-3 py-2 text-right font-medium">{product.price}</td>
                 <td className="px-3 py-2">
-                  <span className={product.active ? "text-emerald-700" : "text-slate-400"}>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      product.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <span className={`size-1.5 rounded-full ${product.active ? "bg-emerald-500" : "bg-slate-400"}`} />
                     {product.active ? "Activo" : "Inactivo"}
                   </span>
                 </td>
                 <td className="px-3 py-2 text-right">
                   {data.writable ? (
-                    <Link to={`/productos/${product.id}`} className="text-[var(--pf-accent)] hover:underline">
+                    <Link
+                      to={`/productos/${product.id}`}
+                      className="rounded-lg px-2 py-1 font-medium text-[var(--pf-accent)] hover:bg-[var(--pf-accent)]/10"
+                    >
                       Editar
                     </Link>
                   ) : null}
@@ -121,7 +137,7 @@ export function CatalogPage() {
             ))}
           </tbody>
         </table>
-        {filtered.length === 0 ? <p className="px-3 py-6 text-center text-sm text-slate-500">Sin coincidencias.</p> : null}
+        {filtered.length === 0 ? <p className="px-3 py-10 text-center text-sm text-slate-500">Sin coincidencias para la búsqueda.</p> : null}
       </div>
     </div>
   )

@@ -46,11 +46,30 @@ export function getVersion() {
 
 export type MoneyOut = { cents: number; label: string; amount: string }
 
+export type PanelNotice = {
+  id: string
+  kind: string
+  title: string
+  detail: string
+  href: string
+}
+
 export type PanelBootstrap = {
-  user: { id: string; name: string; role: string; configMode: boolean }
+  user: {
+    id: string
+    name: string
+    role: string
+    roleLabel?: string
+    detail?: string
+    configMode: boolean
+  }
   business: { id: string; name: string; currency: string }
   branch: { id: string; name: string }
   warehouse: { id: string; name: string }
+  theme?: string
+  logo?: string | null
+  version?: string
+  notices?: PanelNotice[]
   nav: { title: string; items: { href: string; label: string }[] }[]
   permissions: {
     cash: boolean
@@ -199,6 +218,8 @@ export type SaleProduct = {
   unitPriceLabel: string
   categoryId?: string | null
   unit?: string
+  stock?: number
+  stockLabel?: string
 }
 
 export function getSaleStatus() {

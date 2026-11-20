@@ -2,7 +2,7 @@ import type { Express } from "express"
 import { randomUUID } from "node:crypto"
 import { currentSession } from "../../lib/cash"
 import { errorMessage } from "../../lib/errors"
-import { formatDate, formatMoney, formatQty, fromMoneyInt } from "../../lib/money"
+import { formatDate, formatMoney, formatQty, fromMoneyInt, QTY_SCALE } from "../../lib/money"
 import { listPaymentMethods } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
 import { readPosSettings } from "../../lib/pos-settings"
@@ -153,9 +153,7 @@ export function registerSalesRoutes(app: Express) {
         take: q ? 40 : 40,
       })
 
-      res.json({
-        currency: ctx.currency,
-        products: products.flatMap((product) => {
+      const list = products.flatMap((product) => {
           if (product.variants.length > 0) {
             return product.variants
               .filter((variant) => variant.presentations.length > 0)
@@ -202,6 +200,23 @@ export function registerSalesRoutes(app: Express) {
               unit: product.baseUnit.symbol,
             },
           ]
+        })
+      const balances = list.length
+        ? await prisma.stockBalance.findMany({
+            where: {
+              businessId: ctx.businessId,
+              warehouseId: ctx.warehouseId,
+              productId: { in: list.map((item) => item.id) },
+            },
+            select: { productId: true, quantity: true },
+          })
+        : []
+      const stockById = new Map(balances.map((row) => [row.productId, row.quantity]))
+      res.json({
+        currency: ctx.currency,
+        products: list.map((item) => {
+          const quantity = stockById.get(item.id) ?? 0
+          return { ...item, stock: quantity / QTY_SCALE, stockLabel: formatQty(quantity) }
         }),
       })
     } catch (error) {
