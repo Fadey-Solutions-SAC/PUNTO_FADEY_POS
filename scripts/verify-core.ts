@@ -4,6 +4,7 @@ import { closeSession, openSession, summarizeSession } from "../lib/cash";
 import { receiveTransfer, sendTransfer, stockIn } from "../lib/inventory";
 import { confirmSale, readDraft, saveDraft } from "../lib/sales";
 import { createUser, registerOwner } from "../lib/setup";
+import { runLosses } from "./verify-losses";
 import { runPart2 } from "./verify-part2";
 import type { TenantContext } from "../lib/types";
 
@@ -239,6 +240,7 @@ export async function run() {
     eachId: each.id,
     registerId: ownerA.registerId,
   });
+  await runLosses({ ctxA, ctxB, productId: product.id, eachId: each.id });
   console.log("Verificación de Punto Fadey correcta");
   await prisma.$disconnect();
 }

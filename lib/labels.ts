@@ -10,6 +10,7 @@ export const MOVE_LABEL: Record<string, string> = {
   SHRINKAGE: "Merma",
   LOSS: "Pérdida",
   INTERNAL: "Consumo interno",
+  LOSS_VOID: "Reversión de merma",
 }
 
 export const PAYMENT_LABEL: Record<string, string> = {

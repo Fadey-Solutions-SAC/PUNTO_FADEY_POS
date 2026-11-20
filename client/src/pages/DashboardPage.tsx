@@ -69,12 +69,20 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
   const maxDay = Math.max(...data.days.map((day) => Math.max(day.total.cents, 0)), 1)
   const hasSalesChart = data.days.some((day) => day.total.cents !== 0)
 
-  const cards: { label: string; value: string; trend: ReturnType<typeof change>; color: string; icon: LucideIcon; href?: string }[] = [
+  const cards: { label: string; value: string; trend: ReturnType<typeof change>; color: string; icon: LucideIcon; href?: string; note?: string }[] = [
     { label: "Ventas del día", value: data.salesTotal.label, trend: salesTrend, color: "#0d9488", icon: TrendingUp },
     { label: "Operaciones", value: String(data.operations), trend: opsTrend, color: "#6366f1", icon: Receipt },
     { label: "Ingresos de caja", value: data.income.label, trend: null, color: "#10b981", icon: ArrowDownCircle },
     { label: "Egresos de caja", value: data.expense.label, trend: null, color: "#ef4444", icon: ArrowUpCircle },
-    { label: "Ganancia estimada", value: data.profit.label, trend: null, color: "#8b5cf6", icon: Wallet },
+    {
+      label: "Ganancia estimada",
+      value: data.profit.label,
+      trend: null,
+      color: "#8b5cf6",
+      icon: Wallet,
+      note: data.lossesToday && data.lossesToday.cents > 0 ? `Descuenta ${data.lossesToday.label} de mermas` : undefined,
+      href: data.lossesToday && data.lossesToday.cents > 0 ? "/inventario/mermas" : undefined,
+    },
     { label: "Productos", value: String(data.products), trend: null, color: "#0ea5e9", icon: Boxes, href: "/productos" },
     { label: "Stock bajo", value: String(data.low), trend: null, color: "#f59e0b", icon: AlertTriangle, href: "/inventario/alertas" },
     { label: "Agotados", value: String(data.empty), trend: null, color: "#e11d48", icon: PackageX, href: "/inventario/alertas" },
@@ -118,6 +126,7 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
               >
                 {card.value}
               </p>
+              {card.note ? <p className="mt-1 text-xs font-medium text-rose-600">{card.note}</p> : null}
               {card.trend ? (
                 <span
                   className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${

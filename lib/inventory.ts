@@ -19,6 +19,7 @@ export type MoveType =
   | "SHRINKAGE"
   | "LOSS"
   | "INTERNAL"
+  | "LOSS_VOID"
 
 async function assertWarehouse(ctx: TenantContext, warehouseId: string, tx: Tx | typeof prisma = prisma) {
   const warehouse = await tx.warehouse.findFirst({

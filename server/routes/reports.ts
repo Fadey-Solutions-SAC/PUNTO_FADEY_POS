@@ -11,6 +11,7 @@ import {
   purchasesReport,
   salesReport,
 } from "../../lib/reports"
+import { LOSS_TYPES, listLosses } from "../../lib/losses"
 import { listPaymentMethods } from "../../lib/payment-methods"
 import { can } from "../../lib/roles"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
@@ -113,8 +114,11 @@ export function registerReportsRoutes(app: Express) {
       let report: ReportPayload
 
       if (area === "ventas" || area === "rentabilidad") {
-        const data = await salesReport(ctx, range, filter)
         const profitView = area === "rentabilidad"
+        const [data, losses] = await Promise.all([
+          salesReport(ctx, range, filter),
+          profitView ? listLosses(ctx, range, { includeVoided: false }) : Promise.resolve(null),
+        ])
         const productRows = byValueDesc(data.byProduct, (row) => (profitView ? row.total - row.cost : row.total))
         const categoryRows = byValueDesc(data.byCategory, (row) => (profitView ? row.total - row.cost : row.total))
         const dayRows = byDateAsc(data.byDay)
@@ -203,13 +207,20 @@ export function registerReportsRoutes(app: Express) {
 
         report = profitView
           ? {
-              description: "Utilidad bruta = venta − costo de lo vendido (netas de devoluciones). No incluye gastos de caja.",
+              description:
+                "Utilidad bruta = venta − costo de lo vendido (netas de devoluciones). Utilidad tras mermas = bruta − costo de mermas y pérdidas. No incluye gastos de caja.",
               chartTitle: group === "periodo" ? "Utilidad por día" : group === "categoria" ? "Utilidad por categoría" : "Utilidad por producto",
               kpis: [
                 { label: "Ventas", value: money(data.total), tone: "teal" },
                 { label: "Costo", value: money(data.cost), tone: "amber" },
                 { label: "Utilidad bruta", value: money(data.gross), tone: data.gross >= 0 ? "emerald" : "red" },
                 { label: "Margen", value: margin(data.total, data.cost), tone: "violet" },
+                { label: "Mermas y pérdidas", value: money(losses?.totalCost ?? 0), tone: (losses?.totalCost ?? 0) > 0 ? "rose" : "slate" },
+                {
+                  label: "Utilidad tras mermas",
+                  value: money(data.gross - (losses?.totalCost ?? 0)),
+                  tone: data.gross - (losses?.totalCost ?? 0) >= 0 ? "teal" : "red",
+                },
               ],
               empty: "No hay ventas en este período.",
               ...grouped,
@@ -312,7 +323,27 @@ export function registerReportsRoutes(app: Express) {
         else if (group === "salidas") grouped = movementRows(moves.exits)
         else if (group === "transferencias") grouped = movementRows(moves.transfers)
         else if (group === "ajustes") grouped = movementRows(moves.adjustments)
-        else if (group === "vencimientos") {
+        else if (group === "mermas") {
+          const losses = await listLosses(ctx, range, { includeVoided: false })
+          const rows = losses.rows.filter((row) => row.status === "ACTIVE")
+          grouped = {
+            columns: ["Fecha", "Producto", "Tipo", "Causa", "Cantidad", "Costo", "Usuario"],
+            numeric: [4, 5],
+            rows: rows.map((row) => [
+              formatDate(row.createdAt),
+              row.product.name,
+              LOSS_TYPES[row.type as keyof typeof LOSS_TYPES] ?? row.type,
+              row.cause,
+              `${row.presentationQty ?? formatQty(row.quantity)} ${row.presentationName ?? row.product.baseUnit.symbol}`,
+              money(row.totalCost),
+              row.user.name,
+            ]),
+            footer: ["Total", "", "", "", "", money(losses.totalCost), ""],
+            chart: losses.byCause.map(([label, item]) => ({ label, value: item.cost, text: money(item.cost) })),
+            chartKind: "rank",
+            chartMoney: true,
+          }
+        } else if (group === "vencimientos") {
           const lots = [...stock.expiries].sort(
             (a, b) => (a.expiresAt?.getTime() ?? Infinity) - (b.expiresAt?.getTime() ?? Infinity),
           )
@@ -343,6 +374,8 @@ export function registerReportsRoutes(app: Express) {
               ? "Valor del inventario por producto"
               : group === "vencimientos"
                 ? "Lotes por vencer"
+                : group === "mermas"
+                ? "Mermas por causa (costo)"
                 : "Cantidades por tipo de movimiento",
           kpis: [
             { label: "Productos", value: String(stock.rows.length), tone: "sky" },

@@ -15,7 +15,7 @@ import { PALETTE, tint } from "../colors"
 
 const AREAS: { id: string; title: string; text: string; icon: LucideIcon; color: string }[] = [
   { id: "ventas", title: "Ventas", text: "Ingresos, operaciones, productos y medios de pago.", icon: TrendingUp, color: "#0d9488" },
-  { id: "rentabilidad", title: "Rentabilidad", text: "Costo de lo vendido, utilidad y margen.", icon: PiggyBank, color: "#8b5cf6" },
+  { id: "rentabilidad", title: "Rentabilidad", text: "Costo de lo vendido, mermas, utilidad y margen.", icon: PiggyBank, color: "#8b5cf6" },
   { id: "compras", title: "Compras", text: "Proveedores, documentos y cuentas por pagar.", icon: Truck, color: "#6366f1" },
   { id: "inventario", title: "Inventario", text: "Existencias, valor y movimientos de stock.", icon: Boxes, color: "#0ea5e9" },
   { id: "caja", title: "Caja", text: "Cobros por medio, movimientos y cierres.", icon: Wallet, color: "#10b981" },
@@ -47,6 +47,7 @@ const GROUPS: Record<string, { id: string; label: string }[]> = {
     { id: "salidas", label: "Salidas" },
     { id: "transferencias", label: "Transferencias" },
     { id: "ajustes", label: "Ajustes" },
+    { id: "mermas", label: "Mermas" },
     { id: "vencimientos", label: "Por vencer" },
   ],
   caja: [
@@ -316,7 +317,7 @@ export function ReportsPage() {
 
       {report ? (
         <div className={`space-y-4 transition-opacity ${pending ? "opacity-60" : ""}`}>
-          <div className={`grid grid-cols-2 gap-3 ${report.kpis.length >= 5 ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-4"}`}>
+          <div className={`grid grid-cols-2 gap-3 ${report.kpis.length >= 6 ? "md:grid-cols-3 xl:grid-cols-6" : report.kpis.length >= 5 ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-4"}`}>
             {report.kpis.map((item) => {
               const tone = TONES[item.tone] ?? TONES.slate
               return (

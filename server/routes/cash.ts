@@ -96,6 +96,7 @@ export function registerCashRoutes(app: Express) {
         income: moneyOut(data.income, ctx.currency),
         expense: moneyOut(data.expense, ctx.currency),
         profit: moneyOut(data.profit, ctx.currency),
+        lossesToday: moneyOut(data.lossesToday, ctx.currency),
         products: data.products,
         low: data.low,
         empty: data.empty,

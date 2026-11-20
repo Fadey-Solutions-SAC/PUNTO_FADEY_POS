@@ -138,6 +138,7 @@ export type DashboardPayload = {
   income: MoneyOut
   expense: MoneyOut
   profit: MoneyOut
+  lossesToday?: MoneyOut
   products: number
   low: number
   empty: number
@@ -1021,5 +1022,98 @@ export function saveSettingsHardwareReader(enabled: boolean) {
   return request<{ ok: true }>("/api/settings/hardware-reader", {
     method: "POST",
     body: JSON.stringify({ enabled }),
+  })
+}
+
+// ---- Mermas y pérdidas ----
+
+export type LossTypeInfo = { code: "SHRINKAGE" | "LOSS" | "INTERNAL"; label: string; causes: string[] }
+
+export type LossRow = {
+  id: string
+  createdAtLabel: string
+  type: string
+  typeLabel: string
+  cause: string
+  productName: string
+  productCode: string
+  category: string
+  quantityLabel: string
+  baseQuantityLabel: string
+  unitCost: string
+  totalCost: string
+  totalCostCents: number
+  lotCode: string
+  note: string
+  userName: string
+  warehouseName: string
+  status: "ACTIVE" | "VOIDED"
+  voidReason: string
+  voidedAtLabel: string
+}
+
+type LossSum = { label: string; cost: string; costCents: number; count: number }
+
+export function getLosses(params: { desde: string; hasta: string; tipo?: string }) {
+  const query = new URLSearchParams({ desde: params.desde, hasta: params.hasta })
+  if (params.tipo) query.set("tipo", params.tipo)
+  return request<{
+    currency: string
+    warehouseName: string
+    canRegister: boolean
+    canVoid: boolean
+    types: LossTypeInfo[]
+    summary: {
+      total: string
+      totalCents: number
+      count: number
+      voided: number
+      byType: (LossSum & { code: string })[]
+      byCause: LossSum[]
+      byProduct: LossSum[]
+    }
+    rows: LossRow[]
+  }>(`/api/inventory/losses?${query}`)
+}
+
+export type LossProduct = {
+  id: string
+  name: string
+  code: string
+  unit: string
+  stock: number
+  stockLabel: string
+  costPerBase: number
+  trackLots: boolean
+  barcodes: string[]
+  imagePath: string | null
+  categoryId: string | null
+  presentations: { id: string; name: string; factor: number }[]
+  lots: { code: string; quantityLabel: string; expiresAtLabel: string }[]
+}
+
+export function getLossForm() {
+  return request<{ warehouseName: string; products: LossProduct[] }>("/api/inventory/losses/form")
+}
+
+export function registerLoss(input: {
+  productId: string
+  presentationId?: string
+  quantity: string
+  type: string
+  cause: string
+  note?: string
+  lotCode?: string
+}) {
+  return request<{ ok: true; id: string; totalCost: string }>("/api/inventory/losses", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function voidLoss(id: string, reason: string) {
+  return request<{ ok: true }>(`/api/inventory/losses/${id}/void`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
   })
 }

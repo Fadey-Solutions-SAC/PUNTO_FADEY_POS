@@ -29,6 +29,7 @@ model User {
   requirements     PurchaseRequirement[]
   audits           AuditLog[]
   permissions      UserPermission[]
+  stockLosses      StockLoss[]
 }
 
 model Business {
@@ -58,6 +59,7 @@ model Business {
   suppliers        Supplier[]
   purchases        Purchase[]
   requirements     PurchaseRequirement[]
+  stockLosses      StockLoss[]
   grants           PermissionGrant[]
   audits           AuditLog[]
   billing          BillingProfile?
@@ -112,6 +114,7 @@ model Warehouse {
   transfersTo   StockTransfer[] @relation("TransferTo")
   purchases     Purchase[]
   requirements  PurchaseRequirement[]
+  stockLosses   StockLoss[]
 
   @@index([businessId])
   @@index([branchId])
@@ -206,6 +209,7 @@ model Product {
   transferLines   StockTransferLine[]
   purchaseLines   PurchaseLine[]
   requirementLines PurchaseRequirementLine[]
+  stockLosses     StockLoss[]
 
   @@unique([businessId, internalCode])
   @@index([businessId, isActive])
@@ -798,4 +802,39 @@ model DocumentBuyer {
   documentId String  @id
   businessId String
   address    String?
+}
+
+/// Mermas y pérdidas: salida de stock valorizada al costo del momento.
+/// type: SHRINKAGE (merma) · LOSS (pérdida) · INTERNAL (consumo interno).
+/// status: ACTIVE · VOIDED (revertida: el stock regresa con un movimiento LOSS_VOID).
+model StockLoss {
+  id               String    @id @default(cuid())
+  businessId       String
+  warehouseId      String
+  productId        String
+  userId           String
+  type             String
+  cause            String
+  /// Cantidad en unidad base (×10 000) y en la presentación elegida (texto).
+  quantity         Int
+  presentationName String?
+  presentationQty  String?
+  /// Costo por unidad base y total, en céntimos, al momento del registro.
+  unitCost         Int       @default(0)
+  totalCost        Int       @default(0)
+  lotCode          String?
+  note             String?
+  movementId       String?
+  status           String    @default("ACTIVE")
+  voidedAt         DateTime?
+  voidedById       String?
+  voidReason       String?
+  createdAt        DateTime  @default(now())
+  business         Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  warehouse        Warehouse @relation(fields: [warehouseId], references: [id])
+  product          Product   @relation(fields: [productId], references: [id])
+  user             User      @relation(fields: [userId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([productId, createdAt])
 }

@@ -70,6 +70,12 @@ export async function dashboardData(ctx: TenantContext) {
     const cost = sale.lines.reduce((lineSum, line) => lineSum + mulScale(line.costPrice, line.baseQuantity), 0)
     return sum + sale.total - cost
   }, 0) - (returnTotal - returnCost)
+  // Mermas y pérdidas de hoy (activas): se descuentan de la ganancia estimada.
+  const lossesAgg = await prisma.stockLoss.aggregate({
+    where: { businessId: ctx.businessId, status: "ACTIVE", createdAt: { gte: today } },
+    _sum: { totalCost: true },
+  })
+  const lossesToday = lossesAgg._sum.totalCost ?? 0
   const income = movementsToday.filter((item) => item.type === "INCOME" || item.type === "DEPOSIT").reduce((sum, item) => sum + item.amount, 0)
   const expense = movementsToday.filter((item) => item.type === "EXPENSE" || item.type === "WITHDRAWAL").reduce((sum, item) => sum + item.amount, 0)
 
@@ -119,7 +125,8 @@ export async function dashboardData(ctx: TenantContext) {
     yesterdayOperations: salesYesterday.length,
     income,
     expense,
-    profit,
+    profit: profit - lossesToday,
+    lossesToday,
     payMix,
     openSessions,
     products,

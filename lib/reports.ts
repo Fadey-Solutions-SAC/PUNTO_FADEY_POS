@@ -259,7 +259,7 @@ export async function financeReport(ctx: TenantContext, range: ReportRange) {
   }
 }
 
-const IN_TYPES = new Set(["ENTRY", "PURCHASE", "RETURN"])
+const IN_TYPES = new Set(["ENTRY", "PURCHASE", "RETURN", "LOSS_VOID"])
 const OUT_TYPES = new Set(["SALE", "SHRINKAGE", "LOSS", "INTERNAL", "SALE_VOID"])
 const TRANSFER_TYPES = new Set(["TRANSFER_IN", "TRANSFER_OUT"])
 
