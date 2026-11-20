@@ -11,6 +11,7 @@ import {
   type SaleProduct,
 } from "../api"
 import { CustomerPicker } from "../components/CustomerPicker"
+import { dropParked, listParked, parkSale, PARKED_EVENT, takeParked, type ParkedSale } from "../parked"
 import {
   cacheProducts,
   confirmSaleOrQueue,
@@ -77,6 +78,7 @@ export function SalesPage() {
   const [pending, setPending] = useState(false)
   // Cliente y venta a crédito
   const [customer, setCustomer] = useState<SaleCustomer | null>(null)
+  const [parked, setParked] = useState<ParkedSale[]>(() => listParked())
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saleType, setSaleType] = useState<"CASH" | "CREDIT">("CASH")
   const [canCredit, setCanCredit] = useState(false)
@@ -94,6 +96,16 @@ export function SalesPage() {
     return () => {
       window.removeEventListener(OFFLINE_EVENT, sync)
       window.removeEventListener(SERVER_EVENT, server)
+    }
+  }, [])
+
+  useEffect(() => {
+    const sync = () => setParked(listParked())
+    window.addEventListener(PARKED_EVENT, sync)
+    window.addEventListener("storage", sync)
+    return () => {
+      window.removeEventListener(PARKED_EVENT, sync)
+      window.removeEventListener("storage", sync)
     }
   }, [])
 
@@ -267,6 +279,33 @@ export function SalesPage() {
     )
   }
 
+  function onPark() {
+    if (cart.length === 0) return
+    const name = window.prompt("Nombre para reconocer esta venta (opcional):", customer?.name ?? "")
+    if (name === null) return
+    parkSale({ label: name, lines: cart, customer, discount, discountMode, totalCents })
+    setCart([])
+    setCustomer(null)
+    setDiscount("")
+    setSheetOpen(false)
+    setFlash({ text: "Venta en espera. Ya puedes atender a otro cliente.", tone: "ok" })
+  }
+
+  function onResume(id: string) {
+    if (cart.length > 0) {
+      const keep = window.confirm("El carrito actual tiene productos. ¿Ponerlo en espera para retomar la otra venta?")
+      if (!keep) return
+      parkSale({ lines: cart, customer, discount, discountMode, totalCents })
+    }
+    const sale = takeParked(id)
+    if (!sale) return
+    setCart(sale.lines)
+    setCustomer(sale.customer)
+    setDiscount(sale.discount)
+    setDiscountMode(sale.discountMode)
+    setFlash({ text: `Retomada: ${sale.label}`, tone: "ok" })
+  }
+
   function updatePayment(index: number, patch: Partial<PayRow>) {
     setPayments((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   }
@@ -406,15 +445,25 @@ export function SalesPage() {
           </p>
         </div>
         {cart.length > 0 ? (
-          <button
-            type="button"
-            className="rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
-            onClick={() => {
-              if (window.confirm("¿Vaciar el carrito?")) setCart([])
-            }}
-          >
-            Vaciar
-          </button>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+              onClick={onPark}
+              title="Guardar este carrito y atender a otro cliente"
+            >
+              ⏸ En espera
+            </button>
+            <button
+              type="button"
+              className="rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+              onClick={() => {
+                if (window.confirm("¿Vaciar el carrito?")) setCart([])
+              }}
+            >
+              Vaciar
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -569,6 +618,36 @@ export function SalesPage() {
           Historial de ventas
         </Link>
       </div>
+
+      {parked.length > 0 ? (
+        <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-2">
+          <p className="mb-1.5 px-1 text-xs font-semibold text-indigo-900">
+            ⏸ {parked.length} venta{parked.length === 1 ? "" : "s"} en espera · toca para retomar
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {parked.map((item) => (
+              <div key={item.id} className="flex shrink-0 items-center overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-indigo-200">
+                <button type="button" onClick={() => onResume(item.id)} className="px-3 py-1.5 text-left hover:bg-indigo-50">
+                  <span className="block max-w-[11rem] truncate text-xs font-semibold text-[var(--pf-navy)]">{item.label}</span>
+                  <span className="block text-[11px] tabular-nums text-indigo-700">
+                    {item.lines.reduce((sum, line) => sum + line.quantity, 0)} und · S/ {(item.totalCents / 100).toFixed(2)}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Descartar ${item.label}`}
+                  onClick={() => {
+                    if (window.confirm(`¿Descartar la venta en espera "${item.label}"?`)) dropParked(item.id)
+                  }}
+                  className="self-stretch border-l border-indigo-100 px-2 text-xs text-slate-400 hover:bg-red-50 hover:text-red-700"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {usingCache ? (
         <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
