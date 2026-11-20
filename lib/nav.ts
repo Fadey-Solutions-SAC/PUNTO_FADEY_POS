@@ -27,6 +27,7 @@ const NAV: NavGroup[] = [
     title: "Productos",
     items: [
       { href: "/productos", label: "Catálogo" },
+      { href: "/productos/categorias", label: "Categorías y marcas" },
       { href: "/productos/unidades", label: "Unidades" },
       { href: "/productos/presentaciones", label: "Presentaciones" },
       { href: "/productos/codigos", label: "Códigos de barras" },

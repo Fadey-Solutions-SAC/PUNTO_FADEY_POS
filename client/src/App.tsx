@@ -38,6 +38,7 @@ import { SuppliersPage } from "./pages/SuppliersPage"
 import { TicketPage } from "./pages/TicketPage"
 import { TransfersPage } from "./pages/TransfersPage"
 import { UnitsPage } from "./pages/UnitsPage"
+import { TaxonomyPage } from "./pages/TaxonomyPage"
 import { WarehousesPage } from "./pages/WarehousesPage"
 
 type Me = Awaited<ReturnType<typeof getMe>>
@@ -178,6 +179,7 @@ export function App() {
           <Route path="productos" element={<CatalogPage />} />
           <Route path="productos/nuevo" element={<ProductFormPage />} />
           <Route path="productos/unidades" element={<UnitsPage />} />
+          <Route path="productos/categorias" element={<TaxonomyPage />} />
           <Route path="productos/presentaciones" element={<PresentationsPage />} />
           <Route path="productos/codigos" element={<BarcodesPage />} />
           <Route path="productos/precios" element={<PricesPage />} />

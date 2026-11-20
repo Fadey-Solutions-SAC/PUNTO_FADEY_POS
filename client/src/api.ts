@@ -1324,3 +1324,30 @@ export function createWarehouseApi(name: string) {
 export function deleteWarehouseApi(id: string) {
   return request<{ ok: true }>(`/api/settings/warehouses/${id}`, { method: "DELETE" })
 }
+
+// ---- Categorías, marcas e importación ----
+
+export type TaxonomyItem = { id: string; name: string; products: number }
+
+export function getTaxonomy() {
+  return request<{ writable: boolean; categories: TaxonomyItem[]; brands: TaxonomyItem[] }>("/api/catalog/taxonomy")
+}
+
+export function createTaxonomy(kind: "categories" | "brands", name: string) {
+  return request<{ ok: true }>(`/api/catalog/${kind}`, { method: "POST", body: JSON.stringify({ name }) })
+}
+
+export function renameTaxonomy(kind: "categories" | "brands", id: string, name: string) {
+  return request<{ ok: true }>(`/api/catalog/${kind}/${id}`, { method: "PUT", body: JSON.stringify({ name }) })
+}
+
+export function deleteTaxonomy(kind: "categories" | "brands", id: string) {
+  return request<{ ok: true }>(`/api/catalog/${kind}/${id}`, { method: "DELETE" })
+}
+
+export function importCatalog(csv: string, dryRun: boolean) {
+  return request<{ created: number; updated: number; errors: string[] }>("/api/catalog/import", {
+    method: "POST",
+    body: JSON.stringify({ csv, dryRun }),
+  })
+}

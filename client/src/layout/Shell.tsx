@@ -22,6 +22,7 @@ import {
   Settings,
   ShoppingBag,
   SlidersHorizontal,
+  Tags,
   Truck,
   Undo2,
   UserRound,
@@ -63,6 +64,7 @@ const VITE_HREF: Record<string, string> = {
   "/productos": "/productos",
   "/productos/nuevo": "/productos/nuevo",
   "/productos/unidades": "/productos/unidades",
+  "/productos/categorias": "/productos/categorias",
   "/productos/presentaciones": "/productos/presentaciones",
   "/productos/codigos": "/productos/codigos",
   "/productos/precios": "/productos/precios",
@@ -99,6 +101,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/caja/historial": History,
   "/productos": Package,
   "/productos/unidades": Ruler,
+  "/productos/categorias": Tags,
   "/productos/presentaciones": Boxes,
   "/productos/codigos": Barcode,
   "/productos/precios": BadgeDollarSign,
@@ -152,7 +155,7 @@ function themeStyle(id?: string | null): CSSProperties {
 
 function screenTitle(pathname: string, navLabel?: string) {
   if (pathname === "/productos/nuevo") return "Nuevo producto"
-  if (/^\/productos\/(?!nuevo$|unidades$|presentaciones$|codigos$|precios$)[^/]+$/.test(pathname)) return "Editar producto"
+  if (/^\/productos\/(?!nuevo$|unidades$|presentaciones$|codigos$|precios$|categorias$)[^/]+$/.test(pathname)) return "Editar producto"
   if (/^\/ventas\/(?!historial$|devoluciones$|anulaciones$|sincronizar$|pendiente$)[^/]+\/ticket$/.test(pathname)) return "Ticket"
   if (/^\/ventas\/(?!historial$|devoluciones$|anulaciones$|sincronizar$|pendiente$)[^/]+$/.test(pathname)) return "Venta"
   if (pathname === "/ventas/sincronizar") return "Ventas por sincronizar"

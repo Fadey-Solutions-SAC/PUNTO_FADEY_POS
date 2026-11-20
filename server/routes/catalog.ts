@@ -1,5 +1,5 @@
 import express, { type Express } from "express"
-import { getProductForm, loadCatalog, saveNamed, saveProduct, saveProductImage } from "../../lib/catalog"
+import { deleteNamed, exportCatalogCsv, getProductForm, importCatalogCsv, loadCatalog, saveNamed, saveProduct, saveProductImage } from "../../lib/catalog"
 import { errorMessage } from "../../lib/errors"
 import { formatMoney, toMoneyInt } from "../../lib/money"
 import { prisma } from "../../lib/db"
@@ -139,6 +139,85 @@ export function registerCatalogRoutes(app: Express) {
     try {
       await saveNamed(req.tenant!, "category", String(req.body?.name ?? ""))
       res.json({ ok: true })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Categorías y marcas con cuántos productos las usan.
+  app.get("/api/catalog/taxonomy", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const [categories, brands] = await Promise.all([
+        prisma.category.findMany({ where: { businessId: ctx.businessId }, include: { _count: { select: { products: true } } }, orderBy: { name: "asc" } }),
+        prisma.brand.findMany({ where: { businessId: ctx.businessId }, include: { _count: { select: { products: true } } }, orderBy: { name: "asc" } }),
+      ])
+      res.json({
+        writable: can(ctx.role, "catalogWrite", ctx.grants),
+        categories: categories.map((item) => ({ id: item.id, name: item.name, products: item._count.products })),
+        brands: brands.map((item) => ({ id: item.id, name: item.name, products: item._count.products })),
+      })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  for (const [kind, path] of [
+    ["category", "categories"],
+    ["brand", "brands"],
+  ] as const) {
+    if (kind === "brand") {
+      app.post(`/api/catalog/${path}`, requireApiTenant, async (req: AuthedRequest, res) => {
+        try {
+          await saveNamed(req.tenant!, kind, String(req.body?.name ?? ""))
+          res.json({ ok: true })
+        } catch (error) {
+          res.status(400).json({ error: errorMessage(error) })
+        }
+      })
+    }
+    app.put(`/api/catalog/${path}/:id`, requireApiTenant, async (req: AuthedRequest, res) => {
+      try {
+        await saveNamed(req.tenant!, kind, String(req.body?.name ?? ""), String(req.params.id))
+        res.json({ ok: true })
+      } catch (error) {
+        res.status(400).json({ error: errorMessage(error) })
+      }
+    })
+    app.delete(`/api/catalog/${path}/:id`, requireApiTenant, async (req: AuthedRequest, res) => {
+      try {
+        await deleteNamed(req.tenant!, kind, String(req.params.id))
+        res.json({ ok: true })
+      } catch (error) {
+        res.status(400).json({ error: errorMessage(error) })
+      }
+    })
+  }
+
+  // Importar productos desde CSV (texto). dryRun = solo revisar, sin guardar.
+  app.post("/api/catalog/import", requireApiTenant, express.json({ limit: "5mb" }), async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const result = await importCatalogCsv(ctx, String(req.body?.csv ?? ""), { dryRun: req.body?.dryRun === true })
+      if (!req.body?.dryRun && !result.errors.length) {
+        await prisma.auditLog.create({
+          data: { businessId: ctx.businessId, userId: ctx.userId, action: "catalog.import", entity: "Product", detail: `${result.created} nuevos · ${result.updated} actualizados` },
+        })
+      }
+      res.json(result)
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Exportar el catálogo (sirve también de plantilla para importar).
+  app.get("/api/catalog/export", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const csv = await exportCatalogCsv(ctx)
+      res.setHeader("Content-Type", "text/csv; charset=utf-8")
+      res.setHeader("Content-Disposition", `attachment; filename="catalogo-${new Date().toLocaleDateString("en-CA")}.csv"`)
+      res.send(`\ufeff${csv}`)
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
     }

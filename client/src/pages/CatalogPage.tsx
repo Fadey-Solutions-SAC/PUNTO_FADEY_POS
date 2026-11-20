@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { ProductPhoto } from "../components/ProductPhoto"
 import { getCatalog } from "../api"
+import { CatalogImport } from "../components/CatalogImport"
 
 export function CatalogPage() {
   const [data, setData] = useState<Awaited<ReturnType<typeof getCatalog>> | null>(null)
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [notice, setNotice] = useState("")
   const [categoryId, setCategoryId] = useState("")
 
   useEffect(() => {
@@ -51,15 +54,37 @@ export function CatalogPage() {
             {filtered.length} producto{filtered.length === 1 ? "" : "s"}.
           </p>
         </div>
-        {data.writable ? (
-          <Link
-            to="/productos/nuevo"
-            className="h-10 rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold leading-10 text-white"
-          >
-            Nuevo producto
-          </Link>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <a href="/api/catalog/export" className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[var(--pf-navy)] shadow-sm">
+            Exportar CSV
+          </a>
+          {data.writable ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setImporting(true)}
+                className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[var(--pf-navy)] shadow-sm"
+              >
+                Importar CSV
+              </button>
+              <Link to="/productos/nuevo" className="inline-flex h-10 items-center rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white">
+                Nuevo producto
+              </Link>
+            </>
+          ) : null}
+        </div>
       </div>
+      {notice ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {notice}</p> : null}
+      {importing ? (
+        <CatalogImport
+          onClose={() => setImporting(false)}
+          onDone={async (text) => {
+            setImporting(false)
+            setNotice(text)
+            setData(await getCatalog())
+          }}
+        />
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <input

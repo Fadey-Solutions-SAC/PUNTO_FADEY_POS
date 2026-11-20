@@ -479,6 +479,9 @@ function parseCsv(text: string) {
   let cell = ""
   let quoted = false
   const source = text.replace(/^\uFEFF/, "")
+  // Excel en español guarda con ";". Se toma el separador más usado en la primera línea.
+  const firstLine = source.split(/\r?\n/, 1)[0] ?? ""
+  const separator = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ","
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index]
     if (quoted) {
@@ -489,7 +492,7 @@ function parseCsv(text: string) {
         } else quoted = false
       } else cell += char
     } else if (char === '"') quoted = true
-    else if (char === ",") {
+    else if (char === separator) {
       row.push(cell)
       cell = ""
     } else if (char === "\n") {
@@ -553,19 +556,80 @@ export async function exportCatalogCsv(ctx: TenantContext) {
   return lines.join("\n")
 }
 
-export async function importCatalogCsv(ctx: TenantContext, text: string) {
+/** Encabezados aceptados (inglés del export y español). */
+const IMPORT_COLUMNS: Record<string, string[]> = {
+  internalCode: ["internalcode", "codigo", "código", "codigo interno", "código interno", "sku"],
+  name: ["name", "nombre", "producto", "descripcion", "descripción"],
+  category: ["category", "categoria", "categoría"],
+  brand: ["brand", "marca"],
+  unit: ["unit", "unidad", "unidad base"],
+  costPrice: ["costprice", "costo", "precio costo", "precio de costo"],
+  salePrice: ["saleprice", "precio", "precio venta", "precio de venta"],
+  wholesalePrice: ["wholesaleprice", "mayorista", "precio mayorista"],
+  retailPrice: ["retailprice", "minorista", "precio minorista"],
+  barcode: ["barcode", "codigo de barras", "código de barras", "ean"],
+  minStock: ["minstock", "stock minimo", "stock mínimo", "minimo", "mínimo"],
+  presentation: ["presentation", "presentacion", "presentación"],
+  factor: ["factor"],
+  presentationPrice: ["presentationprice", "precio presentacion", "precio presentación"],
+}
+
+export type CatalogImportResult = { created: number; updated: number; errors: string[] }
+
+export async function importCatalogCsv(ctx: TenantContext, text: string, options: { dryRun?: boolean } = {}): Promise<CatalogImportResult> {
   assertCan(ctx, "catalogWrite")
   const rows = parseCsv(text)
   if (rows.length < 2) throw new AppError("El archivo no tiene productos")
-  const header = rows[0].map((cell) => cell.trim())
-  const index = (name: string) => header.indexOf(name)
-  if (index("name") < 0 || index("unit") < 0) throw new AppError("Faltan las columnas name y unit")
+  const header = rows[0].map((cell) => cell.trim().toLowerCase())
+  const column = (key: string) => header.findIndex((cell) => IMPORT_COLUMNS[key].includes(cell))
+  if (column("name") < 0 || column("unit") < 0) throw new AppError("Faltan las columnas de nombre y unidad (name/nombre y unit/unidad)")
+  if (rows.length - 1 > 2000) throw new AppError("Máximo 2000 productos por archivo")
+
+  const units = await prisma.unit.findMany({ where: { businessId: ctx.businessId } })
+  const unitBy = (value: string) => {
+    const text = value.trim().toLowerCase()
+    return units.find((unit) => unit.symbol.toLowerCase() === text || unit.name.toLowerCase() === text)
+  }
+  const money = (value: string) => value.replace(/[^0-9.,-]/g, "").replace(",", ".")
+
+  // 1. Validación completa: si hay errores, no se guarda nada.
+  const errors: string[] = []
+  const seenCodes = new Map<string, number>()
+  const parsed = rows.slice(1).map((row, offset) => {
+    const line = offset + 2
+    const read = (key: string) => (column(key) >= 0 ? row[column(key)]?.trim() ?? "" : "")
+    const name = read("name")
+    const unit = unitBy(read("unit"))
+    if (!name) errors.push(`Fila ${line}: falta el nombre`)
+    if (!unit) errors.push(`Fila ${line}: unidad "${read("unit")}" no registrada (usa el símbolo, ej. und, kg)`)
+    for (const key of ["costPrice", "salePrice", "wholesalePrice", "retailPrice", "presentationPrice"]) {
+      const value = read(key)
+      if (value && !Number.isFinite(Number(money(value)))) errors.push(`Fila ${line}: ${key} no es un número ("${value}")`)
+    }
+    const factor = read("factor")
+    if (factor && !(Number(factor.replace(",", ".")) > 0)) errors.push(`Fila ${line}: factor debe ser mayor que 0`)
+    const code = read("internalCode")
+    if (code) {
+      const previous = seenCodes.get(code.toLowerCase())
+      if (previous) errors.push(`Fila ${line}: código ${code} repetido (también en la fila ${previous})`)
+      seenCodes.set(code.toLowerCase(), line)
+    }
+    return { line, read, name, unit }
+  })
+  if (errors.length) return { created: 0, updated: 0, errors: errors.slice(0, 50) }
+
   let created = 0
   let updated = 0
-  for (const row of rows.slice(1)) {
-    const read = (name: string) => row[index(name)]?.trim() ?? ""
-    const unit = await prisma.unit.findFirst({ where: { businessId: ctx.businessId, symbol: read("unit") } })
-    if (!unit) throw new AppError(`Unidad no registrada: ${read("unit")}`)
+  for (const item of parsed) {
+    const { read } = item
+    const existing = read("internalCode")
+      ? await prisma.product.findFirst({ where: { businessId: ctx.businessId, internalCode: read("internalCode") } })
+      : null
+    if (options.dryRun) {
+      if (existing) updated += 1
+      else created += 1
+      continue
+    }
     let categoryId: string | undefined
     if (read("category")) {
       const categoryName = upperName(read("category"))
@@ -585,40 +649,61 @@ export async function importCatalogCsv(ctx: TenantContext, text: string) {
       })
       brandId = brand.id
     }
-    const existing = read("internalCode")
-      ? await prisma.product.findFirst({ where: { businessId: ctx.businessId, internalCode: read("internalCode") } })
-      : null
     const presentations: PresentationInput[] = [
       {
-        name: read("presentation") || unit.name,
-        factorToBase: read("factor") || "1",
-        price: read("presentationPrice") || undefined,
+        name: read("presentation") || item.unit!.name,
+        factorToBase: read("factor").replace(",", ".") || "1",
+        price: read("presentationPrice") ? money(read("presentationPrice")) : undefined,
         isDefault: true,
       },
     ]
+    let barcodes = read("barcode") ? [read("barcode")] : []
     if (existing) {
       const current = await getProductForm(ctx, existing.id)
       presentations[0].id = current.values.presentations[0]?.id
+      // Conserva los códigos de barras que ya tenía.
+      barcodes = [...new Set([...current.values.barcodes.filter(Boolean), ...barcodes])]
     }
-    await saveProduct(ctx, {
-      id: existing?.id,
-      name: read("name"),
-      internalCode: read("internalCode") || undefined,
-      categoryId,
-      brandId,
-      baseUnitId: unit.id,
-      costPrice: read("costPrice") || "0",
-      salePrice: read("salePrice") || "0",
-      wholesalePrice: read("wholesalePrice") || "0",
-      retailPrice: read("retailPrice") || "0",
-      minStock: read("minStock") || "0",
-      trackLots: false,
-      isActive: true,
-      barcodes: read("barcode") ? [read("barcode")] : [],
-      presentations,
-    })
+    try {
+      await saveProduct(ctx, {
+        id: existing?.id,
+        name: item.name,
+        internalCode: read("internalCode") || undefined,
+        categoryId: categoryId ?? existing?.categoryId ?? undefined,
+        brandId: brandId ?? existing?.brandId ?? undefined,
+        baseUnitId: item.unit!.id,
+        costPrice: money(read("costPrice")) || (existing ? fromMoneyInt(existing.costPrice).toFixed(2) : "0"),
+        salePrice: money(read("salePrice")) || (existing ? fromMoneyInt(existing.salePrice).toFixed(2) : "0"),
+        wholesalePrice: money(read("wholesalePrice")) || (existing ? fromMoneyInt(existing.wholesalePrice).toFixed(2) : "0"),
+        retailPrice: money(read("retailPrice")) || (existing ? fromMoneyInt(existing.retailPrice).toFixed(2) : "0"),
+        minStock: read("minStock").replace(",", ".") || (existing ? fromQtyInt(existing.minStock).toFixed(4) : "0"),
+        // Un producto existente conserva su control de lotes y su estado.
+        trackLots: existing?.trackLots ?? false,
+        isActive: existing?.isActive ?? true,
+        barcodes,
+        presentations,
+      })
+    } catch (error) {
+      const message = error instanceof AppError ? error.message : "error al guardar"
+      throw new AppError(`Fila ${item.line} (${item.name}): ${message}. Las filas anteriores ya se guardaron.`)
+    }
     if (existing) updated += 1
     else created += 1
   }
-  return { created, updated }
+  return { created, updated, errors: [] }
+}
+
+/** Elimina una categoría o marca solo si ningún producto la usa. */
+export async function deleteNamed(ctx: TenantContext, kind: "category" | "brand", id: string) {
+  assertCan(ctx, "catalogWrite")
+  const used =
+    kind === "category"
+      ? await prisma.product.count({ where: { businessId: ctx.businessId, categoryId: id } })
+      : await prisma.product.count({ where: { businessId: ctx.businessId, brandId: id } })
+  if (used > 0) throw new AppError(`No se puede eliminar: ${used} producto${used === 1 ? "" : "s"} la usa${used === 1 ? "" : "n"}`)
+  const result =
+    kind === "category"
+      ? await prisma.category.deleteMany({ where: { id, businessId: ctx.businessId } })
+      : await prisma.brand.deleteMany({ where: { id, businessId: ctx.businessId } })
+  if (result.count === 0) throw new AppError("No encontrado")
 }
