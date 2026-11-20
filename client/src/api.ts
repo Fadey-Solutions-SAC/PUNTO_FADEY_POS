@@ -1,16 +1,25 @@
 export type ApiError = { error: string }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  })
+  let res: Response
+  try {
+    res = await fetch(path, {
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+      ...init,
+    })
+  } catch {
+    throw new Error("Sin conexión con el servidor. Revisa tu internet e intenta de nuevo.")
+  }
   const data = (await res.json().catch(() => ({}))) as T & ApiError
   if (!res.ok) {
+    if (!data.error && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      // Render reinicia el servicio durante un despliegue: la operación no llegó al servidor.
+      throw new Error("El sistema se está actualizando. Espera unos segundos y vuelve a intentar.")
+    }
     throw new Error(data.error || `Error ${res.status}`)
   }
   return data
