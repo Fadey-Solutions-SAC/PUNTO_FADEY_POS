@@ -20,6 +20,7 @@ import { registerPurchasesRoutes } from "./routes/purchases"
 import { registerReportsRoutes } from "./routes/reports"
 import { registerSalesRoutes } from "./routes/sales"
 import { registerSettingsRoutes } from "./routes/settings"
+import { registerUsersRoutes } from "./routes/users"
 import { APP_VERSION, formatAppVersion } from "../lib/version"
 
 // Días y rangos de fechas en hora de Perú (Render corre en UTC). Ver también scripts/boot.mjs.
@@ -73,6 +74,7 @@ registerPurchasesRoutes(app)
 registerBillingRoutes(app)
 registerReportsRoutes(app)
 registerSettingsRoutes(app)
+registerUsersRoutes(app)
 
 app.use("/uploads", express.static(uploadsDir()))
 

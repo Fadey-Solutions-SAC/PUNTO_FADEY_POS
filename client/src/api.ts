@@ -1117,3 +1117,58 @@ export function voidLoss(id: string, reason: string) {
     body: JSON.stringify({ reason }),
   })
 }
+
+// ---- Usuarios y permisos ----
+
+export type UserRow = {
+  id: string
+  name: string
+  username: string
+  role: string
+  roleLabel: string
+  registerId: string
+  registerName: string
+  mode: "role" | "custom"
+  permissions: string[]
+}
+
+export function getUsers() {
+  return request<{
+    canManage: boolean
+    currentUserId: string
+    roles: { code: string; label: string }[]
+    permissions: { code: string; label: string }[]
+    registers: { id: string; name: string }[]
+    roleMatrix: { role: string; label: string; permissions: string[] }[]
+    users: UserRow[]
+  }>("/api/settings/users")
+}
+
+export type UserInput = {
+  name: string
+  username: string
+  password?: string
+  role?: string
+  registerId?: string
+  mode: "role" | "custom"
+  permissions?: string[]
+}
+
+export function createUser(input: UserInput) {
+  return request<{ ok: true; id: string }>("/api/settings/users", { method: "POST", body: JSON.stringify(input) })
+}
+
+export function updateUser(id: string, input: UserInput) {
+  return request<{ ok: true }>(`/api/settings/users/${id}`, { method: "PUT", body: JSON.stringify(input) })
+}
+
+export function deleteUser(id: string) {
+  return request<{ ok: true }>(`/api/settings/users/${id}`, { method: "DELETE" })
+}
+
+export function saveRolePermissions(grants: string[]) {
+  return request<{ ok: true; changes: number }>("/api/settings/role-permissions", {
+    method: "POST",
+    body: JSON.stringify({ grants }),
+  })
+}

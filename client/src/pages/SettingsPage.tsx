@@ -23,6 +23,7 @@ import {
   uploadSettingsImage,
 } from "../api"
 import { shrinkImage } from "../image"
+import { UsersPanel } from "../components/UsersPanel"
 
 type Settings = Awaited<ReturnType<typeof getSettings>>
 type ModuleId = "negocio" | "apariencia" | "marca" | "pagos" | "sucursales" | "usuarios" | "lector" | "sistema"
@@ -33,19 +34,11 @@ const MODULES: { id: ModuleId; label: string; hint: string; icon: LucideIcon; co
   { id: "apariencia", label: "Apariencia", hint: "Color del sistema", icon: Palette, color: "#8b5cf6" },
   { id: "pagos", label: "Métodos de pago", hint: "Efectivo, Yape, tarjeta…", icon: CreditCard, color: "#6366f1" },
   { id: "sucursales", label: "Sucursales", hint: "Locales, almacenes y cajas", icon: Store, color: "#f59e0b" },
-  { id: "usuarios", label: "Usuarios", hint: "Personas con acceso", icon: Users, color: "#0ea5e9" },
+  { id: "usuarios", label: "Usuarios y permisos", hint: "Accesos, roles y contraseñas", icon: Users, color: "#0ea5e9" },
   { id: "lector", label: "Lector de código", hint: "Escáner USB o Bluetooth", icon: ScanBarcode, color: "#10b981" },
   { id: "sistema", label: "Sistema", hint: "Versión instalada", icon: Info, color: "#64748b" },
 ]
 
-const ROLE_LABEL: Record<string, string> = {
-  OWNER: "Dueño",
-  ADMIN: "Administrador",
-  MANAGER: "Encargado",
-  CASHIER: "Cajero",
-  WAREHOUSE: "Almacenero",
-  SELLER: "Vendedor",
-}
 
 export function SettingsPage() {
   const [params, setParams] = useSearchParams()
@@ -358,27 +351,7 @@ export function SettingsPage() {
             </div>
           ) : null}
 
-          {data && active === "usuarios" ? (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {data.users.map((user) => (
-                <li key={user.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-sky-500 text-xs font-bold text-white">
-                    {user.name
-                      .split(/\s+/)
-                      .slice(0, 2)
-                      .map((word) => word[0]?.toUpperCase())
-                      .join("")}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-[var(--pf-navy)]">{user.name}</span>
-                    <span className="block truncate text-xs text-slate-500">
-                      {ROLE_LABEL[user.role] ?? user.role} · {user.email}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          {data && active === "usuarios" ? <UsersPanel /> : null}
 
           {data && active === "lector" ? (
             <label className="flex items-start gap-3 rounded-xl bg-slate-50 px-3 py-3 text-sm">

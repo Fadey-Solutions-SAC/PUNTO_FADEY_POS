@@ -18,7 +18,8 @@
     "lint": "eslint",
     "db:push": "prisma db push",
     "verify": "tsx scripts/verify.ts",
-    "build:server": "esbuild server/app.ts --bundle --platform=node --format=esm --target=node20 --packages=external --outfile=dist/server.mjs --log-level=warning"
+    "build:server": "esbuild server/app.ts --bundle --platform=node --format=esm --target=node20 --packages=external --outfile=dist/server.mjs --log-level=warning",
+    "typecheck:server": "tsc --noEmit -p tsconfig.server.json"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

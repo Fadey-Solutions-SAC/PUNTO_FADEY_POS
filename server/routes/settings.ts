@@ -139,7 +139,7 @@ export function registerSettingsRoutes(app: Express) {
             res.status(400).json({ error: "Usa una imagen JPG, PNG o WebP" })
             return
           }
-          const file = new File([req.body], kind, { type })
+          const file = new File([new Uint8Array(req.body)], kind, { type })
           if (kind === "logo") await saveBrandLogo(ctx, file)
           else await saveLoginCover(ctx, file)
           res.json({ ok: true, url: kind === "logo" ? await brandLogoUrl(ctx.businessId) : await loginCoverUrl(ctx.businessId) })

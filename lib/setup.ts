@@ -245,7 +245,13 @@ export async function updateMember(
     const register = await prisma.cashRegister.findFirst({ where: { id: registerId, businessId: ctxBusinessId, isActive: true } })
     if (!register) throw new AppError("Caja no encontrada")
   }
-  const permissions = member.role === "OWNER" ? null : (input.permissions ?? []).filter((permission) => isPermission(permission) && permission !== "users" && permission !== "permissions")
+  // undefined = "según su rol": se borran los permisos personales del usuario.
+  const permissions =
+    member.role === "OWNER"
+      ? null
+      : input.permissions === undefined
+        ? undefined
+        : input.permissions.filter((permission) => isPermission(permission) && permission !== "users" && permission !== "permissions")
   if (permissions?.includes("cash") && !registerId) throw new AppError("Asigna una caja a este usuario")
   if (member.role === "OWNER" && !registerId) throw new AppError("Asigna una caja al dueño")
   if (input.password && input.password.length < 8) throw new AppError("La contraseña debe tener al menos 8 caracteres")
@@ -262,7 +268,9 @@ export async function updateMember(
       where: { id: member.id },
       data: { cashRegisterId: registerId },
     })
-    if (permissions) {
+    if (permissions === undefined) {
+      await tx.userPermission.deleteMany({ where: { businessId: ctxBusinessId, userId: member.userId } })
+    } else if (permissions) {
       await tx.userPermission.deleteMany({ where: { businessId: ctxBusinessId, userId: member.userId } })
       if (permissions.length) {
         await tx.userPermission.createMany({

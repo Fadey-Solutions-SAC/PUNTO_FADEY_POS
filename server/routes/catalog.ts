@@ -90,7 +90,7 @@ export function registerCatalogRoutes(app: Express) {
           res.status(400).json({ error: "Usa una imagen JPG, PNG o WebP" })
           return
         }
-        const file = new File([req.body], "imagen", { type })
+        const file = new File([new Uint8Array(req.body)], "imagen", { type })
         await saveProductImage(ctx, String(req.params.id), file)
         const product = await prisma.product.findFirst({
           where: { id: String(req.params.id), businessId: ctx.businessId },
