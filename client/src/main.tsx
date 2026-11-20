@@ -3,12 +3,15 @@ import { createRoot } from "react-dom/client"
 import { BrowserRouter } from "react-router-dom"
 import { App } from "./App"
 import "./index.css"
+import { SplashGate } from "./splash/SplashGate"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <SplashGate>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </SplashGate>
   </StrictMode>,
 )
 

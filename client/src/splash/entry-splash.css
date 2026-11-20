@@ -1,0 +1,390 @@
+/* Animación de apertura (misma que Resto Fadey) */
+
+.rf-entry-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: #000000;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  pointer-events: auto;
+  overflow: hidden;
+  overscroll-behavior: none;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  box-sizing: border-box;
+}
+
+.rf-entry-splash--out {
+  animation: rf-entry-splash-out 0.45s ease-in forwards;
+}
+
+.rf-entry-splash__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  padding: 1.25rem;
+  box-sizing: border-box;
+}
+
+.rf-entry-splash__stack {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0 auto;
+  gap: clamp(0.75rem, 2.5vw, 1.25rem);
+}
+
+.rf-entry-splash__stack--out {
+  animation: rf-entry-logo-out 0.45s ease-in forwards;
+}
+
+.rf-entry-splash__logo-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+  animation: rf-entry-logo-pop 1.15s cubic-bezier(0.22, 1.15, 0.36, 1) both;
+}
+
+.rf-entry-splash__glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(58vw, 320px);
+  height: min(58vw, 320px);
+  margin-top: calc(min(58vw, 320px) / -2);
+  margin-left: calc(min(58vw, 320px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.28) 0%, rgba(192, 192, 192, 0.08) 45%, transparent 72%);
+  animation:
+    rf-entry-glow-in 0.9s ease-out both,
+    rf-entry-glow 2s ease-in-out 0.9s infinite;
+  pointer-events: none;
+}
+
+.rf-entry-splash__logo-ring {
+  position: relative;
+  z-index: 1;
+  width: min(46vw, 200px);
+  height: min(46vw, 200px);
+  aspect-ratio: 1;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  flex-shrink: 0;
+  background: #000000;
+  box-shadow:
+    0 0 28px rgba(212, 175, 55, 0.32),
+    0 0 56px rgba(192, 192, 192, 0.1);
+  animation: rf-entry-ring-pulse 1.15s cubic-bezier(0.22, 1.15, 0.36, 1) both;
+}
+
+.rf-entry-splash__logo-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  background: #000000;
+}
+
+.rf-entry-splash__shine {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.rf-entry-splash__shine::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -60%;
+  width: 45%;
+  height: 140%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0) 35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 248, 220, 0.35) 58%,
+    rgba(255, 255, 255, 0) 70%,
+    transparent 100%
+  );
+  transform: skewX(-18deg);
+  animation: rf-entry-shine-sweep 2.2s cubic-bezier(0.4, 0, 0.2, 1) 0.55s both;
+}
+
+.rf-entry-splash__credit {
+  position: absolute;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 2;
+  margin: 0;
+  max-width: min(90vw, 16rem);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(0.68rem, 2.1vw, 0.8rem);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  color: #d4af37;
+  animation: rf-entry-credit-in 0.7s ease-out 0.75s both;
+}
+
+.rf-entry-splash__circuits {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.rf-entry-splash__circuits-tl,
+.rf-entry-splash__circuits-br {
+  filter: drop-shadow(0 0 0.4px rgba(201, 162, 39, 0.3));
+}
+
+.rf-entry-splash__seg-node {
+  fill: none;
+  stroke: #c9a227;
+  stroke-width: 0.18;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.rf-entry-splash__seg-node--filled {
+  fill: #c9a227;
+  stroke: none;
+}
+
+.rf-entry-splash__seg-wire {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  opacity: 1;
+}
+
+.rf-entry-splash__seg--tl .rf-entry-splash__seg-wire {
+  animation:
+    rf-entry-circuit-draw 0.07s linear calc(0.02s + (var(--seg) * 0.01s)) both,
+    rf-entry-circuit-undraw 0.07s linear calc(0.85s + (var(--seg) * 0.01s)) forwards;
+}
+
+.rf-entry-splash__seg--tl .rf-entry-splash__seg-node {
+  animation:
+    rf-entry-circuit-node-pop 0.06s cubic-bezier(0.22, 1.2, 0.36, 1) calc(0.02s + (var(--seg) * 0.01s) + 0.05s) both,
+    rf-entry-circuit-node-out 0.06s ease-in calc(0.85s + (var(--seg) * 0.01s)) forwards;
+}
+
+.rf-entry-splash__seg--br .rf-entry-splash__seg-wire {
+  animation:
+    rf-entry-circuit-draw 0.07s linear calc(1.35s + (var(--seg) * 0.009s)) both,
+    rf-entry-circuit-undraw 0.07s linear calc(2.15s + (var(--seg) * 0.009s)) forwards;
+}
+
+.rf-entry-splash__seg--br .rf-entry-splash__seg-node {
+  animation:
+    rf-entry-circuit-node-pop 0.06s cubic-bezier(0.22, 1.2, 0.36, 1) calc(1.35s + (var(--seg) * 0.009s) + 0.05s) both,
+    rf-entry-circuit-node-out 0.06s ease-in calc(2.15s + (var(--seg) * 0.009s)) forwards;
+}
+
+@media (min-width: 900px) {
+  .rf-entry-splash__logo-ring {
+    width: min(22vw, 220px);
+    height: min(22vw, 220px);
+  }
+  .rf-entry-splash__glow {
+    width: min(32vw, 340px);
+    height: min(32vw, 340px);
+    margin-top: calc(min(32vw, 340px) / -2);
+    margin-left: calc(min(32vw, 340px) / -2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-entry-splash__shine::before {
+    animation: none;
+    opacity: 0;
+  }
+  .rf-entry-splash__logo-wrap,
+  .rf-entry-splash__logo-ring,
+  .rf-entry-splash__credit,
+  .rf-entry-splash__glow {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .rf-entry-splash__circuits,
+  .rf-entry-splash__circuits-tl,
+  .rf-entry-splash__circuits-br,
+  .rf-entry-splash__seg-wire,
+  .rf-entry-splash__seg-node {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}
+
+@keyframes rf-entry-logo-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.45) translateY(18px);
+    filter: blur(8px);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.08) translateY(-4px);
+    filter: blur(0);
+  }
+  75% {
+    transform: scale(0.97) translateY(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes rf-entry-ring-pulse {
+  0% {
+    box-shadow:
+      0 0 0 rgba(212, 175, 55, 0),
+      0 0 0 rgba(192, 192, 192, 0);
+  }
+  60% {
+    box-shadow:
+      0 0 40px rgba(212, 175, 55, 0.55),
+      0 0 80px rgba(192, 192, 192, 0.22);
+  }
+  100% {
+    box-shadow:
+      0 0 28px rgba(212, 175, 55, 0.32),
+      0 0 56px rgba(192, 192, 192, 0.1);
+  }
+}
+
+@keyframes rf-entry-glow-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+
+@keyframes rf-entry-credit-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rf-entry-circuit-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes rf-entry-circuit-undraw {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+
+@keyframes rf-entry-circuit-node-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rf-entry-circuit-node-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+
+@keyframes rf-entry-logo-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes rf-entry-splash-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes rf-entry-glow {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes rf-entry-shine-sweep {
+  0% {
+    left: -70%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    left: 130%;
+    opacity: 0.85;
+  }
+}
