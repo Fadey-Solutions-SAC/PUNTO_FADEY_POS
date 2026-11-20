@@ -5,21 +5,24 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Boxes,
+  PackagePlus,
   PackageX,
   Receipt,
   ShoppingCart,
   TrendingUp,
+  Truck,
   Wallet,
   type LucideIcon,
 } from "lucide-react"
 import { getDashboard, type DashboardPayload, type PanelBootstrap } from "../api"
+import { PALETTE, payColor, tint } from "../colors"
 
-const PAY_COLORS: Record<string, string> = {
-  CASH: "#148a84",
-  CARD: "#0c2340",
-  TRANSFER: "#b45309",
-  OTHER: "#64748b",
-  CREDIT: "#0f5f73",
+const SHORTCUT_COLORS = ["#0d9488", "#6366f1", "#8b5cf6", "#f59e0b"]
+const SHORTCUT_ICONS: Record<string, LucideIcon> = {
+  "/ventas": ShoppingCart,
+  "/caja": Wallet,
+  "/productos/nuevo": PackagePlus,
+  "/compras/recepcion": Truck,
 }
 
 function change(current: number, previous: number) {
@@ -35,7 +38,7 @@ function conic(mix: DashboardPayload["payMix"], total: number) {
     .filter(([, value]) => value.cents > 0)
     .map(([method, value]) => {
       const next = cursor + (value.cents / total) * 100
-      const stop = `${PAY_COLORS[method] ?? "#94a3b8"} ${cursor}% ${next}%`
+      const stop = `${payColor(method)} ${cursor}% ${next}%`
       cursor = next
       return stop
     })
@@ -83,15 +86,15 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
   const maxDay = Math.max(...data.days.map((day) => Math.max(day.total.cents, 0)), 1)
   const hasSalesChart = data.days.some((day) => day.total.cents !== 0)
 
-  const cards: { label: string; value: string; trend: ReturnType<typeof change>; tone: string; icon: LucideIcon; tint: string; href?: string }[] = [
-    { label: "Ventas del día", value: data.salesTotal.label, trend: salesTrend, tone: "text-[var(--pf-accent)]", icon: TrendingUp, tint: "bg-teal-50 text-teal-700" },
-    { label: "Operaciones", value: String(data.operations), trend: opsTrend, tone: "text-[var(--pf-navy)]", icon: Receipt, tint: "bg-sky-50 text-sky-700" },
-    { label: "Ingresos de caja", value: data.income.label, trend: null, tone: "text-emerald-700", icon: ArrowDownCircle, tint: "bg-emerald-50 text-emerald-700" },
-    { label: "Egresos de caja", value: data.expense.label, trend: null, tone: "text-red-700", icon: ArrowUpCircle, tint: "bg-red-50 text-red-700" },
-    { label: "Ganancia estimada", value: data.profit.label, trend: null, tone: "text-[var(--pf-navy)]", icon: Wallet, tint: "bg-indigo-50 text-indigo-700" },
-    { label: "Productos", value: String(data.products), trend: null, tone: "text-[var(--pf-navy)]", icon: Boxes, tint: "bg-slate-100 text-slate-700", href: "/productos" },
-    { label: "Stock bajo", value: String(data.low), trend: null, tone: "text-amber-700", icon: AlertTriangle, tint: "bg-amber-50 text-amber-700", href: "/inventario/alertas" },
-    { label: "Agotados", value: String(data.empty), trend: null, tone: "text-red-700", icon: PackageX, tint: "bg-red-50 text-red-700", href: "/inventario/alertas" },
+  const cards: { label: string; value: string; trend: ReturnType<typeof change>; color: string; icon: LucideIcon; href?: string }[] = [
+    { label: "Ventas del día", value: data.salesTotal.label, trend: salesTrend, color: "#0d9488", icon: TrendingUp },
+    { label: "Operaciones", value: String(data.operations), trend: opsTrend, color: "#6366f1", icon: Receipt },
+    { label: "Ingresos de caja", value: data.income.label, trend: null, color: "#10b981", icon: ArrowDownCircle },
+    { label: "Egresos de caja", value: data.expense.label, trend: null, color: "#ef4444", icon: ArrowUpCircle },
+    { label: "Ganancia estimada", value: data.profit.label, trend: null, color: "#8b5cf6", icon: Wallet },
+    { label: "Productos", value: String(data.products), trend: null, color: "#0ea5e9", icon: Boxes, href: "/productos" },
+    { label: "Stock bajo", value: String(data.low), trend: null, color: "#f59e0b", icon: AlertTriangle, href: "/inventario/alertas" },
+    { label: "Agotados", value: String(data.empty), trend: null, color: "#e11d48", icon: PackageX, href: "/inventario/alertas" },
   ]
 
   const hour = new Date().getHours()
@@ -112,50 +115,67 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
         </div>
         {shortcuts.length > 0 ? (
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {shortcuts.map((item, index) => (
-              <Link
-                key={item.label}
-                to={item.href}
-                className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition ${
-                  index === 0
-                    ? "bg-[var(--pf-accent)] text-white hover:brightness-110"
-                    : "border border-slate-200 bg-white text-[var(--pf-navy)] hover:border-[var(--pf-accent)]/40"
-                }`}
-              >
-                {index === 0 ? <ShoppingCart size={16} /> : null}
-                {item.label}
-              </Link>
-            ))}
+            {shortcuts.map((item, index) => {
+              const color = SHORTCUT_COLORS[index % SHORTCUT_COLORS.length]
+              const Icon = SHORTCUT_ICONS[item.href] ?? ShoppingCart
+              return (
+                <Link
+                  key={item.label}
+                  to={item.href}
+                  className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  style={{ background: color }}
+                >
+                  <Icon size={16} strokeWidth={2.2} />
+                  {item.label}
+                </Link>
+              )
+            })}
           </div>
         ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {cards.map((card) => {
+        {cards.map((card, index) => {
           const Icon = card.icon
+          const hero = index === 0
           const body = (
             <>
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-slate-500">{card.label}</p>
-                <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${card.tint}`}>
-                  <Icon size={16} strokeWidth={2} />
+                <p className={`text-sm ${hero ? "text-white/80" : "text-slate-500"}`}>{card.label}</p>
+                <span
+                  className="grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-sm"
+                  style={{ background: hero ? "rgba(255,255,255,0.18)" : card.color }}
+                >
+                  <Icon size={17} strokeWidth={2.2} />
                 </span>
               </div>
-              <p className={`mt-1 text-2xl font-semibold tracking-tight tabular-nums ${card.tone}`}>{card.value}</p>
+              <p
+                className="mt-1 text-2xl font-bold tracking-tight tabular-nums sm:text-[1.7rem]"
+                style={{ color: hero ? "#fff" : card.color }}
+              >
+                {card.value}
+              </p>
               {card.trend ? (
-                <p className={`mt-1 text-xs font-medium ${card.trend.up ? "text-emerald-700" : "text-red-700"}`}>
-                  {card.trend.text} vs. ayer
-                </p>
+                <span
+                  className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    hero ? "bg-white/20 text-white" : card.trend.up ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                  }`}
+                >
+                  {card.trend.up ? "▲" : "▼"} {card.trend.text} vs. ayer
+                </span>
               ) : null}
             </>
           )
-          const cls = "block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          const cls = "relative block overflow-hidden rounded-2xl border p-4 shadow-sm"
+          const style = hero
+            ? { background: `linear-gradient(135deg, ${card.color}, #0ea5e9)`, borderColor: "transparent" }
+            : { background: `linear-gradient(180deg, ${tint(card.color, 0.07)}, #fff 70%)`, borderColor: tint(card.color, 0.35) }
           return card.href ? (
-            <Link key={card.label} to={card.href} className={`${cls} transition hover:border-[var(--pf-accent)]/40 hover:shadow`}>
+            <Link key={card.label} to={card.href} className={`${cls} transition hover:-translate-y-0.5 hover:shadow-md`} style={style}>
               {body}
             </Link>
           ) : (
-            <div key={card.label} className={cls}>
+            <div key={card.label} className={cls} style={style}>
               {body}
             </div>
           )
@@ -173,17 +193,29 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
             ) : null}
           </div>
           {hasSalesChart ? (
-            <div className="mt-4 flex h-44 items-end gap-2">
-              {data.days.map((day) => (
-                <div key={day.label} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                  <span className="text-[10px] text-slate-400">{day.total.cents > 0 ? day.total.label : ""}</span>
-                  <div
-                    className="w-full rounded-t-lg bg-[var(--pf-accent)]/90"
-                    style={{ height: `${Math.max(day.total.cents > 0 ? 8 : 2, (Math.max(day.total.cents, 0) / maxDay) * 100)}%` }}
-                  />
-                  <span className="text-[11px] capitalize text-slate-500">{day.label.replace(".", "")}</span>
-                </div>
-              ))}
+            <div className="mt-4 flex h-48 items-end gap-2">
+              {data.days.map((day, index) => {
+                const today = index === data.days.length - 1
+                const color = today ? "#f59e0b" : PALETTE[index % PALETTE.length]
+                const pct = Math.max(day.total.cents > 0 ? 8 : 2, (Math.max(day.total.cents, 0) / maxDay) * 100)
+                return (
+                  <div key={day.label} className="group flex h-full flex-1 flex-col items-center justify-end gap-1" title={`${day.label}: ${day.total.label}`}>
+                    <span className="whitespace-nowrap text-[10px] font-semibold tabular-nums" style={{ color: day.total.cents > 0 ? color : "transparent" }}>
+                      {day.total.cents > 0 ? day.total.label.replace("S/ ", "") : "·"}
+                    </span>
+                    <div
+                      className={`w-full rounded-t-xl transition-all duration-500 group-hover:brightness-110 ${today ? "ring-2 ring-amber-300 ring-offset-1" : ""}`}
+                      style={{
+                        height: `${pct}%`,
+                        background: day.total.cents > 0 ? `linear-gradient(180deg, ${color}, ${tint(color, 0.55)})` : "#e2e8f0",
+                      }}
+                    />
+                    <span className={`text-[11px] capitalize ${today ? "font-bold text-amber-600" : "text-slate-500"}`}>
+                      {today ? "Hoy" : day.label.replace(".", "")}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           ) : (
             <p className="mt-8 rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
@@ -221,7 +253,7 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
                       <dt>Ventas en efectivo</dt>
                       <dd>{box.cashSales.label}</dd>
                     </div>
-                    <div className="flex justify-between font-semibold text-[var(--pf-navy)]">
+                    <div className="flex justify-between font-bold text-emerald-700">
                       <dt>Saldo esperado</dt>
                       <dd>{box.expected.label}</dd>
                     </div>
@@ -240,11 +272,11 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
           ) : (
             <div className="mt-4 flex items-center gap-4">
               <div className="grid size-28 shrink-0 place-items-center rounded-full" style={{ background: conic(data.payMix, payTotal) }}>
-                <div className="grid size-16 place-items-center rounded-full bg-white text-center">
+                <div className="grid size-[4.5rem] place-items-center rounded-full bg-white text-center shadow-inner">
                   <span className="text-[10px] leading-tight text-slate-500">
                     Total
                     <br />
-                    {(payTotal / 100).toFixed(2)}
+                    <span className="text-sm font-bold tabular-nums text-[var(--pf-navy)]">{(payTotal / 100).toFixed(2)}</span>
                   </span>
                 </div>
               </div>
@@ -253,9 +285,11 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
                   .filter(([, value]) => value.cents > 0)
                   .map(([method, value]) => (
                     <li key={method} className="flex items-center gap-2">
-                      <span className="size-2 rounded-full" style={{ background: PAY_COLORS[method] }} />
+                      <span className="size-2.5 rounded-full" style={{ background: payColor(method) }} />
                       <span className="flex-1">{value.label}</span>
-                      <span>{Math.round((value.cents / payTotal) * 100)}%</span>
+                      <span className="font-semibold tabular-nums" style={{ color: payColor(method) }}>
+                        {Math.round((value.cents / payTotal) * 100)}%
+                      </span>
                     </li>
                   ))}
               </ul>
@@ -290,7 +324,7 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
                     )}
                     <p className="truncate text-xs text-slate-500">{sale.customerName}</p>
                   </div>
-                  <span className="shrink-0">{sale.total.label}</span>
+                  <span className="shrink-0 rounded-lg bg-teal-50 px-2 py-0.5 font-semibold tabular-nums text-teal-700">{sale.total.label}</span>
                 </li>
               ))}
             </ul>
@@ -311,7 +345,11 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
               {data.attention.map((item) => (
                 <li key={item.name} className="flex items-center justify-between gap-3 py-2">
                   <span className="truncate font-medium text-[var(--pf-navy)]">{item.name}</span>
-                  <span className="shrink-0 text-slate-500">
+                  <span
+                    className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                      Number.parseFloat(item.quantityLabel) <= 0 ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
                     {item.quantityLabel} / mín. {item.minStockLabel}
                   </span>
                 </li>
@@ -336,7 +374,7 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
               {data.lastPurchases.map((purchase) => (
                 <li key={purchase.id} className="flex items-center justify-between gap-3 py-2">
                   <span className="truncate">{purchase.supplierName}</span>
-                  <span className="shrink-0 text-slate-600">{purchase.total.label}</span>
+                  <span className="shrink-0 rounded-lg bg-indigo-50 px-2 py-0.5 font-semibold tabular-nums text-indigo-700">{purchase.total.label}</span>
                 </li>
               ))}
             </ul>

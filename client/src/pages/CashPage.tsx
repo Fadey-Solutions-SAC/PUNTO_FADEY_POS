@@ -88,12 +88,12 @@ export function CashPage() {
           <p className="mt-1 text-sm text-slate-500">Apertura, esperado y movimientos de la sesión abierta.</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
-          <Link to="/caja/historial" className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 font-medium text-[var(--pf-navy)] shadow-sm hover:bg-slate-50">
+          <Link to="/caja/historial" className="inline-flex h-10 items-center rounded-xl bg-indigo-500 px-3 font-semibold text-white shadow-sm hover:bg-indigo-600">
             Historial
           </Link>
           {session ? (
             <>
-              <Link to="/caja/cierre" className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 font-medium text-[var(--pf-navy)] shadow-sm hover:bg-slate-50">
+              <Link to="/caja/cierre" className="inline-flex h-10 items-center rounded-xl bg-rose-500 px-3 font-semibold text-white shadow-sm hover:bg-rose-600">
                 Cerrar caja
               </Link>
               <Link to="/ventas" className="inline-flex h-10 items-center rounded-xl bg-[var(--pf-accent)] px-4 font-semibold text-white shadow-sm hover:brightness-110">
@@ -161,9 +161,12 @@ export function CashPage() {
               </div>
               <p className="mt-1 text-lg font-semibold text-[var(--pf-navy)]">{session.registerName}</p>
             </div>
-            <Stat label="Efectivo inicial" value={session.opening.label} />
-            <div className="rounded-2xl bg-[var(--pf-navy)] p-4 text-white shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/60">Efectivo esperado</p>
+            <div className="rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-sky-700">Efectivo inicial</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-sky-700">{session.opening.label}</p>
+            </div>
+            <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 p-4 text-white shadow-md">
+              <p className="text-xs font-medium uppercase tracking-wide text-white/80">Efectivo esperado</p>
               <p className="mt-1 text-2xl font-bold tabular-nums">{session.expected?.label ?? "—"}</p>
             </div>
           </div>
@@ -216,9 +219,11 @@ export function CashPage() {
               <button
                 type="submit"
                 disabled={pending}
-                className="h-11 w-full rounded-xl bg-[var(--pf-navy)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                className={`h-11 w-full rounded-xl px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-60 ${
+                  isOut(type) ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
               >
-                {pending ? "Guardando…" : "Registrar movimiento"}
+                {pending ? "Guardando…" : isOut(type) ? "Registrar salida" : "Registrar entrada"}
               </button>
             </form>
 
@@ -282,12 +287,3 @@ const MOVE_TYPES = [
   { code: "EXPENSE", label: "Egreso" },
   { code: "WITHDRAWAL", label: "Retiro" },
 ]
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-[var(--pf-navy)]">{value}</p>
-    </div>
-  )
-}

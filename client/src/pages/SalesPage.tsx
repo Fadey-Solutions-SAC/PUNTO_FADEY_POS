@@ -8,6 +8,7 @@ import {
   type SaleProduct,
 } from "../api"
 import { CodeField, playScanPit, ScannerButton } from "../components/Scanner"
+import { categoryColor, tint } from "../colors"
 
 type CartLine = SaleProduct & { quantity: number; key: string }
 type PayRow = { method: string; amount: string }
@@ -321,7 +322,7 @@ export function SalesPage() {
                     {line.presentationName} · {line.unitPriceLabel}
                   </p>
                 </div>
-                <p className="shrink-0 text-sm font-semibold tabular-nums text-[var(--pf-navy)]">
+                <p className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
                   {money(line.unitPriceCents * line.quantity)}
                 </p>
               </div>
@@ -402,8 +403,8 @@ export function SalesPage() {
         ) : null}
         <div className="flex items-baseline justify-between pt-1 text-[var(--pf-navy)]">
           <span className="font-semibold">Total</span>
-          <span className="text-2xl font-bold tabular-nums">
-            {totalAmount} <span className="text-sm font-medium text-slate-500">{currency}</span>
+          <span className="bg-gradient-to-r from-teal-600 to-sky-600 bg-clip-text text-3xl font-extrabold tabular-nums text-transparent">
+            {totalAmount} <span className="text-sm font-semibold">{currency}</span>
           </span>
         </div>
         <button
@@ -475,7 +476,7 @@ export function SalesPage() {
               Todos
             </Chip>
             {categories.map((category) => (
-              <Chip key={category.id} active={categoryId === category.id} onClick={() => setCategoryId(category.id)}>
+              <Chip key={category.id} color={categoryColor(category.id)} active={categoryId === category.id} onClick={() => setCategoryId(category.id)}>
                 {category.name}
               </Chip>
             ))}
@@ -500,6 +501,11 @@ export function SalesPage() {
                       : "border-slate-200 hover:border-[var(--pf-accent)]/50 hover:shadow"
                   } ${out ? "opacity-60" : ""}`}
                 >
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-3 top-0 h-1 rounded-b-full"
+                    style={{ background: categoryColor(product.categoryId) }}
+                  />
                   {inCart > 0 ? (
                     <span className="absolute -right-1.5 -top-1.5 grid min-w-6 place-items-center rounded-full bg-[var(--pf-accent)] px-1.5 text-xs font-bold text-white shadow">
                       {inCart}
@@ -510,7 +516,9 @@ export function SalesPage() {
                     {product.code} · {product.presentationName}
                   </span>
                   <span className="mt-auto flex items-end justify-between gap-1 pt-2">
-                    <span className="text-base font-bold tabular-nums text-[var(--pf-accent)]">{product.unitPriceLabel}</span>
+                    <span className="text-lg font-extrabold tabular-nums" style={{ color: categoryColor(product.categoryId) }}>
+                      {product.unitPriceLabel}
+                    </span>
                     {typeof stock === "number" ? (
                       <span
                         className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
@@ -625,8 +633,8 @@ export function SalesPage() {
               </button>
             </div>
 
-            <div className="rounded-2xl bg-[var(--pf-navy)] px-4 py-3 text-white">
-              <p className="text-xs uppercase tracking-wide text-white/60">Total a cobrar</p>
+            <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-sky-700 px-4 py-3 text-white shadow-md">
+              <p className="text-xs uppercase tracking-wide text-white/70">Total a cobrar</p>
               <p className="truncate text-3xl font-bold tabular-nums">
                 {totalAmount} <span className="text-base font-medium text-white/70">{currency}</span>
               </p>
@@ -742,17 +750,30 @@ export function SalesPage() {
   )
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({
+  active,
+  onClick,
+  children,
+  color,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+  color?: string
+}) {
+  const c = color ?? "#0f172a"
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium shadow-sm ring-1 transition ${
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition"
+      style={
         active
-          ? "bg-[var(--pf-accent)] text-white ring-[var(--pf-accent)]"
-          : "bg-white text-slate-700 ring-slate-200 hover:ring-[var(--pf-accent)]/40"
-      }`}
+          ? { background: c, color: "#fff", boxShadow: `0 0 0 1px ${c}` }
+          : { background: color ? tint(c, 0.1) : "#fff", color: color ? c : "#334155", boxShadow: `0 0 0 1px ${tint(c, 0.3)}` }
+      }
     >
+      {color ? <span className="size-2 rounded-full" style={{ background: active ? "#fff" : c }} /> : null}
       {children}
     </button>
   )
