@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { saveCustomer, searchSaleCustomers, type SaleCustomer } from "../api"
+import { DocumentLookup } from "./DocumentLookup"
 
 /** Ventana para elegir el cliente de la venta (o crear uno nuevo al vuelo). */
 export function CustomerPicker({
@@ -103,12 +104,15 @@ export function CustomerPicker({
             <div className="grid grid-cols-2 gap-2">
               <label className="block text-sm font-medium text-slate-700">
                 DNI o RUC
-                <input
-                  inputMode="numeric"
-                  className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3"
-                  value={form.document}
-                  onChange={(event) => setForm((current) => ({ ...current, document: event.target.value }))}
-                />
+                <span className="flex gap-2">
+                  <input
+                    inputMode="numeric"
+                    className="mt-1 h-11 w-full min-w-0 rounded-xl border border-slate-200 px-3"
+                    value={form.document}
+                    onChange={(event) => setForm((current) => ({ ...current, document: event.target.value }))}
+                  />
+                  <DocumentLookup value={form.document} onFound={(party) => setForm((current) => ({ ...current, document: party.document, name: party.name }))} />
+                </span>
               </label>
               <label className="block text-sm font-medium text-slate-700">
                 Teléfono

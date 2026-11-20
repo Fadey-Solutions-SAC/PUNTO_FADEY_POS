@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { getCustomers, saveCustomer } from "../api"
+import { DocumentLookup } from "../components/DocumentLookup"
 
 type Customer = Awaited<ReturnType<typeof getCustomers>>["customers"][number]
 
@@ -145,13 +146,22 @@ export function CustomersPage() {
               ).map(([key, label, required]) => (
                 <label key={key} className="block text-sm">
                   {label}
-                  <input
-                    required={required}
-                    type={key === "email" ? "email" : "text"}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                    value={form[key]}
-                    onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
-                  />
+                  <span className="flex gap-2">
+                    <input
+                      required={required}
+                      type={key === "email" ? "email" : "text"}
+                      inputMode={key === "document" ? "numeric" : undefined}
+                      className="mt-1 w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2"
+                      value={form[key]}
+                      onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+                    />
+                    {key === "document" ? (
+                      <DocumentLookup
+                        value={form.document}
+                        onFound={(party) => setForm((current) => ({ ...current, document: party.document, name: party.name, address: party.address || current.address }))}
+                      />
+                    ) : null}
+                  </span>
                 </label>
               ))}
             </div>

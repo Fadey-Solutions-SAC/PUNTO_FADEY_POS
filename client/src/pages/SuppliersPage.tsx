@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { getSuppliers, saveSupplier } from "../api"
+import { DocumentLookup } from "../components/DocumentLookup"
 
 const empty = {
   tradeName: "",
@@ -61,13 +62,30 @@ export function SuppliersPage() {
         ).map(([key, label, required]) => (
           <label key={key} className={`block text-sm ${key === "address" ? "sm:col-span-2" : ""}`}>
             {label}
-            <input
-              required={required}
-              type={key === "email" ? "email" : "text"}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-              value={form[key]}
-              onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
-            />
+            <span className="flex gap-2">
+              <input
+                required={required}
+                type={key === "email" ? "email" : "text"}
+                inputMode={key === "taxId" ? "numeric" : undefined}
+                className="mt-1 w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2"
+                value={form[key]}
+                onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+              />
+              {key === "taxId" ? (
+                <DocumentLookup
+                  value={form.taxId}
+                  onFound={(party) =>
+                    setForm((current) => ({
+                      ...current,
+                      taxId: party.document,
+                      legalName: party.name,
+                      tradeName: current.tradeName || party.name,
+                      address: party.address || current.address,
+                    }))
+                  }
+                />
+              ) : null}
+            </span>
           </label>
         ))}
         <button

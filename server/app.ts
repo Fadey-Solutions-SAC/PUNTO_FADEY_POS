@@ -17,6 +17,7 @@ import { registerCustomersRoutes } from "./routes/customers"
 import { registerInventoryRoutes } from "./routes/inventory"
 import { registerLossesRoutes } from "./routes/losses"
 import { registerEntriesRoutes } from "./routes/entries"
+import { registerLookupRoutes } from "./routes/lookup"
 import { registerPurchasesRoutes } from "./routes/purchases"
 import { registerReportsRoutes } from "./routes/reports"
 import { registerSalesRoutes } from "./routes/sales"
@@ -74,6 +75,7 @@ registerCustomersRoutes(app)
 registerInventoryRoutes(app)
 registerLossesRoutes(app)
 registerEntriesRoutes(app)
+registerLookupRoutes(app)
 registerPurchasesRoutes(app)
 registerBillingRoutes(app)
 registerReportsRoutes(app)

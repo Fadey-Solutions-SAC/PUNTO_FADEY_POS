@@ -1351,3 +1351,11 @@ export function importCatalog(csv: string, dryRun: boolean) {
     body: JSON.stringify({ csv, dryRun }),
   })
 }
+
+// ---- Consulta DNI / RUC ----
+
+export function lookupDocument(numero: string) {
+  return request<{ docType: "1" | "6"; document: string; name: string; address: string }>(
+    `/api/lookup/document?numero=${encodeURIComponent(numero)}`,
+  )
+}
