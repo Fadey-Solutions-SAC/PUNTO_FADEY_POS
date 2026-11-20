@@ -1394,3 +1394,90 @@ export function saveBillingSeries(docType: string, series: string) {
 export function sendBillingDocument(id: string) {
   return request<{ ok: true; status: string; statusLabel: string }>(`/api/billing/${id}/send`, { method: "POST" })
 }
+
+// ---- Toma de inventario (conteo físico) ----
+export type MeasureOption = { id: string; name: string; factor: number }
+
+export type CountSummaryRow = {
+  id: string
+  number: number
+  status: "OPEN" | "CLOSED" | "CANCELLED"
+  statusLabel: string
+  warehouseName: string
+  scope: string
+  userName: string
+  createdAtLabel: string
+  closedAtLabel: string
+  products: number
+  countedItems: number
+  diffItems: number
+  shortage: string
+  surplus: string
+  net: string
+  netCents: number
+}
+
+export type CountLine = {
+  productId: string
+  name: string
+  code: string
+  category: string
+  unit: string
+  barcodes: string[]
+  trackLots: boolean
+  measures: MeasureOption[]
+  system: number
+  counted: number | null
+  costPerUnit: number
+  diffLabel: string
+  diffValue: string
+  diffValueCents: number
+}
+
+export type CountDetail = {
+  id: string
+  number: number
+  status: "OPEN" | "CLOSED" | "CANCELLED"
+  statusLabel: string
+  warehouseName: string
+  sameWarehouse: boolean
+  scope: string
+  note: string
+  userName: string
+  createdAtLabel: string
+  closedAtLabel: string
+  canManage: boolean
+  currency: string
+  summary: { countedItems: number; diffItems: number; shortage: string; surplus: string; net: string; systemValue: string; countedValue: string }
+  lines: CountLine[]
+}
+
+export function getCounts() {
+  return request<{
+    warehouseName: string
+    canManage: boolean
+    categories: { id: string; name: string }[]
+    openId: string | null
+    counts: CountSummaryRow[]
+  }>("/api/inventory/counts")
+}
+
+export function createCount(input: { categoryId?: string; note?: string }) {
+  return request<{ ok: true; id: string }>("/api/inventory/counts", { method: "POST", body: JSON.stringify(input) })
+}
+
+export function getCount(id: string) {
+  return request<CountDetail>(`/api/inventory/counts/${id}`)
+}
+
+export function saveCountLines(id: string, lines: { productId: string; quantity: string; measureId?: string }[]) {
+  return request<{ ok: true; saved: number }>(`/api/inventory/counts/${id}/lines`, { method: "PUT", body: JSON.stringify({ lines }) })
+}
+
+export function closeCount(id: string, uncounted: "KEEP" | "ZERO") {
+  return request<{ ok: true; id: string; diffItems: number }>(`/api/inventory/counts/${id}/close`, { method: "POST", body: JSON.stringify({ uncounted }) })
+}
+
+export function cancelCount(id: string) {
+  return request<{ ok: true }>(`/api/inventory/counts/${id}/cancel`, { method: "POST" })
+}

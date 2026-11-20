@@ -9,13 +9,13 @@ datasource db {
 
 /// Montos en centavos y cantidades en diezmilésimas (ver lib/money.ts).
 model User {
-  id               String            @id @default(cuid())
+  id               String                @id @default(cuid())
   name             String
-  username         String?           @unique
-  email            String            @unique
+  username         String?               @unique
+  email            String                @unique
   passwordHash     String
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   memberships      Membership[]
   sales            Sale[]
   cashSessions     CashSession[]
@@ -30,19 +30,20 @@ model User {
   audits           AuditLog[]
   permissions      UserPermission[]
   stockLosses      StockLoss[]
+  stockCounts      StockCount[]
 }
 
 model Business {
-  id               String         @id @default(cuid())
+  id               String                @id @default(cuid())
   name             String
   legalName        String?
   taxId            String?
-  currency         String         @default("PEN")
-  discountLimitPct Int            @default(1000)
-  allowCredit      Boolean        @default(false)
-  theme            String         @default("azul")
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  currency         String                @default("PEN")
+  discountLimitPct Int                   @default(1000)
+  allowCredit      Boolean               @default(false)
+  theme            String                @default("azul")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   memberships      Membership[]
   branches         Branch[]
   warehouses       Warehouse[]
@@ -60,6 +61,7 @@ model Business {
   purchases        Purchase[]
   requirements     PurchaseRequirement[]
   stockLosses      StockLoss[]
+  stockCounts      StockCount[]
   grants           PermissionGrant[]
   audits           AuditLog[]
   billing          BillingProfile?
@@ -98,23 +100,24 @@ model Branch {
 }
 
 model Warehouse {
-  id            String          @id @default(cuid())
+  id            String                @id @default(cuid())
   businessId    String
   branchId      String
   name          String
-  isDefault     Boolean         @default(false)
-  isActive      Boolean         @default(true)
-  business      Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch        Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  isDefault     Boolean               @default(false)
+  isActive      Boolean               @default(true)
+  business      Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch        Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
   balances      StockBalance[]
   movements     StockMovement[]
   lots          Lot[]
   sales         Sale[]
-  transfersFrom StockTransfer[] @relation("TransferFrom")
-  transfersTo   StockTransfer[] @relation("TransferTo")
+  transfersFrom StockTransfer[]       @relation("TransferFrom")
+  transfersTo   StockTransfer[]       @relation("TransferTo")
   purchases     Purchase[]
   requirements  PurchaseRequirement[]
   stockLosses   StockLoss[]
+  stockCounts   StockCount[]
 
   @@index([businessId])
   @@index([branchId])
@@ -172,44 +175,45 @@ model UnitConversion {
 }
 
 model Product {
-  id              String           @id @default(cuid())
-  businessId      String
-  name            String
-  internalCode    String
-  categoryId      String?
-  brandId         String?
-  baseUnitId      String
-  description     String?
-  imagePath       String?
-  costPrice       Int              @default(0)
-  salePrice       Int              @default(0)
-  wholesalePrice  Int              @default(0)
-  retailPrice     Int              @default(0)
-  minStock        Int              @default(0)
-  maxStock        Int?
-  trackLots       Boolean          @default(false)
-  isActive        Boolean          @default(true)
-  parentId        String?
-  variantName     String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  business        Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  category        Category?        @relation(fields: [categoryId], references: [id])
-  brand           Brand?           @relation(fields: [brandId], references: [id])
-  baseUnit        Unit             @relation(fields: [baseUnitId], references: [id])
-  parent          Product?         @relation("Variants", fields: [parentId], references: [id])
-  variants        Product[]        @relation("Variants")
-  barcodes        ProductBarcode[]
-  presentations   Presentation[]
-  prices          PriceListItem[]
-  balances        StockBalance[]
-  movements       StockMovement[]
-  lots            Lot[]
-  saleLines       SaleLine[]
-  transferLines   StockTransferLine[]
-  purchaseLines   PurchaseLine[]
+  id               String                    @id @default(cuid())
+  businessId       String
+  name             String
+  internalCode     String
+  categoryId       String?
+  brandId          String?
+  baseUnitId       String
+  description      String?
+  imagePath        String?
+  costPrice        Int                       @default(0)
+  salePrice        Int                       @default(0)
+  wholesalePrice   Int                       @default(0)
+  retailPrice      Int                       @default(0)
+  minStock         Int                       @default(0)
+  maxStock         Int?
+  trackLots        Boolean                   @default(false)
+  isActive         Boolean                   @default(true)
+  parentId         String?
+  variantName      String?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  business         Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category         Category?                 @relation(fields: [categoryId], references: [id])
+  brand            Brand?                    @relation(fields: [brandId], references: [id])
+  baseUnit         Unit                      @relation(fields: [baseUnitId], references: [id])
+  parent           Product?                  @relation("Variants", fields: [parentId], references: [id])
+  variants         Product[]                 @relation("Variants")
+  barcodes         ProductBarcode[]
+  presentations    Presentation[]
+  prices           PriceListItem[]
+  balances         StockBalance[]
+  movements        StockMovement[]
+  lots             Lot[]
+  saleLines        SaleLine[]
+  transferLines    StockTransferLine[]
+  purchaseLines    PurchaseLine[]
   requirementLines PurchaseRequirementLine[]
-  stockLosses     StockLoss[]
+  stockLosses      StockLoss[]
+  countLines       StockCountLine[]
 
   @@unique([businessId, internalCode])
   @@index([businessId, isActive])
@@ -230,17 +234,17 @@ model ProductBarcode {
 }
 
 model Presentation {
-  id           String           @id @default(cuid())
-  businessId   String
-  productId    String
-  unitId       String?
-  name         String
-  factorToBase Int
-  price        Int?
-  isDefault    Boolean          @default(false)
-  isActive     Boolean          @default(true)
-  product      Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  unit         Unit?            @relation(fields: [unitId], references: [id])
+  id            String           @id @default(cuid())
+  businessId    String
+  productId     String
+  unitId        String?
+  name          String
+  factorToBase  Int
+  price         Int?
+  isDefault     Boolean          @default(false)
+  isActive      Boolean          @default(true)
+  product       Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unit          Unit?            @relation(fields: [unitId], references: [id])
   barcodes      ProductBarcode[]
   saleLines     SaleLine[]
   purchaseLines PurchaseLine[]
@@ -275,37 +279,37 @@ model PriceListItem {
 }
 
 model Customer {
-  id         String            @id @default(cuid())
-  businessId String
-  name       String
+  id          String            @id @default(cuid())
+  businessId  String
+  name        String
   document    String?
   phone       String?
   email       String?
   address     String?
-  creditLimit Int              @default(0)
-  balance    Int               @default(0)
-  isActive   Boolean           @default(true)
-  createdAt  DateTime          @default(now())
-  business   Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  sales      Sale[]
-  payments   CustomerPayment[]
+  creditLimit Int               @default(0)
+  balance     Int               @default(0)
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sales       Sale[]
+  payments    CustomerPayment[]
 
   @@index([businessId])
 }
 
 model CustomerPayment {
-  id         String       @id @default(cuid())
+  id         String      @id @default(cuid())
   businessId String
   customerId String
   sessionId  String
   userId     String
   saleId     String?
   amount     Int
-  createdAt  DateTime     @default(now())
-  customer   Customer     @relation(fields: [customerId], references: [id])
-  session    CashSession  @relation(fields: [sessionId], references: [id])
-  user       User         @relation(fields: [userId], references: [id])
-  sale       Sale?        @relation(fields: [saleId], references: [id])
+  createdAt  DateTime    @default(now())
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  session    CashSession @relation(fields: [sessionId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  sale       Sale?       @relation(fields: [saleId], references: [id])
 
   @@index([businessId, customerId])
   @@index([saleId])
@@ -326,31 +330,31 @@ model CashRegister {
 }
 
 model CashSession {
-  id             String         @id @default(cuid())
-  businessId     String
-  branchId       String
-  cashRegisterId String
-  userId         String
-  status         String         @default("OPEN")
-  openingAmount  Int
-  expectedAmount Int?
-  countedAmount  Int?
-  difference     Int?
-  cashSales      Int?
-  cardSales      Int?
-  transferSales  Int?
-  otherSales     Int?
-  incomeTotal    Int?
-  expenseTotal   Int?
-  notes          String?
-  openedAt       DateTime       @default(now())
-  closedAt       DateTime?
-  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch         Branch         @relation(fields: [branchId], references: [id])
-  register       CashRegister   @relation(fields: [cashRegisterId], references: [id])
-  user           User           @relation(fields: [userId], references: [id])
-  movements      CashMovement[]
-  sales          Sale[]
+  id               String            @id @default(cuid())
+  businessId       String
+  branchId         String
+  cashRegisterId   String
+  userId           String
+  status           String            @default("OPEN")
+  openingAmount    Int
+  expectedAmount   Int?
+  countedAmount    Int?
+  difference       Int?
+  cashSales        Int?
+  cardSales        Int?
+  transferSales    Int?
+  otherSales       Int?
+  incomeTotal      Int?
+  expenseTotal     Int?
+  notes            String?
+  openedAt         DateTime          @default(now())
+  closedAt         DateTime?
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch           Branch            @relation(fields: [branchId], references: [id])
+  register         CashRegister      @relation(fields: [cashRegisterId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
+  movements        CashMovement[]
+  sales            Sale[]
   returns          SaleReturn[]
   payments         CustomerPayment[]
   purchasePayments PurchasePayment[]
@@ -376,7 +380,7 @@ model CashMovement {
 }
 
 model Sale {
-  id             String        @id @default(cuid())
+  id             String               @id @default(cuid())
   businessId     String
   branchId       String
   warehouseId    String
@@ -388,18 +392,18 @@ model Sale {
   saleType       String
   idempotencyKey String
   subtotal       Int
-  discount       Int           @default(0)
+  discount       Int                  @default(0)
   total          Int
   notes          String?
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime             @default(now())
   voidedAt       DateTime?
-  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch         Branch        @relation(fields: [branchId], references: [id])
-  warehouse      Warehouse     @relation(fields: [warehouseId], references: [id])
-  session        CashSession?  @relation(fields: [sessionId], references: [id])
-  user           User          @relation(fields: [userId], references: [id])
-  customer       Customer?     @relation(fields: [customerId], references: [id])
-  priceList      PriceList?    @relation(fields: [priceListId], references: [id])
+  business       Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch         Branch               @relation(fields: [branchId], references: [id])
+  warehouse      Warehouse            @relation(fields: [warehouseId], references: [id])
+  session        CashSession?         @relation(fields: [sessionId], references: [id])
+  user           User                 @relation(fields: [userId], references: [id])
+  customer       Customer?            @relation(fields: [customerId], references: [id])
+  priceList      PriceList?           @relation(fields: [priceListId], references: [id])
   lines          SaleLine[]
   payments       SalePayment[]
   returns        SaleReturn[]
@@ -412,7 +416,7 @@ model Sale {
 }
 
 model SaleLine {
-  id             String         @id @default(cuid())
+  id             String           @id @default(cuid())
   saleId         String
   productId      String
   presentationId String?
@@ -423,9 +427,9 @@ model SaleLine {
   unitPrice      Int
   costPrice      Int
   total          Int
-  sale           Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product        Product        @relation(fields: [productId], references: [id])
-  presentation   Presentation?  @relation(fields: [presentationId], references: [id])
+  sale           Sale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product        Product          @relation(fields: [productId], references: [id])
+  presentation   Presentation?    @relation(fields: [presentationId], references: [id])
   returnLines    SaleReturnLine[]
 
   @@index([saleId])
@@ -443,18 +447,18 @@ model SalePayment {
 }
 
 model SaleReturn {
-  id         String           @id @default(cuid())
-  businessId String
-  saleId     String
-  sessionId  String?
-  userId     String
-  total      Int
+  id           String           @id @default(cuid())
+  businessId   String
+  saleId       String
+  sessionId    String?
+  userId       String
+  total        Int
   refundMethod String
-  createdAt  DateTime         @default(now())
-  sale       Sale             @relation(fields: [saleId], references: [id])
-  session    CashSession?     @relation(fields: [sessionId], references: [id])
-  user       User             @relation(fields: [userId], references: [id])
-  lines      SaleReturnLine[]
+  createdAt    DateTime         @default(now())
+  sale         Sale             @relation(fields: [saleId], references: [id])
+  session      CashSession?     @relation(fields: [sessionId], references: [id])
+  user         User             @relation(fields: [userId], references: [id])
+  lines        SaleReturnLine[]
 
   @@index([businessId, createdAt])
   @@index([saleId])
@@ -722,7 +726,7 @@ model DocumentSeries {
 }
 
 model ElectronicDocument {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   businessId      String
   saleId          String?
   relatedId       String?
@@ -739,12 +743,12 @@ model ElectronicDocument {
   xmlText         String
   cdrText         String?
   responseCode    String?
-  attempts        Int      @default(0)
+  attempts        Int       @default(0)
   lastError       String?
-  issuedAt        DateTime @default(now())
+  issuedAt        DateTime  @default(now())
   sentAt          DateTime?
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  sale            Sale?    @relation(fields: [saleId], references: [id])
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sale            Sale?     @relation(fields: [saleId], references: [id])
 
   @@unique([businessId, series, number])
   @@index([businessId, status])
@@ -766,27 +770,27 @@ model BusinessPaymentMethod {
 }
 
 model BusinessPosSetting {
-  businessId String @id
+  businessId     String @id
   /// INTEGER 0/1 (tabla creada por SQL crudo).
-  hardwareReader Int @default(0)
+  hardwareReader Int    @default(0)
 }
 
 model AssistantBilling {
-  businessId          String    @id
-  tradeName           String?
-  address             String?
-  ubigeo              String?
-  department          String?
-  province            String?
-  district            String?
-  phone               String?
-  email               String?
-  solUser             String?
-  solPasswordCipher   String?
-  certCipher          String?
-  certPasswordCipher  String?
-  certName            String?
-  updatedAt           DateTime?
+  businessId         String    @id
+  tradeName          String?
+  address            String?
+  ubigeo             String?
+  department         String?
+  province           String?
+  district           String?
+  phone              String?
+  email              String?
+  solUser            String?
+  solPasswordCipher  String?
+  certCipher         String?
+  certPasswordCipher String?
+  certName           String?
+  updatedAt          DateTime?
 }
 
 model AssistantDocument {
@@ -837,4 +841,51 @@ model StockLoss {
 
   @@index([businessId, createdAt])
   @@index([productId, createdAt])
+}
+
+/// Toma de inventario (conteo físico) de un almacén. OPEN mientras se cuenta; CLOSED al guardar el cuadre.
+model StockCount {
+  id            String           @id @default(cuid())
+  businessId    String
+  warehouseId   String
+  userId        String
+  number        Int
+  status        String           @default("OPEN")
+  scope         String           @default("Todos los productos")
+  note          String?
+  /// Al cerrar: productos contados, con diferencia y valores en céntimos (a costo).
+  countedItems  Int              @default(0)
+  diffItems     Int              @default(0)
+  shortageValue Int              @default(0)
+  surplusValue  Int              @default(0)
+  systemValue   Int              @default(0)
+  countedValue  Int              @default(0)
+  closedById    String?
+  closedAt      DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  business      Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  warehouse     Warehouse        @relation(fields: [warehouseId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
+  lines         StockCountLine[]
+
+  @@unique([businessId, number])
+  @@index([businessId, createdAt])
+}
+
+model StockCountLine {
+  id         String     @id @default(cuid())
+  countId    String
+  productId  String
+  /// Cantidades en unidad base (×10 000). systemQty se fija al cerrar el cuadre.
+  countedQty Int?
+  systemQty  Int        @default(0)
+  diffQty    Int        @default(0)
+  unitCost   Int        @default(0)
+  diffValue  Int        @default(0)
+  updatedAt  DateTime   @updatedAt
+  count      StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@unique([countId, productId])
 }

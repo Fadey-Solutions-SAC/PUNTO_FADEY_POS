@@ -12,6 +12,7 @@ import {
   salesReport,
 } from "../../lib/reports"
 import { LOSS_TYPES, listLosses } from "../../lib/losses"
+import { listCounts } from "../../lib/counts"
 import { listPaymentMethods } from "../../lib/payment-methods"
 import { can } from "../../lib/roles"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
@@ -343,6 +344,40 @@ export function registerReportsRoutes(app: Express) {
             chartKind: "rank",
             chartMoney: true,
           }
+        } else if (group === "conteos") {
+          const counts = (await listCounts(ctx, range)).filter((row) => row.status === "CLOSED")
+          const sum = (pick: (row: (typeof counts)[number]) => number) => counts.reduce((total, row) => total + pick(row), 0)
+          grouped = {
+            columns: ["Fecha", "N.º", "Almacén", "Alcance", "Contados", "Con diferencia", "Faltante", "Sobrante", "Neto", "Usuario"],
+            numeric: [4, 5, 6, 7, 8],
+            rows: counts.map((row) => [
+              formatDate(row.closedAt ?? row.createdAt),
+              String(row.number),
+              row.warehouse.name,
+              row.scope,
+              String(row.countedItems),
+              String(row.diffItems),
+              money(row.shortageValue),
+              money(row.surplusValue),
+              money(row.surplusValue - row.shortageValue),
+              row.user.name,
+            ]),
+            footer: [
+              "Total",
+              "",
+              "",
+              "",
+              String(sum((row) => row.countedItems)),
+              String(sum((row) => row.diffItems)),
+              money(sum((row) => row.shortageValue)),
+              money(sum((row) => row.surplusValue)),
+              money(sum((row) => row.surplusValue - row.shortageValue)),
+              "",
+            ],
+            chart: counts.map((row) => ({ label: `Conteo N.º ${row.number}`, value: row.shortageValue, text: `Faltante ${money(row.shortageValue)}` })),
+            chartKind: "rank",
+            chartMoney: true,
+          }
         } else if (group === "vencimientos") {
           const lots = [...stock.expiries].sort(
             (a, b) => (a.expiresAt?.getTime() ?? Infinity) - (b.expiresAt?.getTime() ?? Infinity),
@@ -376,6 +411,8 @@ export function registerReportsRoutes(app: Express) {
                 ? "Lotes por vencer"
                 : group === "mermas"
                 ? "Mermas por causa (costo)"
+                : group === "conteos"
+                ? "Faltante por conteo (costo)"
                 : "Cantidades por tipo de movimiento",
           kpis: [
             { label: "Productos", value: String(stock.rows.length), tone: "sky" },

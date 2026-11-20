@@ -48,6 +48,7 @@ const GROUPS: Record<string, { id: string; label: string }[]> = {
     { id: "transferencias", label: "Transferencias" },
     { id: "ajustes", label: "Ajustes" },
     { id: "mermas", label: "Mermas" },
+    { id: "conteos", label: "Cuadres" },
     { id: "vencimientos", label: "Por vencer" },
   ],
   caja: [

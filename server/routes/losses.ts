@@ -86,11 +86,7 @@ export function registerLossesRoutes(app: Express) {
           barcodes: product.barcodes.map((item) => item.code),
           imagePath: product.imagePath ?? null,
           categoryId: product.categoryId,
-          presentations: product.presentations.map((item) => ({
-            id: item.id,
-            name: item.name,
-            factor: item.factorToBase / 10_000,
-          })),
+          presentations: product.measures,
           lots: product.lots.map((lot) => ({
             code: lot.code,
             quantityLabel: formatQty(lot.quantity),

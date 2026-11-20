@@ -213,7 +213,7 @@ export async function stockIn(
   if (!input.reason.trim()) throw new AppError("Indica el motivo")
   const warehouseId = input.warehouseId ?? ctx.warehouseId
   await assertWarehouse(ctx, warehouseId)
-  const { product, factor } = await presentationFactor(ctx, input.productId, input.presentationId)
+  const { product, factor } = await measureFactor(ctx, input.productId, input.presentationId)
   const quantity = baseQuantity(input.quantity, factor)
   return prisma.$transaction((tx) =>
     applyStock(tx, {
@@ -313,7 +313,7 @@ export async function stockOut(
   if (!input.reason.trim()) throw new AppError("Indica el motivo")
   const warehouseId = input.warehouseId ?? ctx.warehouseId
   await assertWarehouse(ctx, warehouseId)
-  const { product, factor } = await presentationFactor(ctx, input.productId, input.presentationId)
+  const { product, factor } = await measureFactor(ctx, input.productId, input.presentationId)
   const quantity = baseQuantity(input.quantity, factor)
   return prisma.$transaction((tx) =>
     applyStock(tx, {
@@ -538,4 +538,63 @@ export async function inventoryValue(ctx: TenantContext) {
     include: { product: true },
   })
   return balances.reduce((sum, row) => sum + mulScale(row.product.costPrice, row.quantity), 0)
+}
+
+/**
+ * Unidades en que se puede expresar una cantidad de un producto: su unidad base (kg, und…),
+ * las unidades convertibles a ella (g → kg) y sus presentaciones con factor distinto de 1 (saco 50 kg).
+ * El id de una unidad es "unit:<unitId>"; el de una presentación, su propio id.
+ */
+export const UNIT_OPTION = "unit:"
+
+export type MeasureOption = { id: string; name: string; factor: number }
+
+type MeasureProduct = {
+  baseUnitId: string
+  baseUnit: { symbol: string }
+  presentations: { id: string; name: string; factorToBase: number; isActive: boolean }[]
+}
+
+export async function unitConversionsTo(businessId: string, tx: Tx | typeof prisma = prisma) {
+  const rows = await tx.unitConversion.findMany({ where: { businessId }, include: { fromUnit: { select: { symbol: true } } } })
+  const map = new Map<string, { unitId: string; symbol: string; factor: number }[]>()
+  for (const row of rows) {
+    const list = map.get(row.toUnitId) ?? []
+    list.push({ unitId: row.fromUnitId, symbol: row.fromUnit.symbol, factor: row.factor })
+    map.set(row.toUnitId, list)
+  }
+  return map
+}
+
+export function measureOptions(product: MeasureProduct, conversions: Map<string, { unitId: string; symbol: string; factor: number }[]>): MeasureOption[] {
+  const options: MeasureOption[] = [{ id: UNIT_OPTION + product.baseUnitId, name: product.baseUnit.symbol, factor: 1 }]
+  for (const item of conversions.get(product.baseUnitId) ?? []) {
+    options.push({ id: UNIT_OPTION + item.unitId, name: item.symbol, factor: item.factor / QTY_SCALE })
+  }
+  for (const item of product.presentations) {
+    if (!item.isActive || item.factorToBase === QTY_SCALE) continue
+    options.push({ id: item.id, name: item.name, factor: item.factorToBase / QTY_SCALE })
+  }
+  return options
+}
+
+/** Factor (escala ×10 000) de una unidad o presentación del producto hacia su unidad base. */
+export async function measureFactor(ctx: TenantContext, productId: string, optionId?: string, tx: Tx | typeof prisma = prisma) {
+  if (optionId?.startsWith(UNIT_OPTION)) {
+    const product = await tx.product.findFirst({
+      where: { id: productId, businessId: ctx.businessId },
+      include: { baseUnit: { select: { symbol: true } } },
+    })
+    if (!product) throw new AppError("Producto no encontrado")
+    const unitId = optionId.slice(UNIT_OPTION.length)
+    if (unitId === product.baseUnitId) return { product, name: product.baseUnit.symbol, factor: QTY_SCALE }
+    const conversion = await tx.unitConversion.findFirst({
+      where: { businessId: ctx.businessId, fromUnitId: unitId, toUnitId: product.baseUnitId },
+      include: { fromUnit: { select: { symbol: true } } },
+    })
+    if (!conversion) throw new AppError(`Esa unidad no se convierte a ${product.baseUnit.symbol}`)
+    return { product, name: conversion.fromUnit.symbol, factor: conversion.factor }
+  }
+  const { product, presentation, factor } = await presentationFactor(ctx, productId, optionId, tx)
+  return { product, name: presentation.name, factor }
 }

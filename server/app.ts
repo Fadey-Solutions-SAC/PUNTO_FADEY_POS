@@ -16,6 +16,7 @@ import { registerCatalogExtraRoutes } from "./routes/catalog-extra"
 import { registerCustomersRoutes } from "./routes/customers"
 import { registerInventoryRoutes } from "./routes/inventory"
 import { registerLossesRoutes } from "./routes/losses"
+import { registerCountRoutes } from "./routes/counts"
 import { registerEntriesRoutes } from "./routes/entries"
 import { registerLookupRoutes } from "./routes/lookup"
 import { registerPurchasesRoutes } from "./routes/purchases"
@@ -74,6 +75,7 @@ registerCatalogExtraRoutes(app)
 registerCustomersRoutes(app)
 registerInventoryRoutes(app)
 registerLossesRoutes(app)
+registerCountRoutes(app)
 registerEntriesRoutes(app)
 registerLookupRoutes(app)
 registerPurchasesRoutes(app)

@@ -4,6 +4,7 @@ import { getBootstrap, getMe, getPanelBootstrap, getVersion, isOfflineError, typ
 import { startOfflineSync } from "./offline"
 import { OfflineTicketPage, SyncPage } from "./pages/OfflinePages"
 import { Shell } from "./layout/Shell"
+import { CountSheetPage, CountsPage } from "./pages/CountPages"
 import { AdjustmentsPage } from "./pages/AdjustmentsPage"
 import { AlertsPage } from "./pages/AlertsPage"
 import { BarcodesPage } from "./pages/BarcodesPage"
@@ -194,6 +195,8 @@ export function App() {
           <Route path="inventario/entradas" element={<EntriesPage />} />
           <Route path="inventario/transferencias" element={<TransfersPage />} />
           <Route path="inventario/ajustes" element={<AdjustmentsPage />} />
+          <Route path="inventario/conteo" element={<CountsPage />} />
+          <Route path="inventario/conteo/:id" element={<CountSheetPage />} />
           <Route path="compras/proveedores" element={<SuppliersPage />} />
           <Route path="compras/requerimiento" element={<RequirementPage />} />
           <Route path="compras/recepcion" element={<ReceptionPage />} />

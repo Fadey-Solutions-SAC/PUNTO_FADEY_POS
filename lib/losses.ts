@@ -9,7 +9,7 @@
  */
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
-import { applyStock, presentationFactor } from "@/lib/inventory"
+import { applyStock, measureFactor, measureOptions, unitConversionsTo } from "@/lib/inventory"
 import { D, QTY_SCALE, mulScale, toQtyInt } from "@/lib/money"
 import { assertCan, assertCanAny } from "@/lib/roles"
 import type { TenantContext } from "@/lib/types"
@@ -58,7 +58,7 @@ export async function registerLoss(
   const note = input.note?.trim() || null
   if (cause === "Otro" && !note) throw new AppError("Describe el motivo en la nota")
 
-  const { product, presentation, factor } = await presentationFactor(ctx, input.productId, input.presentationId)
+  const { product, name: measureName, factor } = await measureFactor(ctx, input.productId, input.presentationId)
   const qtyInt = toQtyInt(input.quantity || "0")
   if (qtyInt <= 0) throw new AppError("La cantidad debe ser mayor que cero")
   const baseQty = mulScale(qtyInt, factor)
@@ -79,7 +79,7 @@ export async function registerLoss(
         type,
         cause,
         quantity: baseQty,
-        presentationName: presentation.name,
+        presentationName: measureName,
         presentationQty: input.quantity,
         unitCost,
         totalCost,
@@ -111,7 +111,7 @@ export async function registerLoss(
         action: "stock_loss.create",
         entity: "StockLoss",
         entityId: loss.id,
-        detail: `${product.name}: ${input.quantity} ${presentation.name} · ${label} · costo ${totalCost}`,
+        detail: `${product.name}: ${input.quantity} ${measureName} · ${label} · costo ${totalCost}`,
       },
     })
     return tx.stockLoss.update({ where: { id: loss.id }, data: { movementId: movement?.id ?? null } })
@@ -217,5 +217,6 @@ export async function lossFormData(ctx: TenantContext) {
     },
     orderBy: { name: "asc" },
   })
-  return products
+  const conversions = await unitConversionsTo(ctx.businessId)
+  return products.map((product) => ({ ...product, measures: measureOptions(product, conversions) }))
 }
