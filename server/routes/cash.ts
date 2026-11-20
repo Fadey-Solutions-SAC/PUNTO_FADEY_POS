@@ -37,7 +37,7 @@ export function registerCashRoutes(app: Express) {
       const ctx = req.tenant!
       const [theme, logo, notices] = await Promise.all([
         readTheme(ctx.businessId),
-        brandLogoUrl(),
+        brandLogoUrl(ctx.businessId),
         listNotices(ctx),
       ])
       res.json({

@@ -44,6 +44,30 @@ export function registerAuthRoutes(app: Express) {
     }
   })
 
+  // Marca pública para la pantalla de inicio: logo, portada y nombre del negocio.
+  // `b` es el negocio que entró por última vez en ese equipo; si hay un solo negocio, se usa ese.
+  app.get("/api/auth/branding", async (req, res) => {
+    try {
+      const requested = String(req.query.b ?? "").trim()
+      let business = requested
+        ? await prisma.business.findUnique({ where: { id: requested }, select: { id: true, name: true } })
+        : null
+      if (!business) {
+        const list = await prisma.business.findMany({ select: { id: true, name: true }, take: 2 })
+        business = list.length === 1 ? list[0] : null
+      }
+      const { brandLogoUrl, loginCoverUrl } = await import("../../lib/cover")
+      res.json({
+        businessId: business?.id ?? null,
+        businessName: business?.name ?? null,
+        logo: await brandLogoUrl(business?.id),
+        cover: await loginCoverUrl(business?.id),
+      })
+    } catch (error) {
+      res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
   app.get("/api/auth/me", async (req, res) => {
     try {
       const session = await readReqSession(req)

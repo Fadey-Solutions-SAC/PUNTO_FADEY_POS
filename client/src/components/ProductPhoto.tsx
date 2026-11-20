@@ -1,32 +1,7 @@
 import { useState, type ChangeEvent } from "react"
 import { uploadProductImage } from "../api"
 import { categoryColor } from "../colors"
-
-/** Reduce la foto (las de celular pesan varios MB) a máx. 600 px en JPEG antes de subirla. */
-async function shrinkImage(file: File, max = 600): Promise<Blob> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image()
-      el.onload = () => resolve(el)
-      el.onerror = () => reject(new Error("No se pudo leer la imagen"))
-      el.src = url
-    })
-    const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
-    const canvas = document.createElement("canvas")
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return file
-    ctx.fillStyle = "#fff"
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85))
-    return blob ?? file
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
+import { shrinkImage } from "../image"
 
 function initials(name: string) {
   return (

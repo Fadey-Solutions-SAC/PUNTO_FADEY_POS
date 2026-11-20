@@ -911,7 +911,47 @@ export function getSettings() {
     users: { id: string; name: string; email: string; role: string }[]
     paymentMethods: { id: string; code: string; label: string; locked: boolean }[]
     hardwareReader: boolean
+    theme: string
+    themes: { id: string; label: string; panel: string; accent: string }[]
+    logo: string | null
+    cover: string | null
   }>("/api/settings")
+}
+
+export function saveSettingsTheme(theme: string) {
+  return request<{ ok: true }>("/api/settings/theme", { method: "POST", body: JSON.stringify({ theme }) })
+}
+
+/** Sube logo o portada del negocio (binario ya reducido). */
+export async function uploadSettingsImage(kind: "logo" | "cover", image: Blob) {
+  let res: Response
+  try {
+    res = await fetch(`/api/settings/${kind}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": image.type || "image/jpeg" },
+      body: image,
+    })
+  } catch {
+    throw new OfflineError("Sin conexión: la imagen se sube cuando vuelva internet.")
+  }
+  const data = (await res.json().catch(() => ({}))) as { url?: string | null; error?: string }
+  if (!res.ok) {
+    if (res.status === 413) throw new Error(kind === "logo" ? "El logo supera 2 MB" : "La portada supera 5 MB")
+    throw new Error(data.error || `Error ${res.status}`)
+  }
+  return { url: data.url ?? null }
+}
+
+export function deleteSettingsImage(kind: "logo" | "cover") {
+  return request<{ ok: true }>(`/api/settings/${kind}`, { method: "DELETE" })
+}
+
+export function getBranding(businessId?: string | null) {
+  const query = businessId ? `?b=${encodeURIComponent(businessId)}` : ""
+  return request<{ businessId: string | null; businessName: string | null; logo: string | null; cover: string | null }>(
+    `/api/auth/branding${query}`,
+  )
 }
 
 export function saveSettingsBusiness(input: {

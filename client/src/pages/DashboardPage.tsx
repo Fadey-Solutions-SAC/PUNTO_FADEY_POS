@@ -5,25 +5,14 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Boxes,
-  PackagePlus,
   PackageX,
   Receipt,
-  ShoppingCart,
   TrendingUp,
-  Truck,
   Wallet,
   type LucideIcon,
 } from "lucide-react"
 import { getDashboard, type DashboardPayload, type PanelBootstrap } from "../api"
 import { PALETTE, payColor, tint } from "../colors"
-
-const SHORTCUT_COLORS = ["#0d9488", "#6366f1", "#8b5cf6", "#f59e0b"]
-const SHORTCUT_ICONS: Record<string, LucideIcon> = {
-  "/ventas": ShoppingCart,
-  "/caja": Wallet,
-  "/productos/nuevo": PackagePlus,
-  "/compras/recepcion": Truck,
-}
 
 function change(current: number, previous: number) {
   if (previous === 0) return null
@@ -56,12 +45,6 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "No se pudo cargar el panel"))
   }, [])
 
-  const shortcuts = [
-    perms.sell ? { href: "/ventas", label: "Nueva venta" } : null,
-    perms.cash ? { href: "/caja", label: "Caja" } : null,
-    perms.catalogWrite ? { href: "/productos/nuevo", label: "Registrar producto" } : null,
-    perms.purchases ? { href: "/compras/recepcion", label: "Registrar compra" } : null,
-  ].filter((item): item is { href: string; label: string } => item !== null)
 
   if (error) {
     return <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
@@ -99,40 +82,20 @@ export function DashboardPage({ panel }: { panel: PanelBootstrap }) {
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches"
-  const today = new Date().toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" })
+  const today = new Date().toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-500 first-letter:uppercase">{today}</p>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">
-            {greeting}, {panel.user.name}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {panel.business.name} · sucursal {panel.branch.name} · almacén {panel.warehouse.name}
-          </p>
+      <section className="rounded-3xl bg-[#eef2f7] px-5 py-4 shadow-sm ring-1 ring-slate-200/70 sm:px-7 sm:py-5">
+        <div className="flex items-start justify-between gap-3 text-sm text-slate-500 sm:text-base">
+          <p className="min-w-0 truncate uppercase tracking-wide">{panel.business.name}</p>
+          <p className="shrink-0 tabular-nums">{today}</p>
         </div>
-        {shortcuts.length > 0 ? (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {shortcuts.map((item, index) => {
-              const color = SHORTCUT_COLORS[index % SHORTCUT_COLORS.length]
-              const Icon = SHORTCUT_ICONS[item.href] ?? ShoppingCart
-              return (
-                <Link
-                  key={item.label}
-                  to={item.href}
-                  className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                  style={{ background: color }}
-                >
-                  <Icon size={16} strokeWidth={2.2} />
-                  {item.label}
-                </Link>
-              )
-            })}
-          </div>
-        ) : null}
-      </div>
+        <h1 className="mt-2 text-3xl font-bold leading-tight text-[var(--pf-navy)] sm:text-4xl">
+          {greeting}, {panel.user.name}
+        </h1>
+        <p className="mt-1 text-base text-slate-500 sm:text-lg">Te damos la bienvenida a tu panel de gestión.</p>
+      </section>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {cards.map((card, index) => {

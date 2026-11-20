@@ -1,4 +1,7 @@
-import type { Express } from "express"
+import express, { type Express } from "express"
+import { readTheme, saveTheme } from "../../lib/appearance"
+import { brandLogoUrl, loginCoverUrl, removeBrandLogo, removeLoginCover, saveBrandLogo, saveLoginCover } from "../../lib/cover"
+import { THEMES } from "../../lib/themes"
 import { errorMessage } from "../../lib/errors"
 import { fromPercentInt } from "../../lib/money"
 import {
@@ -20,10 +23,13 @@ export function registerSettingsRoutes(app: Express) {
         res.status(403).json({ error: "Sin permiso de configuración" })
         return
       }
-      const [{ business, branches, users }, methods, pos] = await Promise.all([
+      const [{ business, branches, users }, methods, pos, theme, logo, cover] = await Promise.all([
         businessSnapshot(ctx),
         listPaymentMethods(ctx),
         readPosSettings(ctx.businessId),
+        readTheme(ctx.businessId),
+        brandLogoUrl(ctx.businessId),
+        loginCoverUrl(ctx.businessId),
       ])
       res.json({
         version: APP_VERSION,
@@ -50,6 +56,10 @@ export function registerSettingsRoutes(app: Express) {
         })),
         paymentMethods: methods,
         hardwareReader: pos.hardwareReader,
+        theme,
+        themes: THEMES.map((item) => ({ id: item.id, label: item.label, panel: item.panel, accent: item.accent })),
+        logo,
+        cover,
       })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
@@ -102,6 +112,52 @@ export function registerSettingsRoutes(app: Express) {
       res.status(400).json({ error: errorMessage(error) })
     }
   })
+
+  app.post("/api/settings/theme", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      await saveTheme(req.tenant!, String(req.body?.theme ?? ""))
+      res.json({ ok: true })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Logo y portada del negocio: cuerpo binario JPG/PNG/WebP (logo 2 MB, portada 5 MB).
+  for (const [kind, limit] of [
+    ["logo", "2mb"],
+    ["cover", "5mb"],
+  ] as const) {
+    app.post(
+      `/api/settings/${kind}`,
+      requireApiTenant,
+      express.raw({ type: ["image/jpeg", "image/png", "image/webp"], limit }),
+      async (req: AuthedRequest, res) => {
+        try {
+          const ctx = req.tenant!
+          const type = String(req.headers["content-type"] ?? "").split(";")[0].trim()
+          if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+            res.status(400).json({ error: "Usa una imagen JPG, PNG o WebP" })
+            return
+          }
+          const file = new File([req.body], kind, { type })
+          if (kind === "logo") await saveBrandLogo(ctx, file)
+          else await saveLoginCover(ctx, file)
+          res.json({ ok: true, url: kind === "logo" ? await brandLogoUrl(ctx.businessId) : await loginCoverUrl(ctx.businessId) })
+        } catch (error) {
+          res.status(400).json({ error: errorMessage(error) })
+        }
+      },
+    )
+    app.delete(`/api/settings/${kind}`, requireApiTenant, async (req: AuthedRequest, res) => {
+      try {
+        if (kind === "logo") await removeBrandLogo(req.tenant!)
+        else await removeLoginCover(req.tenant!)
+        res.json({ ok: true })
+      } catch (error) {
+        res.status(400).json({ error: errorMessage(error) })
+      }
+    })
+  }
 
   app.post("/api/settings/hardware-reader", requireApiTenant, async (req: AuthedRequest, res) => {
     try {

@@ -189,7 +189,9 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
   const navLabel = navItems.find((item) => item.href === activeHref)?.label
   const section = screenTitle(pathname, navLabel)
   const accountDetail = panel.user.detail ?? panel.user.roleLabel ?? panel.user.role
-  const logoSrc = panel.logo || "/brand/punto-fadey.jpg"
+  // El menú siempre muestra la marca Punto Fadey (igual que el ícono del navegador).
+  // El logo de cada negocio se usa en su pantalla de inicio de sesión.
+  const logoSrc = "/brand/punto-fadey.jpg"
   const sideWidth = rail ? "w-[4.25rem]" : "w-[14.5rem] max-w-[86vw]"
   const hasConfig = navItems.some((item) => item.href === "/configuracion")
   const notices = panel.notices ?? []

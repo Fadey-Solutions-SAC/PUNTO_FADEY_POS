@@ -1,6 +1,16 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
-import { login } from "../api"
+import { getBranding, login } from "../api"
+
+type Branding = Awaited<ReturnType<typeof getBranding>>
+
+function lastBusinessId() {
+  try {
+    return localStorage.getItem("pf-last-business")
+  } catch {
+    return null
+  }
+}
 
 export function LoginPage({ versionLabel, onSuccess }: { versionLabel: string; onSuccess: () => Promise<void> }) {
   const navigate = useNavigate()
@@ -9,6 +19,13 @@ export function LoginPage({ versionLabel, onSuccess }: { versionLabel: string; o
   const [visible, setVisible] = useState(false)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
+  const [brand, setBrand] = useState<Branding | null>(null)
+
+  useEffect(() => {
+    getBranding(lastBusinessId())
+      .then(setBrand)
+      .catch(() => setBrand(null))
+  }, [])
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -28,17 +45,22 @@ export function LoginPage({ versionLabel, onSuccess }: { versionLabel: string; o
   return (
     <main className="relative min-h-dvh overflow-hidden">
       <div className="absolute inset-0 bg-[#07111c]" />
+      {brand?.cover ? (
+        <img src={brand.cover} alt="" className="absolute inset-0 size-full object-cover" aria-hidden />
+      ) : null}
       <div className="absolute inset-0 bg-[#061018]/72" />
       <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-10">
         <img
-          src="/brand/punto-fadey.jpg"
-          alt="Punto Fadey"
+          src={brand?.logo || "/brand/punto-fadey.jpg"}
+          alt={brand?.businessName || "Punto Fadey"}
           className="size-28 rounded-full object-cover shadow-[0_0_40px_rgba(20,138,132,0.35)]"
           onError={(event) => {
             event.currentTarget.style.display = "none"
           }}
         />
-        <h1 className="mt-5 text-center text-3xl font-bold tracking-[0.12em] text-white sm:text-4xl">PUNTO FADEY</h1>
+        <h1 className="mt-5 text-center text-3xl font-bold tracking-[0.12em] text-white sm:text-4xl">
+          {(brand?.businessName || "Punto Fadey").toUpperCase()}
+        </h1>
         <span className="mt-3 rounded-full border border-white/25 bg-black/25 px-3 py-1 text-xs text-white">{versionLabel}</span>
         <h2 className="mt-8 text-2xl font-semibold text-white">Iniciar sesión</h2>
         <p className="mt-1 text-sm text-white/75">Ingresa tus credenciales para continuar</p>
@@ -80,7 +102,7 @@ export function LoginPage({ versionLabel, onSuccess }: { versionLabel: string; o
             {pending ? "Entrando…" : "Ingresar"}
           </button>
         </form>
-        <p className="mt-12 text-sm text-white/85">Sistema de gestión comercial · Vite (fase 2)</p>
+        <p className="mt-12 text-sm text-white/85">Punto Fadey · sistema de gestión comercial</p>
       </div>
     </main>
   )

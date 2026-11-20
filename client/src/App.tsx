@@ -61,6 +61,7 @@ export function App() {
           const panelData = await getPanelBootstrap()
           if (!cancelled) setPanel(panelData)
           try {
+            localStorage.setItem("pf-last-business", session.business.id)
             localStorage.setItem(BOOT_KEY, JSON.stringify({ me: session, panel: panelData, versionLabel: version.label }))
           } catch {
             /* noop */
@@ -144,6 +145,11 @@ export function App() {
               versionLabel={versionLabel}
               onSuccess={async () => {
                 const session = await getMe()
+                try {
+                  localStorage.setItem("pf-last-business", session.business.id)
+                } catch {
+                  /* noop */
+                }
                 setMe(session)
                 setPanel(await getPanelBootstrap())
               }}
