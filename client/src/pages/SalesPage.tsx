@@ -603,7 +603,7 @@ export function SalesPage() {
 
       {paying ? (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-[var(--pf-navy)]/50 p-4"
+          className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-[var(--pf-navy)]/50 p-3 sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Cobro"
@@ -612,7 +612,7 @@ export function SalesPage() {
           }}
         >
           <form
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            className="max-h-[calc(100dvh-1.5rem)] w-full min-w-0 max-w-lg space-y-4 overflow-y-auto overflow-x-hidden rounded-2xl bg-white p-4 shadow-xl sm:p-5"
             onSubmit={(event) => {
               event.preventDefault()
               void onCharge()
@@ -621,13 +621,13 @@ export function SalesPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-[var(--pf-navy)]">Cobrar</h2>
               <button type="button" className="text-sm text-slate-500 hover:text-slate-800" disabled={pending} onClick={() => setPaying(false)}>
-                Cerrar <kbd className="ml-1 rounded border border-slate-200 px-1 text-[10px]">Esc</kbd>
+                Cerrar <kbd className="ml-1 hidden rounded border border-slate-200 px-1 text-[10px] sm:inline">Esc</kbd>
               </button>
             </div>
 
             <div className="rounded-2xl bg-[var(--pf-navy)] px-4 py-3 text-white">
               <p className="text-xs uppercase tracking-wide text-white/60">Total a cobrar</p>
-              <p className="text-3xl font-bold tabular-nums">
+              <p className="truncate text-3xl font-bold tabular-nums">
                 {totalAmount} <span className="text-base font-medium text-white/70">{currency}</span>
               </p>
             </div>
@@ -649,9 +649,9 @@ export function SalesPage() {
                 </button>
               </div>
               {payments.map((row, index) => (
-                <div key={index} className="grid grid-cols-[1.2fr_1fr_auto] items-center gap-2">
+                <div key={index} className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_auto] items-center gap-2">
                   <select
-                    className="h-11 rounded-xl border border-slate-200 px-2 text-sm"
+                    className="h-11 w-full min-w-0 truncate rounded-xl border border-slate-200 px-2 text-sm"
                     value={row.method}
                     onChange={(event) => updatePayment(index, { method: event.target.value })}
                     aria-label="Medio de pago"
@@ -665,7 +665,7 @@ export function SalesPage() {
                   <input
                     autoFocus={index === 0}
                     inputMode="decimal"
-                    className="h-11 rounded-xl border border-slate-200 px-3 text-right text-base tabular-nums outline-none focus:border-[var(--pf-accent)] focus:ring-2 focus:ring-[var(--pf-accent)]/15"
+                    className="h-11 w-full min-w-0 rounded-xl border border-slate-200 px-3 text-right text-base tabular-nums outline-none focus:border-[var(--pf-accent)] focus:ring-2 focus:ring-[var(--pf-accent)]/15"
                     value={row.amount}
                     onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) => updatePayment(index, { amount: event.target.value })}
@@ -693,7 +693,7 @@ export function SalesPage() {
                       key={cents}
                       type="button"
                       onClick={() => updatePayment(0, { amount: money(cents) })}
-                      className={`h-10 rounded-xl border px-3 text-sm font-medium tabular-nums ${
+                      className={`h-10 min-w-[4.5rem] flex-1 rounded-xl border px-3 text-sm font-medium tabular-nums sm:flex-none ${
                         toCents(payments[0].amount) === cents
                           ? "border-[var(--pf-accent)] bg-[var(--pf-accent)] text-white"
                           : "border-slate-200 bg-white text-slate-700 hover:border-[var(--pf-accent)]/50"
@@ -706,7 +706,7 @@ export function SalesPage() {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="grid grid-cols-2 gap-2 text-sm [&>*]:min-w-0">
               <div className="rounded-xl bg-slate-50 px-3 py-2">
                 <p className="text-xs text-slate-500">Recibido</p>
                 <p className="text-lg font-semibold tabular-nums text-[var(--pf-navy)]">{money(paidCents)}</p>
@@ -733,7 +733,7 @@ export function SalesPage() {
               className="h-12 w-full rounded-xl bg-[#f5c518] text-base font-semibold text-[#1a1403] transition hover:brightness-95 disabled:opacity-50"
             >
               {pending ? "Cobrando…" : "Confirmar cobro"}
-              {!pending ? <kbd className="ml-2 rounded bg-black/10 px-1.5 text-[10px] font-medium">Enter</kbd> : null}
+              {!pending ? <kbd className="ml-2 hidden rounded bg-black/10 px-1.5 text-[10px] font-medium sm:inline">Enter</kbd> : null}
             </button>
           </form>
         </div>
