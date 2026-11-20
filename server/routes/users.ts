@@ -1,6 +1,6 @@
 import type { Express } from "express"
 import { prisma } from "../../lib/db"
-import { errorMessage } from "../../lib/errors"
+import { AppError, errorMessage } from "../../lib/errors"
 import { PERMISSIONS, PERMISSION_LABEL, ROLES, ROLE_LABEL, can, isRole, type Permission, type Role } from "../../lib/roles"
 import { createUser, deleteMember, updateMember } from "../../lib/setup"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
@@ -145,7 +145,7 @@ export function registerUsersRoutes(app: Express) {
   app.post("/api/settings/role-permissions", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
-      if (ctx.role !== "OWNER") throw new Error("Solo el dueño puede cambiar los permisos")
+      if (ctx.role !== "OWNER") throw new AppError("Solo el dueño puede cambiar los permisos")
       const wanted = new Set(Array.isArray(req.body?.grants) ? req.body.grants.map(String) : [])
       let changes = 0
       await prisma.$transaction(async (tx) => {

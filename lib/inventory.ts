@@ -205,6 +205,8 @@ export async function stockIn(
     lotCode?: string
     expiresAt?: string
     warehouseId?: string
+    /** Para encontrar luego estos movimientos (p. ej. "STOCK_ENTRY" en Entradas). */
+    referenceType?: string
   },
 ) {
   assertCan(ctx, "inventoryMove")
@@ -223,6 +225,7 @@ export async function stockIn(
       type: input.type,
       quantity,
       reason: input.reason.trim(),
+      referenceType: input.referenceType,
       lotCode: input.lotCode?.trim(),
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
     }),

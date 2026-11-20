@@ -1,6 +1,6 @@
 import type { Express } from "express"
 import { randomUUID } from "node:crypto"
-import { errorMessage } from "../../lib/errors"
+import { AppError, errorMessage } from "../../lib/errors"
 import { PURCHASE_LABEL } from "../../lib/labels"
 import { formatDate, formatMoney, formatQty } from "../../lib/money"
 import {
@@ -289,7 +289,7 @@ export function registerPurchasesRoutes(app: Express) {
   app.post("/api/purchases/:id/pay", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const method = String(req.body?.method ?? "CASH")
-      if (!["CASH", "TRANSFER", "OTHER"].includes(method)) throw new Error("Medio de pago inválido")
+      if (!["CASH", "TRANSFER", "OTHER"].includes(method)) throw new AppError("Medio de pago inválido")
       await payPurchase(req.tenant!, String(req.params.id), String(req.body?.amount ?? "0"), method)
       res.json({ ok: true })
     } catch (error) {

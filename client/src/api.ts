@@ -1254,3 +1254,40 @@ export function receivePurchaseNow(id: string, lots: Record<string, { lotCode?: 
 export function payPurchaseNow(id: string, amount: string, method: "CASH" | "TRANSFER" | "OTHER") {
   return request<{ ok: true }>(`/api/purchases/${id}/pay`, { method: "POST", body: JSON.stringify({ amount, method }) })
 }
+
+// ---- Entradas de inventario (sin compra) ----
+
+export type EntryRow = {
+  id: string
+  createdAtLabel: string
+  productName: string
+  typeLabel: string
+  reason: string
+  quantityLabel: string
+  balanceLabel: string
+  lotCode: string
+  userName: string
+}
+
+export function getEntries(params: { desde: string; hasta: string }) {
+  return request<{
+    warehouseName: string
+    canRegister: boolean
+    causes: string[]
+    count: number
+    byCause: { label: string; count: number }[]
+    rows: EntryRow[]
+  }>(`/api/inventory/entries?${new URLSearchParams(params)}`)
+}
+
+export function registerEntry(input: {
+  productId: string
+  presentationId?: string
+  quantity: string
+  cause: string
+  note?: string
+  lotCode?: string
+  expiresAt?: string
+}) {
+  return request<{ ok: true; balanceLabel: string }>("/api/inventory/entries", { method: "POST", body: JSON.stringify(input) })
+}
