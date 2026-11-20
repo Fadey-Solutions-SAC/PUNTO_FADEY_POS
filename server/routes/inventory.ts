@@ -246,6 +246,11 @@ export function registerInventoryRoutes(app: Express) {
         return
       }
       const products = (await loadCatalog(ctx)).filter((product) => product.isActive && !product.hasVariants)
+      const lots = await prisma.lot.findMany({
+        where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId },
+        orderBy: [{ expiresAt: "asc" }, { code: "asc" }],
+        select: { productId: true, code: true, quantity: true, expiresAt: true },
+      })
       res.json({
         warehouseName: ctx.warehouseName,
         products: products
@@ -265,6 +270,13 @@ export function registerInventoryRoutes(app: Express) {
               min: product.minStock,
               presentationId: base?.id ?? "",
               trackLots: product.trackLots,
+              lots: lots
+                .filter((lot) => lot.productId === product.id)
+                .map((lot) => ({
+                  code: lot.code,
+                  quantity: formatQty(lot.quantity),
+                  expiresAt: lot.expiresAt ? lot.expiresAt.toLocaleDateString("es-PE") : "",
+                })),
             }
           })
           .sort((a, b) => a.name.localeCompare(b.name, "es")),

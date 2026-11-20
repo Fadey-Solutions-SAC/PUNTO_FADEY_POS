@@ -2,7 +2,9 @@ import express, { type Express } from "express"
 import { readTheme, saveTheme } from "../../lib/appearance"
 import { brandLogoUrl, loginCoverUrl, removeBrandLogo, removeLoginCover, saveBrandLogo, saveLoginCover } from "../../lib/cover"
 import { THEMES } from "../../lib/themes"
-import { backupForDownload, createBackup, listBackups } from "../../lib/backup"
+import { backupForDownload, createBackup, listBackups, wipeBusinessData } from "../../lib/backup"
+import { assertAttempts, assertNoCode, configPasswordOk, noteAttempt, runWithClientIp } from "../../lib/guard"
+import { SESSION_COOKIE } from "../../lib/session-core"
 import { errorMessage } from "../../lib/errors"
 import { fromPercentInt } from "../../lib/money"
 import {
@@ -226,6 +228,38 @@ export function registerSettingsRoutes(app: Express) {
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
     }
+  })
+
+  // Borrar todos los datos: pide la contraseña de configuración (no la del usuario) y confirmación.
+  app.post("/api/settings/wipe", requireApiTenant, async (req: AuthedRequest, res) => {
+    const forwarded = req.headers["x-forwarded-for"]
+    const ip = (typeof forwarded === "string" && forwarded.split(",")[0]?.trim()) || req.socket.remoteAddress || "local"
+    await runWithClientIp(ip, async () => {
+      try {
+        const ctx = req.tenant!
+        if (!can(ctx.role, "backup", ctx.grants)) {
+          res.status(403).json({ error: "Sin permiso para borrar los datos" })
+          return
+        }
+        const password = String(req.body?.password ?? "")
+        assertNoCode(password)
+        if (req.body?.confirm !== true) {
+          res.status(400).json({ error: "Confirma que deseas borrar todos los datos" })
+          return
+        }
+        await assertAttempts("wipe", 4, 30 * 60 * 1000)
+        if (!configPasswordOk(password)) {
+          await noteAttempt("wipe", 30 * 60 * 1000)
+          res.status(400).json({ error: "Contraseña incorrecta" })
+          return
+        }
+        await wipeBusinessData(ctx)
+        res.clearCookie(SESSION_COOKIE, { path: "/" })
+        res.json({ ok: true })
+      } catch (error) {
+        res.status(400).json({ error: errorMessage(error) })
+      }
+    })
   })
 
   app.post("/api/settings/backups", requireApiTenant, async (req: AuthedRequest, res) => {

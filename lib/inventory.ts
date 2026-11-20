@@ -330,6 +330,25 @@ export async function stockOut(
   )
 }
 
+/**
+ * Lote para un ajuste de un producto con lotes: el elegido; si no se eligió y tiene un solo lote, ese;
+ * si no tiene lotes y entra stock, uno automático AJ<fecha>. Con varios lotes, una entrada exige elegir.
+ */
+async function adjustmentLot(ctx: TenantContext, productId: string, direction: "IN" | "OUT", chosen?: string) {
+  const code = chosen?.trim()
+  if (code) return code
+  const lots = await prisma.lot.findMany({
+    where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId, productId },
+    select: { code: true, quantity: true },
+  })
+  if (lots.length === 1) return lots[0].code
+  if (direction === "OUT") return undefined
+  const withStock = lots.filter((lot) => lot.quantity > 0)
+  if (withStock.length === 1) return withStock[0].code
+  if (lots.length === 0) return `AJ${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`
+  throw new AppError("Este producto tiene varios lotes: elige a cuál entra el sobrante")
+}
+
 export async function setStock(
   ctx: TenantContext,
   input: { productId: string; presentationId?: string; quantity: string; reason: string; lotCode?: string; expiresAt?: string },
@@ -347,6 +366,7 @@ export async function setStock(
     const balance = current?.businessId === ctx.businessId ? current.quantity : 0
     const delta = target - balance
     if (delta === 0) throw new AppError("El stock ya está en esa cantidad")
+    const lotCode = product.trackLots ? await adjustmentLot(ctx, product.id, delta > 0 ? "IN" : "OUT", input.lotCode) : input.lotCode?.trim()
     return applyStock(tx, {
       businessId: ctx.businessId,
       warehouseId: ctx.warehouseId,
@@ -357,7 +377,7 @@ export async function setStock(
       quantity: Math.abs(delta),
       reason: input.reason.trim(),
       referenceType: "ADJUST",
-      lotCode: input.lotCode?.trim(),
+      lotCode,
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
     })
   })
@@ -378,6 +398,7 @@ export async function adjustStock(
   if (!input.reason.trim()) throw new AppError("El ajuste necesita un motivo")
   const { product, factor } = await presentationFactor(ctx, input.productId, input.presentationId)
   const quantity = baseQuantity(input.quantity, factor)
+  const lotCode = product.trackLots ? await adjustmentLot(ctx, product.id, input.direction, input.lotCode) : input.lotCode?.trim()
   return prisma.$transaction((tx) =>
     applyStock(tx, {
       businessId: ctx.businessId,
@@ -389,7 +410,7 @@ export async function adjustStock(
       quantity,
       reason: input.reason.trim(),
       referenceType: "ADJUST",
-      lotCode: input.lotCode?.trim(),
+      lotCode,
     }),
   )
 }

@@ -158,6 +158,11 @@ export async function closeCount(ctx: TenantContext, countId: string, input: { u
         diffItems += 1
         if (diffQty < 0) shortageValue += -diffValue
         else surplusValue += diffValue
+        let surplusLot: string | undefined
+        if (diffQty > 0 && line.product.trackLots) {
+          const lots = await tx.lot.findMany({ where: { warehouseId: count.warehouseId, productId: line.productId }, select: { code: true } })
+          surplusLot = lots.length === 1 ? lots[0].code : `INV${day}-${count.number}`
+        }
         await applyStock(tx, {
           businessId: ctx.businessId,
           warehouseId: count.warehouseId,
@@ -170,7 +175,7 @@ export async function closeCount(ctx: TenantContext, countId: string, input: { u
           referenceType: "STOCK_COUNT",
           referenceId: count.id,
           // Un sobrante de un producto con lotes entra a un lote de conteo; un faltante sale por vencimiento.
-          lotCode: diffQty > 0 && line.product.trackLots ? `INV${day}-${count.number}` : undefined,
+          lotCode: surplusLot,
         })
       }
       if (countedItems === 0) throw new AppError("No contaste ningún producto. Escribe al menos una cantidad")

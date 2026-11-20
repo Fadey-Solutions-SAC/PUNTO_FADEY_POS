@@ -137,3 +137,12 @@ export async function eraseAllData() {
       .map((item) => unlink(path.join(dir, item)).catch(() => undefined)),
   )
 }
+
+/** Vaciar todo el sistema (Configuración → Copias). Solo con un único negocio en el servidor. */
+export async function wipeBusinessData(ctx: TenantContext) {
+  assertCan(ctx, "backup")
+  await assertSingleBusiness().catch(() => {
+    throw new AppError("Este servidor tiene varios negocios en la misma base: no se puede vaciar todo desde aquí. Pide al administrador del servidor.")
+  })
+  await eraseAllData()
+}

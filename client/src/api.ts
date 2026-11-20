@@ -766,6 +766,7 @@ export function getInventoryAdjustments() {
       min: string
       presentationId: string
       trackLots: boolean
+      lots: { code: string; quantity: string; expiresAt: string }[]
     }[]
   }>("/api/inventory/adjustments")
 }
@@ -1538,4 +1539,8 @@ export function saveAssistantEmitResult(id: string, result: unknown) {
 
 export function releaseAssistantEmit(id: string, reason: string) {
   return request<{ ok: true }>(`/api/billing/${id}/assistant/release`, { method: "POST", body: JSON.stringify({ reason }) })
+}
+
+export function wipeAllData(password: string) {
+  return request<{ ok: true }>("/api/settings/wipe", { method: "POST", body: JSON.stringify({ password, confirm: true }) })
 }

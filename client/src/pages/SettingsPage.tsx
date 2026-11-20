@@ -26,6 +26,7 @@ import {
 import { shrinkImage } from "../image"
 import { UsersPanel } from "../components/UsersPanel"
 import { BackupsPanel } from "../components/BackupsPanel"
+import { WipeDataPanel } from "../components/WipeDataPanel"
 import { PlacesPanel } from "../components/PlacesPanel"
 import { AssistantSettings } from "../components/AssistantSettings"
 
@@ -327,7 +328,12 @@ export function SettingsPage() {
 
           {data && active === "impresion" ? <AssistantSettings /> : null}
 
-          {data && active === "copias" ? <BackupsPanel /> : null}
+          {data && active === "copias" ? (
+            <div className="space-y-4">
+              <BackupsPanel />
+              <WipeDataPanel />
+            </div>
+          ) : null}
 
           {data && active === "lector" ? (
             <label className="flex items-start gap-3 rounded-xl bg-slate-50 px-3 py-3 text-sm">
