@@ -83,19 +83,30 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
     customer.total += sale.total
     byCustomer.set(customerKey, customer)
     for (const payment of sale.payments) byMethod.set(payment.method, (byMethod.get(payment.method) ?? 0) + payment.amount)
+    // El descuento de la venta se reparte entre sus líneas en proporción a su importe,
+    // para que la suma por producto/categoría coincida con el total vendido.
+    const lineSum = sale.lines.reduce((sum, line) => sum + line.total, 0)
+    let allocated = 0
+    sale.lines.forEach((line, index) => {
+      const last = index === sale.lines.length - 1
+      const net = lineSum > 0 ? (last ? sale.total - allocated : Math.round((line.total * sale.total) / lineSum)) : line.total
+      allocated += net
+      ;(line as { netTotal?: number }).netTotal = net
+    })
     for (const line of sale.lines) {
+      const lineNet = (line as { netTotal?: number }).netTotal ?? line.total
       const priced = lineCost(line.costPrice, line.baseQuantity)
       const id = productKey(line.productId, line.product.name, line.description)
       const row = byProduct.get(id.key) ?? { name: id.name, qty: 0, total: 0, cost: 0 }
       row.qty += line.quantity
-      row.total += line.total
+      row.total += lineNet
       row.cost += priced
       byProduct.set(id.key, row)
       cost += priced
       addDay(day, 0, priced)
       const category = line.product.category?.name ?? "Sin categoría"
       const cat = byCategory.get(category) ?? { total: 0, cost: 0 }
-      cat.total += line.total
+      cat.total += lineNet
       cat.cost += priced
       byCategory.set(category, cat)
     }

@@ -61,7 +61,8 @@ export function ProductFormPage() {
           setUnits(data.units)
           setForm((current) => ({
             ...current,
-            baseUnitId: data.units[0]?.id ?? "",
+            // Por defecto "Unidad" (lo normal en bodega); si no existe, la primera.
+            baseUnitId: (data.units.find((unit) => unit.symbol.toLowerCase() === "und") ?? data.units[0])?.id ?? "",
             categoryId: data.categories[0]?.id ?? "",
           }))
         }

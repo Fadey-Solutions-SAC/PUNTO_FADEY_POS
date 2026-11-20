@@ -11,6 +11,7 @@ import {
   purchasesReport,
   salesReport,
 } from "../../lib/reports"
+import { listPaymentMethods } from "../../lib/payment-methods"
 import { can } from "../../lib/roles"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
 
@@ -106,6 +107,9 @@ export function registerReportsRoutes(app: Express) {
       }
       const currency = ctx.currency
       const money = (value: number) => formatMoney(value, currency)
+      // Nombres de los medios de pago del negocio (Yape, Plin…), no solo los fijos.
+      const methodNames = new Map((await listPaymentMethods(ctx)).map((item) => [item.code, item.label]))
+      const methodLabel = (code: string) => methodNames.get(code) ?? PAYMENT_LABEL[code] ?? code
       let report: ReportPayload
 
       if (area === "ventas" || area === "rentabilidad") {
@@ -119,7 +123,7 @@ export function registerReportsRoutes(app: Express) {
         if (!profitView && group === "usuario") grouped = moneyRanking(data.byUser, currency, "Usuario")
         else if (!profitView && group === "pago") {
           grouped = moneyRanking(
-            data.byMethod.map(([method, total]) => [PAYMENT_LABEL[method] ?? method, total]),
+            data.byMethod.map(([method, total]) => [methodLabel(method), total]),
             currency,
             "Medio de pago",
           )
@@ -402,7 +406,7 @@ export function registerReportsRoutes(app: Express) {
           }
         } else {
           grouped = moneyRanking(
-            data.sales.map(([method, total]) => [PAYMENT_LABEL[method] ?? method, total]),
+            data.sales.map(([method, total]) => [methodLabel(method), total]),
             currency,
             "Medio de pago",
           )
