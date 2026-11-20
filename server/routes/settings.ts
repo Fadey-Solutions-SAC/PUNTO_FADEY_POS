@@ -12,7 +12,8 @@ import {
 } from "../../lib/payment-methods"
 import { readPosSettings, saveHardwareReader } from "../../lib/pos-settings"
 import { can } from "../../lib/roles"
-import { businessSnapshot, createBranch, updateBusiness } from "../../lib/settings"
+import { businessSnapshot, createBranch, createWarehouse, deleteWarehouse, updateBusiness } from "../../lib/settings"
+import { createRegister, removeRegister } from "../../lib/cash"
 import { APP_VERSION, formatAppVersion } from "../../lib/version"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
 
@@ -46,8 +47,13 @@ export function registerSettingsRoutes(app: Express) {
         branches: branches.map((branch) => ({
           id: branch.id,
           name: branch.name,
-          warehouses: branch.warehouses.length,
+          current: branch.id === ctx.branchId,
+          warehouses: branch.warehouses.filter((item) => item.isActive).length,
           registers: branch.registers.filter((register) => register.isActive).length,
+          warehouseList: branch.warehouses
+            .filter((item) => item.isActive)
+            .map((item) => ({ id: item.id, name: item.name, isDefault: item.isDefault, current: item.id === ctx.warehouseId })),
+          registerList: branch.registers.filter((item) => item.isActive).map((item) => ({ id: item.id, name: item.name })),
         })),
         users: users.map((membership) => ({
           id: membership.user.id,
@@ -91,6 +97,48 @@ export function registerSettingsRoutes(app: Express) {
         address: req.body?.address != null ? String(req.body.address) : undefined,
       })
       res.json({ ok: true, id: branch.id })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Cajas y almacenes (se crean en la sucursal en la que estás trabajando).
+  app.post("/api/settings/registers", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const register = await createRegister(req.tenant!, String(req.body?.name ?? ""))
+      res.json({ ok: true, id: register.id })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.delete("/api/settings/registers/:id", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      await removeRegister(req.tenant!, String(req.params.id))
+      res.json({ ok: true })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/settings/warehouses", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const warehouse = await createWarehouse(req.tenant!, String(req.body?.name ?? ""))
+      res.json({ ok: true, id: warehouse.id })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.delete("/api/settings/warehouses/:id", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (String(req.params.id) === ctx.warehouseId) {
+        res.status(400).json({ error: "Estás trabajando en ese almacén: cambia a otro antes de eliminarlo" })
+        return
+      }
+      await deleteWarehouse(ctx, String(req.params.id))
+      res.json({ ok: true })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
     }

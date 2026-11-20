@@ -68,6 +68,37 @@ export function registerAuthRoutes(app: Express) {
     }
   })
 
+  // Cambiar de sucursal/almacén dentro del mismo negocio: se vuelve a firmar la sesión.
+  app.post("/api/auth/switch", async (req, res) => {
+    try {
+      const session = await readReqSession(req)
+      if (!session) {
+        res.status(401).json({ error: "Sin sesión" })
+        return
+      }
+      const branchId = String(req.body?.branchId ?? "")
+      const warehouseId = String(req.body?.warehouseId ?? "")
+      const membership = await prisma.membership.findUnique({
+        where: { userId_businessId: { userId: session.userId, businessId: session.businessId } },
+      })
+      if (!membership) {
+        res.status(403).json({ error: "Sin acceso a este negocio" })
+        return
+      }
+      const branch = await prisma.branch.findFirst({ where: { id: branchId, businessId: session.businessId, isActive: true } })
+      const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, businessId: session.businessId, branchId, isActive: true } })
+      if (!branch || !warehouse) {
+        res.status(400).json({ error: "Sucursal o almacén no válido" })
+        return
+      }
+      const token = await createSessionToken({ ...session, branchId: branch.id, warehouseId: warehouse.id })
+      setSessionCookie(res, token)
+      res.json({ ok: true, branchName: branch.name, warehouseName: warehouse.name })
+    } catch (error) {
+      res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
   app.get("/api/auth/me", async (req, res) => {
     try {
       const session = await readReqSession(req)

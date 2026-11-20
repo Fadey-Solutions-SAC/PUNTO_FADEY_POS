@@ -944,7 +944,15 @@ export function getSettings() {
       discountLimitPct: string
       allowCredit: boolean
     }
-    branches: { id: string; name: string; warehouses: number; registers: number }[]
+    branches: {
+      id: string
+      name: string
+      current?: boolean
+      warehouses: number
+      registers: number
+      warehouseList?: { id: string; name: string; isDefault: boolean; current: boolean }[]
+      registerList?: { id: string; name: string }[]
+    }[]
     users: { id: string; name: string; email: string; role: string }[]
     paymentMethods: { id: string; code: string; label: string; locked: boolean }[]
     hardwareReader: boolean
@@ -1290,4 +1298,29 @@ export function registerEntry(input: {
   expiresAt?: string
 }) {
   return request<{ ok: true; balanceLabel: string }>("/api/inventory/entries", { method: "POST", body: JSON.stringify(input) })
+}
+
+// ---- Sucursales, almacenes y cajas ----
+
+export function switchPlace(branchId: string, warehouseId: string) {
+  return request<{ ok: true; branchName: string; warehouseName: string }>("/api/auth/switch", {
+    method: "POST",
+    body: JSON.stringify({ branchId, warehouseId }),
+  })
+}
+
+export function createRegisterApi(name: string) {
+  return request<{ ok: true; id: string }>("/api/settings/registers", { method: "POST", body: JSON.stringify({ name }) })
+}
+
+export function deleteRegisterApi(id: string) {
+  return request<{ ok: true }>(`/api/settings/registers/${id}`, { method: "DELETE" })
+}
+
+export function createWarehouseApi(name: string) {
+  return request<{ ok: true; id: string }>("/api/settings/warehouses", { method: "POST", body: JSON.stringify({ name }) })
+}
+
+export function deleteWarehouseApi(id: string) {
+  return request<{ ok: true }>(`/api/settings/warehouses/${id}`, { method: "DELETE" })
 }

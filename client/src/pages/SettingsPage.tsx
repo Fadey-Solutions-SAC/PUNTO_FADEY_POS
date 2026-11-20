@@ -13,7 +13,6 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import {
-  createSettingsBranch,
   createSettingsPaymentMethod,
   deleteSettingsImage,
   deleteSettingsPaymentMethod,
@@ -26,6 +25,7 @@ import {
 import { shrinkImage } from "../image"
 import { UsersPanel } from "../components/UsersPanel"
 import { BackupsPanel } from "../components/BackupsPanel"
+import { PlacesPanel } from "../components/PlacesPanel"
 
 type Settings = Awaited<ReturnType<typeof getSettings>>
 type ModuleId = "negocio" | "apariencia" | "marca" | "pagos" | "sucursales" | "usuarios" | "copias" | "lector" | "sistema"
@@ -35,7 +35,7 @@ const MODULES: { id: ModuleId; label: string; hint: string; icon: LucideIcon; co
   { id: "marca", label: "Logo y portada", hint: "Imagen del negocio", icon: ImageIcon, color: "#ec4899" },
   { id: "apariencia", label: "Apariencia", hint: "Color del sistema", icon: Palette, color: "#8b5cf6" },
   { id: "pagos", label: "Métodos de pago", hint: "Efectivo, Yape, tarjeta…", icon: CreditCard, color: "#6366f1" },
-  { id: "sucursales", label: "Sucursales", hint: "Locales, almacenes y cajas", icon: Store, color: "#f59e0b" },
+  { id: "sucursales", label: "Sucursales y cajas", hint: "Locales, almacenes y cajas", icon: Store, color: "#f59e0b" },
   { id: "usuarios", label: "Usuarios y permisos", hint: "Accesos, roles y contraseñas", icon: Users, color: "#0ea5e9" },
   { id: "copias", label: "Copias de seguridad", hint: "Respaldo de toda la información", icon: DatabaseBackup, color: "#334155" },
   { id: "lector", label: "Lector de código", hint: "Escáner USB o Bluetooth", icon: ScanBarcode, color: "#10b981" },
@@ -55,7 +55,6 @@ export function SettingsPage() {
     discountLimitPct: "10",
     allowCredit: false,
   })
-  const [branchName, setBranchName] = useState("")
   const [methodLabel, setMethodLabel] = useState("")
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
@@ -318,42 +317,7 @@ export function SettingsPage() {
             </div>
           ) : null}
 
-          {data && active === "sucursales" ? (
-            <div className="space-y-3">
-              <ul className="grid gap-2 sm:grid-cols-2">
-                {data.branches.map((branch) => (
-                  <li key={branch.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
-                    <p className="font-medium text-[var(--pf-navy)]">{branch.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {branch.warehouses} almacén{branch.warehouses === 1 ? "" : "es"} · {branch.registers} caja
-                      {branch.registers === 1 ? "" : "s"}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-              <form
-                className="flex flex-wrap gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void run(async () => {
-                    await createSettingsBranch(branchName)
-                    setBranchName("")
-                  }, "Sucursal creada")
-                }}
-              >
-                <input
-                  className="h-11 min-w-[12rem] flex-1 rounded-xl border border-slate-200 px-3 text-sm"
-                  placeholder="Nueva sucursal"
-                  value={branchName}
-                  onChange={(event) => setBranchName(event.target.value)}
-                  required
-                />
-                <SaveButton pending={pending} color={current.color}>
-                  Crear
-                </SaveButton>
-              </form>
-            </div>
-          ) : null}
+          {data && active === "sucursales" ? <PlacesPanel branches={data.branches} onChanged={reload} /> : null}
 
           {data && active === "usuarios" ? <UsersPanel /> : null}
 
