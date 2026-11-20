@@ -80,6 +80,7 @@ export function registerCatalogExtraRoutes(app: Express) {
           name: row.name,
           factorLabel: formatQty(row.factorToBase),
           unitSymbol: row.unit?.symbol ?? row.product.baseUnit.symbol,
+          imagePath: row.product.imagePath ?? null,
         })),
       })
     } catch (error) {

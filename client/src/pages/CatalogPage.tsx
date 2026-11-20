@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
+import { ProductPhoto } from "../components/ProductPhoto"
 import { getCatalog } from "../api"
 
 export function CatalogPage() {
@@ -99,8 +100,20 @@ export function CatalogPage() {
               <tr key={product.id} className="border-t border-slate-100">
                 <td className="px-3 py-2 font-mono text-xs text-slate-500">{product.code || "—"}</td>
                 <td className="px-3 py-2">
-                  <span className="font-medium text-[var(--pf-navy)]">{product.name}</span>
-                  {product.brandName ? <span className="block text-xs text-slate-500">{product.brandName}</span> : null}
+                  <span className="flex items-center gap-3">
+                    <ProductPhoto
+                      name={product.name}
+                      imagePath={product.imagePath}
+                      productId={product.id}
+                      categoryId={product.categoryId}
+                      size={40}
+                      editable={data.writable}
+                    />
+                    <span>
+                      <span className="font-medium text-[var(--pf-navy)]">{product.name}</span>
+                      {product.brandName ? <span className="block text-xs text-slate-500">{product.brandName}</span> : null}
+                    </span>
+                  </span>
                 </td>
                 <td className="px-3 py-2">{product.categoryName || "—"}</td>
                 <td className="px-3 py-2">

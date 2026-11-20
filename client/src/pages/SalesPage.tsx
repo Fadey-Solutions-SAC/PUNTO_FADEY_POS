@@ -1,14 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
-  confirmSale,
   getSaleStatus,
+  isOfflineError,
+  isServerReachable,
   lookupSaleProduct,
   searchSaleProducts,
+  SERVER_EVENT,
   type SaleProduct,
 } from "../api"
+import {
+  cacheProducts,
+  confirmSaleOrQueue,
+  lookupCachedProduct,
+  pendingCount,
+  searchCachedProducts,
+  OFFLINE_EVENT,
+} from "../offline"
 import { CodeField, playScanPit, ScannerButton } from "../components/Scanner"
 import { categoryColor, tint } from "../colors"
+import { ProductPhoto } from "../components/ProductPhoto"
 
 type CartLine = SaleProduct & { quantity: number; key: string }
 type PayRow = { method: string; amount: string }
@@ -63,8 +74,46 @@ export function SalesPage() {
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
 
+  const [usingCache, setUsingCache] = useState(false)
+  const [queued, setQueued] = useState(() => pendingCount())
+
   useEffect(() => {
+    const sync = () => setQueued(pendingCount())
+    const server = () => setUsingCache(!isServerReachable())
+    server()
+    window.addEventListener(OFFLINE_EVENT, sync)
+    window.addEventListener(SERVER_EVENT, server)
+    return () => {
+      window.removeEventListener(OFFLINE_EVENT, sync)
+      window.removeEventListener(SERVER_EVENT, server)
+    }
+  }, [])
+
+  useEffect(() => {
+    const STATUS_KEY = "pf-offline-sale-status-v1"
     getSaleStatus()
+      .then((status) => {
+        try {
+          localStorage.setItem(STATUS_KEY, JSON.stringify(status))
+        } catch {
+          /* noop */
+        }
+        return status
+      })
+      .catch((err: unknown) => {
+        // Sin conexión: usa el último estado conocido para seguir vendiendo.
+        if (!isOfflineError(err)) throw err
+        const raw = (() => {
+          try {
+            return localStorage.getItem(STATUS_KEY)
+          } catch {
+            return null
+          }
+        })()
+        if (!raw) throw err
+        setUsingCache(true)
+        return JSON.parse(raw) as Awaited<ReturnType<typeof getSaleStatus>>
+      })
       .then((status) => {
         setCashOpen(status.cashOpen)
         setRegisterName(status.registerName)
@@ -86,10 +135,26 @@ export function SalesPage() {
     const handle = window.setTimeout(() => {
       searchSaleProducts(query, categoryId || undefined)
         .then((data) => {
+          if (!isServerReachable()) {
+            // Copia del service worker: se prefiere la local, que ya descuenta lo vendido sin conexión.
+            const local = searchCachedProducts(query, categoryId || undefined)
+            if (local) data = local
+          }
           setProducts(data.products)
           setCurrency(data.currency)
+          // Si la respuesta vino de la copia del service worker, no se reescribe la copia local.
+          if (isServerReachable() && !query.trim() && !categoryId) cacheProducts(data.currency, data.products)
         })
-        .catch(() => setProducts([]))
+        .catch(() => {
+          const local = searchCachedProducts(query, categoryId || undefined)
+          if (local) {
+            setProducts(local.products)
+            setCurrency(local.currency)
+            setUsingCache(true)
+          } else {
+            setProducts([])
+          }
+        })
         .finally(() => setLoadingProducts(false))
     }, 180)
     return () => window.clearTimeout(handle)
@@ -148,7 +213,10 @@ export function SalesPage() {
 
   async function onCode(code: string) {
     try {
-      const data = await lookupSaleProduct(code)
+      const data = await lookupSaleProduct(code).catch((err: unknown) => {
+        if (!isOfflineError(err)) throw err
+        return { product: lookupCachedProduct(code) }
+      })
       if (!data.product) {
         setFlash({ text: `Código ${code} no registrado`, tone: "warn" })
         return
@@ -213,19 +281,39 @@ export function SalesPage() {
     try {
       const payRows = payments.filter((row) => toCents(row.amount) > 0)
       const rows = payRows.length ? payRows : [{ method: "CASH", amount: totalAmount }]
-      const result = await confirmSale({
-        idempotencyKey: payKey || crypto.randomUUID(),
-        discount: money(discountCents),
-        lines: cart.map((line) => ({
-          productId: line.id,
-          presentationId: line.presentationId,
-          quantity: String(line.quantity),
-        })),
-        payments: rows,
-      })
+      const result = await confirmSaleOrQueue(
+        {
+          idempotencyKey: payKey || crypto.randomUUID(),
+          discount: money(discountCents),
+          lines: cart.map((line) => ({
+            productId: line.id,
+            presentationId: line.presentationId,
+            quantity: String(line.quantity),
+          })),
+          payments: rows,
+        },
+        {
+          lines: cart.map((line) => ({
+            productId: line.id,
+            name: line.name,
+            presentationName: line.presentationName,
+            quantity: line.quantity,
+            unitPriceCents: line.unitPriceCents,
+          })),
+          totalCents,
+          discountCents,
+          receivedCents: paidCents,
+          changeCents,
+          currency,
+        },
+      )
       setCart([])
       setDiscount("")
       setPaying(false)
+      if (result.offline) {
+        navigate(`/ventas/pendiente/${result.id}`)
+        return
+      }
       navigate(`/ventas/${result.saleId}/ticket`, {
         state: changeCents > 0 ? { received: money(paidCents), change: money(changeCents), currency } : undefined,
       })
@@ -437,6 +525,25 @@ export function SalesPage() {
         </Link>
       </div>
 
+      {usingCache ? (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span aria-hidden>📴</span>
+          <span>
+            <b>Sin conexión.</b> Puedes seguir vendiendo: las ventas se guardan en este equipo y se envían solas al volver
+            internet. Precios y stock son los últimos que se cargaron.
+          </span>
+        </div>
+      ) : null}
+      {queued > 0 ? (
+        <Link
+          to="/ventas/sincronizar"
+          className="mb-3 flex items-center gap-2 rounded-xl border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900 hover:bg-sky-100"
+        >
+          <span className="grid size-6 place-items-center rounded-full bg-sky-600 text-xs font-bold text-white">{queued}</span>
+          {queued === 1 ? "venta guardada sin conexión" : "ventas guardadas sin conexión"} · ver y sincronizar
+        </Link>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="min-w-0 space-y-3">
           <div className="flex gap-2">
@@ -511,7 +618,10 @@ export function SalesPage() {
                       {inCart}
                     </span>
                   ) : null}
-                  <span className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--pf-navy)]">{product.name}</span>
+                  <span className="flex items-start gap-2">
+                    <ProductPhoto name={product.name} imagePath={product.imagePath} categoryId={product.categoryId} size={36} />
+                    <span className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--pf-navy)]">{product.name}</span>
+                  </span>
                   <span className="mt-0.5 truncate text-[11px] text-slate-400">
                     {product.code} · {product.presentationName}
                   </span>

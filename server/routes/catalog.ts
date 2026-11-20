@@ -1,5 +1,5 @@
-import type { Express } from "express"
-import { getProductForm, loadCatalog, saveNamed, saveProduct } from "../../lib/catalog"
+import express, { type Express } from "express"
+import { getProductForm, loadCatalog, saveNamed, saveProduct, saveProductImage } from "../../lib/catalog"
 import { errorMessage } from "../../lib/errors"
 import { formatMoney, toMoneyInt } from "../../lib/money"
 import { prisma } from "../../lib/db"
@@ -29,6 +29,7 @@ export function registerCatalogRoutes(app: Express) {
           price: formatMoney(toMoneyInt(product.salePrice), ctx.currency),
           stock: `${product.stock} ${product.baseUnit}`,
           active: product.isActive,
+          imagePath: (product as { imagePath?: string | null }).imagePath ?? null,
         })),
       })
     } catch (error) {
@@ -67,6 +68,7 @@ export function registerCatalogRoutes(app: Express) {
       res.json({
         writable: can(ctx.role, "catalogWrite", ctx.grants),
         values: form.values,
+        imagePath: form.product.imagePath ?? null,
         categories: categories.map((category) => ({ id: category.id, name: category.name })),
         units: units.map((unit) => ({ id: unit.id, name: unit.name, symbol: unit.symbol })),
       })
@@ -74,6 +76,32 @@ export function registerCatalogRoutes(app: Express) {
       res.status(400).json({ error: errorMessage(error) })
     }
   })
+
+  // Foto del producto: cuerpo binario (image/jpeg|png|webp), máx. 2 MB. La guarda en uploads del disco.
+  app.post(
+    "/api/catalog/products/:id/image",
+    requireApiTenant,
+    express.raw({ type: ["image/jpeg", "image/png", "image/webp"], limit: "2mb" }),
+    async (req: AuthedRequest, res) => {
+      try {
+        const ctx = req.tenant!
+        const type = String(req.headers["content-type"] ?? "").split(";")[0].trim()
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+          res.status(400).json({ error: "Usa una imagen JPG, PNG o WebP" })
+          return
+        }
+        const file = new File([req.body], "imagen", { type })
+        await saveProductImage(ctx, String(req.params.id), file)
+        const product = await prisma.product.findFirst({
+          where: { id: String(req.params.id), businessId: ctx.businessId },
+          select: { imagePath: true },
+        })
+        res.json({ ok: true, imagePath: product?.imagePath ?? null })
+      } catch (error) {
+        res.status(400).json({ error: errorMessage(error) })
+      }
+    },
+  )
 
   app.post("/api/catalog/products", requireApiTenant, async (req: AuthedRequest, res) => {
     try {

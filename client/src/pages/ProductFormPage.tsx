@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { createCatalogCategory, getCatalogForm, getCatalogProduct, saveCatalogProduct } from "../api"
+import { ProductPhoto } from "../components/ProductPhoto"
 
 export function ProductFormPage() {
   const { productId } = useParams()
@@ -24,6 +25,7 @@ export function ProductFormPage() {
     isActive: true,
   })
   const [categoryName, setCategoryName] = useState("")
+  const [imagePath, setImagePath] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
 
@@ -36,6 +38,7 @@ export function ProductFormPage() {
           if (cancelled) return
           setCategories(data.categories)
           setUnits(data.units)
+          setImagePath(data.imagePath ?? null)
           setForm({
             name: data.values.name,
             internalCode: data.values.internalCode,
@@ -112,11 +115,27 @@ export function ProductFormPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">
-            {editing ? "Editar producto" : "Nuevo producto"}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">El stock no se escribe aquí. Entra por inventario.</p>
+        <div className="flex items-center gap-4">
+          {editing && productId ? (
+            <ProductPhoto
+              name={form.name || "Producto"}
+              imagePath={imagePath}
+              productId={productId}
+              categoryId={form.categoryId}
+              size={72}
+              editable
+              onUploaded={setImagePath}
+            />
+          ) : null}
+          <div>
+            <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">
+              {editing ? "Editar producto" : "Nuevo producto"}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {editing ? "Toca el círculo para cambiar la foto. " : "Guarda el producto y luego agrega su foto. "}
+              El stock entra por inventario.
+            </p>
+          </div>
         </div>
         <Link to="/productos" className="text-sm text-[var(--pf-accent)] hover:underline">
           Volver al catálogo

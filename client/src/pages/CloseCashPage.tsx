@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { closeCash, getClosePreview, type ClosePreview } from "../api"
+import { pendingCount } from "../offline"
 
 export function CloseCashPage() {
   const navigate = useNavigate()
@@ -58,6 +59,13 @@ export function CloseCashPage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!data) return
+    const queued = pendingCount()
+    if (queued > 0) {
+      setError(
+        `Hay ${queued} venta${queued === 1 ? "" : "s"} guardada${queued === 1 ? "" : "s"} sin conexión en este equipo. Sincronízalas antes de cerrar para que entren en esta caja.`,
+      )
+      return
+    }
     setPending(true)
     setError("")
     try {
@@ -100,8 +108,21 @@ export function CloseCashPage() {
   const countedCents = Math.round(Number(countedLabel || 0) * 100)
   const diffCents = countedCents - expectedCents
 
+  const queued = pendingCount()
+
   return (
     <form onSubmit={onSubmit} className="mx-auto max-w-3xl space-y-4">
+      {queued > 0 ? (
+        <Link
+          to="/ventas/sincronizar"
+          className="block rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100"
+        >
+          <b>
+            {queued} venta{queued === 1 ? "" : "s"} sin sincronizar.
+          </b>{" "}
+          El efectivo esperado todavía no las incluye. Sincroniza antes de cerrar →
+        </Link>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Cierre de caja</h1>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { Navigate, Route, Routes } from "react-router-dom"
-import { getBootstrap, getMe, getPanelBootstrap, getVersion, type PanelBootstrap } from "./api"
+import { getBootstrap, getMe, getPanelBootstrap, getVersion, isOfflineError, type PanelBootstrap } from "./api"
+import { startOfflineSync } from "./offline"
+import { OfflineTicketPage, SyncPage } from "./pages/OfflinePages"
 import { Shell } from "./layout/Shell"
 import { AdjustmentsPage } from "./pages/AdjustmentsPage"
 import { AlertsPage } from "./pages/AlertsPage"
@@ -46,6 +48,7 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false
+    const BOOT_KEY = "pf-offline-boot-v1"
     ;(async () => {
       try {
         const [version, bootstrap] = await Promise.all([getVersion(), getBootstrap()])
@@ -57,14 +60,39 @@ export function App() {
           setMe(session)
           const panelData = await getPanelBootstrap()
           if (!cancelled) setPanel(panelData)
-        } catch {
+          try {
+            localStorage.setItem(BOOT_KEY, JSON.stringify({ me: session, panel: panelData, versionLabel: version.label }))
+          } catch {
+            /* noop */
+          }
+          startOfflineSync()
+        } catch (err) {
+          if (isOfflineError(err)) throw err
           if (!cancelled) {
             setMe(null)
             setPanel(null)
           }
         }
       } catch (err) {
-        if (!cancelled) setBootError(err instanceof Error ? err.message : "Sin API")
+        // Sin conexión: abre con la última sesión guardada en este equipo para seguir vendiendo.
+        let saved: { me: Me; panel: PanelBootstrap; versionLabel?: string } | null = null
+        if (isOfflineError(err)) {
+          try {
+            saved = JSON.parse(localStorage.getItem(BOOT_KEY) ?? "null")
+          } catch {
+            saved = null
+          }
+        }
+        if (saved?.me && saved.panel) {
+          if (!cancelled) {
+            setMe(saved.me)
+            setPanel(saved.panel)
+            if (saved.versionLabel) setVersionLabel(saved.versionLabel)
+            startOfflineSync()
+          }
+        } else if (!cancelled) {
+          setBootError(err instanceof Error ? err.message : "Sin API")
+        }
       } finally {
         if (!cancelled) setReady(true)
       }
@@ -88,9 +116,18 @@ export function App() {
   if (bootError) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-3 px-6 text-slate-200">
-        <h1 className="text-xl font-semibold">API no disponible</h1>
-        <p className="text-sm text-slate-400">{bootError}</p>
-        <p className="text-sm text-slate-500">Arranca con npm run dev:api (o npm run dev:stack).</p>
+        <h1 className="text-xl font-semibold text-[var(--pf-navy)]">Sin conexión con el servidor</h1>
+        <p className="text-sm text-slate-600">{bootError}</p>
+        <p className="text-sm text-slate-500">
+          Para usar Punto Fadey sin internet, entra al menos una vez con conexión en este equipo.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="h-11 rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white"
+        >
+          Reintentar
+        </button>
       </main>
     )
   }
@@ -121,6 +158,8 @@ export function App() {
           <Route path="ventas" element={<SalesPage />} />
           <Route path="ventas/historial" element={<SalesHistoryPage />} />
           <Route path="ventas/devoluciones" element={<ReturnsPage />} />
+          <Route path="ventas/sincronizar" element={<SyncPage />} />
+          <Route path="ventas/pendiente/:queueId" element={<OfflineTicketPage />} />
           <Route path="ventas/anulaciones" element={<SalesHistoryPage voidedOnly />} />
           <Route path="ventas/:saleId/ticket" element={<TicketPage />} />
           <Route path="ventas/:saleId" element={<SaleDetailPage />} />

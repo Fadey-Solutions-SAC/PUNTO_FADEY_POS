@@ -29,8 +29,9 @@ import {
   X,
 } from "lucide-react"
 import type { PanelBootstrap } from "../api"
-import { logout } from "../api"
+import { isServerReachable, logout, SERVER_EVENT } from "../api"
 import { formatAppPath } from "../nav"
+import { clearOfflineCache, OFFLINE_EVENT, pendingCount } from "../offline"
 
 type LucideIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
 
@@ -144,8 +145,10 @@ function themeStyle(id?: string | null): CSSProperties {
 function screenTitle(pathname: string, navLabel?: string) {
   if (pathname === "/productos/nuevo") return "Nuevo producto"
   if (/^\/productos\/(?!nuevo$|unidades$|presentaciones$|codigos$|precios$)[^/]+$/.test(pathname)) return "Editar producto"
-  if (/^\/ventas\/(?!historial$|devoluciones$|anulaciones$)[^/]+\/ticket$/.test(pathname)) return "Ticket"
-  if (/^\/ventas\/(?!historial$|devoluciones$|anulaciones$)[^/]+$/.test(pathname)) return "Venta"
+  if (/^\/ventas\/(?!historial$|devoluciones$|anulaciones$|sincronizar$|pendiente$)[^/]+\/ticket$/.test(pathname)) return "Ticket"
+  if (/^\/ventas\/(?!historial$|devoluciones$|anulaciones$|sincronizar$|pendiente$)[^/]+$/.test(pathname)) return "Venta"
+  if (pathname === "/ventas/sincronizar") return "Ventas por sincronizar"
+  if (pathname.startsWith("/ventas/pendiente/")) return "Venta sin conexión"
   if (pathname === "/caja/cierre") return "Cierre de caja"
   if (pathname === "/caja/historial") return "Historial de caja"
   if (pathname === "/caja") return "Caja"
@@ -164,6 +167,17 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
   const [noticesOpen, setNoticesOpen] = useState(false)
   const [rail, setRail] = useState(false)
   const [online, setOnline] = useState(true)
+  const [queued, setQueued] = useState(() => pendingCount())
+
+  useEffect(() => {
+    const sync = () => setQueued(pendingCount())
+    window.addEventListener(OFFLINE_EVENT, sync)
+    window.addEventListener("storage", sync)
+    return () => {
+      window.removeEventListener(OFFLINE_EVENT, sync)
+      window.removeEventListener("storage", sync)
+    }
+  }, [])
 
   const navItems = panel.nav.flatMap((group) => group.items)
   const activeHref = navItems
@@ -181,13 +195,15 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
   const notices = panel.notices ?? []
 
   useEffect(() => {
-    const sync = () => setOnline(navigator.onLine)
+    const sync = () => setOnline(navigator.onLine && isServerReachable())
     sync()
     window.addEventListener("online", sync)
     window.addEventListener("offline", sync)
+    window.addEventListener(SERVER_EVENT, sync)
     return () => {
       window.removeEventListener("online", sync)
       window.removeEventListener("offline", sync)
+      window.removeEventListener(SERVER_EVENT, sync)
     }
   }, [])
 
@@ -207,6 +223,13 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
 
   async function onLogout() {
     await logout().catch(() => undefined)
+    clearOfflineCache()
+    try {
+      localStorage.removeItem("pf-offline-boot-v1")
+      localStorage.removeItem("pf-offline-sale-status-v1")
+    } catch {
+      /* noop */
+    }
     window.location.assign("/login")
   }
 
@@ -288,6 +311,21 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
             <span className={`size-1.5 rounded-full ${online ? "bg-emerald-300" : "bg-amber-300"}`} />
             {online ? "En línea" : "Sin conexión"}
           </span>
+          {!online ? (
+            <span className="inline-flex items-center rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-amber-950 md:hidden">
+              Sin red
+            </span>
+          ) : null}
+          {queued > 0 ? (
+            <NavLink
+              to="/ventas/sincronizar"
+              className="inline-flex items-center gap-1 rounded-full bg-sky-400 px-2 py-0.5 text-[11px] font-bold text-sky-950 shadow-sm hover:bg-sky-300"
+              title="Ventas guardadas sin conexión"
+            >
+              ⟳ {queued}
+              <span className="hidden sm:inline">por sincronizar</span>
+            </NavLink>
+          ) : null}
 
           <div className="relative">
             <button

@@ -140,10 +140,12 @@ export function registerSalesRoutes(app: Express) {
         },
         include: {
           presentations: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] },
+          barcodes: { select: { code: true } },
           variants: {
             where: { isActive: true },
             include: {
               presentations: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] },
+              barcodes: { select: { code: true } },
             },
             orderBy: { name: "asc" },
           },
@@ -176,6 +178,9 @@ export function registerSalesRoutes(app: Express) {
                   unitPriceLabel: formatMoney(unitPrice, ctx.currency),
                   categoryId: product.categoryId,
                   unit: product.baseUnit.symbol,
+                  imagePath: variant.imagePath ?? product.imagePath ?? null,
+                  // Para escanear sin conexión con la copia local del catálogo.
+                  barcodes: variant.barcodes.map((item) => item.code),
                 }
               })
           }
@@ -198,6 +203,8 @@ export function registerSalesRoutes(app: Express) {
               unitPriceLabel: formatMoney(unitPrice, ctx.currency),
               categoryId: product.categoryId,
               unit: product.baseUnit.symbol,
+              imagePath: product.imagePath ?? null,
+              barcodes: product.barcodes.map((item) => item.code),
             },
           ]
         })

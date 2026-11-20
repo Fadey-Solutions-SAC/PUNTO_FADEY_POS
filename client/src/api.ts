@@ -1,5 +1,41 @@
 export type ApiError = { error: string }
 
+/** Sin red, o Render reiniciando (502/503/504): la operación no llegó al servidor. */
+export class OfflineError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "OfflineError"
+  }
+}
+
+/** Respuesta del servidor con error (400 validación, 401 sin sesión, etc.). */
+export class HttpError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = "HttpError"
+    this.status = status
+  }
+}
+
+export function isOfflineError(error: unknown) {
+  return error instanceof OfflineError
+}
+
+/** ¿Respondió el servidor en la última petición? (no basta con navigator.onLine: puede haber red sin servidor). */
+export const SERVER_EVENT = "pf-server-status"
+let serverReachable = true
+
+export function isServerReachable() {
+  return serverReachable
+}
+
+function markServer(reachable: boolean) {
+  if (reachable === serverReachable) return
+  serverReachable = reachable
+  window.dispatchEvent(new CustomEvent(SERVER_EVENT, { detail: reachable }))
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
@@ -12,15 +48,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     })
   } catch {
-    throw new Error("Sin conexión con el servidor. Revisa tu internet e intenta de nuevo.")
+    markServer(false)
+    throw new OfflineError("Sin conexión con el servidor. Revisa tu internet e intenta de nuevo.")
   }
+  markServer(res.headers.get("X-PF-Offline") !== "1" && ![502, 503, 504].includes(res.status))
   const data = (await res.json().catch(() => ({}))) as T & ApiError
   if (!res.ok) {
     if (!data.error && (res.status === 502 || res.status === 503 || res.status === 504)) {
       // Render reinicia el servicio durante un despliegue: la operación no llegó al servidor.
-      throw new Error("El sistema se está actualizando. Espera unos segundos y vuelve a intentar.")
+      throw new OfflineError("El sistema se está actualizando. Espera unos segundos y vuelve a intentar.")
     }
-    throw new Error(data.error || `Error ${res.status}`)
+    throw new HttpError(data.error || `Error ${res.status}`, res.status)
   }
   return data
 }
@@ -229,6 +267,7 @@ export type SaleProduct = {
   unit?: string
   stock?: number
   stockLabel?: string
+  imagePath?: string | null
 }
 
 export function getSaleStatus() {
@@ -370,6 +409,7 @@ export function getCatalog() {
       price: string
       stock: string
       active: boolean
+      imagePath?: string | null
     }[]
   }>("/api/catalog")
 }
@@ -402,9 +442,31 @@ export function getCatalogProduct(id: string) {
       isActive: boolean
       barcodes: string[]
     }
+    imagePath?: string | null
     categories: { id: string; name: string }[]
     units: { id: string; name: string; symbol: string }[]
   }>(`/api/catalog/products/${id}`)
+}
+
+/** Sube la foto ya reducida (binario). Devuelve la nueva ruta en /uploads. */
+export async function uploadProductImage(productId: string, image: Blob) {
+  let res: Response
+  try {
+    res = await fetch(`/api/catalog/products/${productId}/image`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": image.type || "image/jpeg" },
+      body: image,
+    })
+  } catch {
+    throw new Error("Sin conexión: la foto se sube cuando vuelva internet.")
+  }
+  const data = (await res.json().catch(() => ({}))) as { imagePath?: string | null; error?: string }
+  if (!res.ok) {
+    if (res.status === 413) throw new Error("La imagen supera 2 MB")
+    throw new Error(data.error || `Error ${res.status}`)
+  }
+  return { imagePath: data.imagePath ?? null }
 }
 
 export function saveCatalogProduct(input: {
@@ -536,6 +598,7 @@ export function getCatalogPresentations() {
       name: string
       factorLabel: string
       unitSymbol: string
+      imagePath?: string | null
     }[]
   }>("/api/catalog/presentations")
 }
