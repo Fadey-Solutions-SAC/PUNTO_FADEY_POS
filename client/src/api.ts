@@ -893,11 +893,15 @@ export function getBilling() {
       status: string
       statusLabel: string
       total: string
+      saleId?: string | null
+      attempts?: number
+      lastError?: string
+      hasCdr?: boolean
     }[]
   }>("/api/billing")
 }
 
-export function issueBillingDocument(input: { saleId: string; docType: string; relatedId?: string }) {
+export function issueBillingDocument(input: { saleId: string; docType: string; relatedId?: string; buyerDocument?: string; buyerName?: string }) {
   return request<{ ok: true; id: string }>("/api/billing/issue", {
     method: "POST",
     body: JSON.stringify(input),
@@ -1358,4 +1362,35 @@ export function lookupDocument(numero: string) {
   return request<{ docType: "1" | "6"; document: string; name: string; address: string }>(
     `/api/lookup/document?numero=${encodeURIComponent(numero)}`,
   )
+}
+
+
+// ---- Facturación: configuración, envío y descargas ----
+
+export type BillingConfig = {
+  businessName: string
+  taxId: string
+  taxIdValid: boolean
+  endpoint: string
+  environment: string
+  igvRate: string
+  hasToken: boolean
+  configured: boolean
+  series: { docType: string; label: string; series: string; nextNumber: number; locked: boolean }[]
+}
+
+export function getBillingConfig() {
+  return request<BillingConfig>("/api/billing/config")
+}
+
+export function saveBillingConfig(input: { endpoint: string; token?: string; environment: string; igvRate: string }) {
+  return request<{ ok: true }>("/api/billing/config", { method: "POST", body: JSON.stringify(input) })
+}
+
+export function saveBillingSeries(docType: string, series: string) {
+  return request<{ ok: true }>("/api/billing/series", { method: "POST", body: JSON.stringify({ docType, series }) })
+}
+
+export function sendBillingDocument(id: string) {
+  return request<{ ok: true; status: string; statusLabel: string }>(`/api/billing/${id}/send`, { method: "POST" })
 }

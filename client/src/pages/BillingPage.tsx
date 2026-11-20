@@ -1,130 +1,428 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
-import { getBilling, issueBillingDocument } from "../api"
+import {
+  getBilling,
+  getBillingConfig,
+  getSaleTicket,
+  issueBillingDocument,
+  saveBillingConfig,
+  saveBillingSeries,
+  sendBillingDocument,
+  type BillingConfig,
+} from "../api"
+import { DocumentLookup } from "../components/DocumentLookup"
+
+type Data = Awaited<ReturnType<typeof getBilling>>
+type Doc = Data["documents"][number]
+
+const STATUS_STYLE: Record<string, string> = {
+  QUEUED: "bg-amber-50 text-amber-800",
+  SENT: "bg-sky-50 text-sky-700",
+  ACCEPTED: "bg-emerald-50 text-emerald-700",
+  REJECTED: "bg-red-50 text-red-700",
+  ERROR: "bg-red-50 text-red-700",
+}
+
+function printText(title: string, text: string) {
+  const frame = document.createElement("iframe")
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0"
+  document.body.appendChild(frame)
+  const doc = frame.contentDocument
+  if (!doc || !frame.contentWindow) return frame.remove()
+  doc.open()
+  doc.write(
+    `<!doctype html><html><head><title>${title}</title><style>@page{margin:4mm}body{font-family:ui-monospace,Consolas,monospace;white-space:pre;margin:0;font-size:12px}</style></head><body>${text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")}</body></html>`,
+  )
+  doc.close()
+  const win = frame.contentWindow
+  window.setTimeout(() => {
+    win.focus()
+    win.print()
+    window.setTimeout(() => frame.remove(), 1000)
+  }, 50)
+}
 
 export function BillingPage() {
-  const [data, setData] = useState<Awaited<ReturnType<typeof getBilling>> | null>(null)
-  const [saleId, setSaleId] = useState("")
-  const [docType, setDocType] = useState("BOLETA")
-  const [relatedId, setRelatedId] = useState("")
+  const [tab, setTab] = useState<"docs" | "config">("docs")
+  const [data, setData] = useState<Data | null>(null)
+  const [config, setConfig] = useState<BillingConfig | null>(null)
   const [error, setError] = useState("")
-  const [pending, setPending] = useState(false)
+  const [message, setMessage] = useState("")
+  const [busy, setBusy] = useState(false)
 
-  async function reload() {
-    const payload = await getBilling()
-    setData(payload)
-    setSaleId((current) => current || payload.sales[0]?.id || "")
-  }
+  const reload = useCallback(async () => {
+    const [docs, cfg] = await Promise.all([getBilling(), getBillingConfig()])
+    setData(docs)
+    setConfig(cfg)
+  }, [])
 
   useEffect(() => {
     reload().catch((err: unknown) => setError(err instanceof Error ? err.message : "Error"))
-  }, [])
+  }, [reload])
 
-  async function onIssue(event: FormEvent) {
-    event.preventDefault()
-    setPending(true)
+  async function run(action: () => Promise<unknown>, ok: string) {
+    setBusy(true)
     setError("")
+    setMessage("")
     try {
-      await issueBillingDocument({
-        saleId,
-        docType,
-        relatedId: relatedId || undefined,
-      })
+      await action()
       await reload()
+      setMessage(ok)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo emitir")
+      setError(err instanceof Error ? err.message : "Error")
+      await reload().catch(() => undefined)
     } finally {
-      setPending(false)
+      setBusy(false)
+    }
+  }
+
+  async function onPrint(doc: Doc) {
+    if (!doc.saleId) return
+    try {
+      const ticket = await getSaleTicket(doc.saleId)
+      const header = [
+        config?.businessName ?? "",
+        config?.taxId ? `RUC ${config.taxId}` : "",
+        doc.label.toUpperCase(),
+        `Cliente: ${doc.customerName}`,
+        doc.status === "ACCEPTED" ? "Aceptado por SUNAT" : "REPRESENTACIÓN SIN CDR · NO ACEPTADO AÚN",
+        "--------------------------------",
+      ]
+        .filter(Boolean)
+        .join("\n")
+      printText(doc.label, `${header}\n${ticket.text}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo imprimir")
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Facturación electrónica</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          El comprobante queda en cola hasta recibir la respuesta (CDR) del proveedor.
-        </p>
+    <div className="mx-auto max-w-6xl space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Facturación electrónica</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Un comprobante solo queda <b>aceptado</b> con el CDR de SUNAT que devuelve tu proveedor. Mientras tanto queda en cola.
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+          {(
+            [
+              ["docs", "Comprobantes"],
+              ["config", "Configuración"],
+            ] as const
+          ).map(([value, text]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTab(value)}
+              className={`h-9 rounded-lg px-3 text-sm font-semibold ${tab === value ? "bg-white text-[var(--pf-navy)] shadow-sm" : "text-slate-500"}`}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {config && (!config.taxIdValid || !config.configured) ? (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {!config.taxIdValid ? (
+            <p>
+              <b>Falta un RUC válido del negocio.</b> Regístralo en{" "}
+              <Link to="/configuracion?m=negocio" className="font-semibold underline">
+                Configuración → Negocio
+              </Link>{" "}
+              para poder emitir.
+            </p>
+          ) : null}
+          {!config.configured ? (
+            <p>
+              <b>Proveedor no configurado.</b> Los comprobantes se generan y numeran, pero quedan en cola hasta que configures el envío en la pestaña Configuración.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-      <form onSubmit={onIssue} className="grid max-w-xl gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="block text-sm">
-          Venta
-          <select
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-            value={saleId}
-            onChange={(event) => setSaleId(event.target.value)}
+      {message ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {message}</p> : null}
+
+      {tab === "docs" && data ? (
+        <>
+          <IssueForm data={data} busy={busy} onIssue={(input, ok) => run(() => issueBillingDocument(input), ok)} />
+
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <h2 className="font-semibold text-[var(--pf-navy)]">Comprobantes emitidos</h2>
+              <span className="text-xs text-slate-500">{data.documents.length}</span>
+            </div>
+            {data.documents.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-slate-500">Todavía no hay comprobantes.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2">Fecha</th>
+                      <th className="px-3 py-2">Comprobante</th>
+                      <th className="px-3 py-2">Cliente</th>
+                      <th className="px-3 py-2">Estado</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                      <th className="px-3 py-2 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.documents.map((doc) => (
+                      <tr key={doc.id}>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-600">{doc.issuedAtLabel}</td>
+                        <td className="whitespace-nowrap px-3 py-2 font-semibold text-[var(--pf-navy)]">{doc.label}</td>
+                        <td className="px-3 py-2">{doc.customerName}</td>
+                        <td className="px-3 py-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[doc.status] ?? "bg-slate-100"}`}>{doc.statusLabel}</span>
+                          {doc.lastError ? <span className="mt-0.5 block max-w-[16rem] text-[11px] leading-tight text-red-700">{doc.lastError}</span> : null}
+                          {doc.attempts ? <span className="block text-[11px] text-slate-400">Intentos: {doc.attempts}/5</span> : null}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{doc.total}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap justify-end gap-1 text-xs font-semibold">
+                            {doc.status !== "ACCEPTED" ? (
+                              <button
+                                type="button"
+                                disabled={busy || (doc.attempts ?? 0) >= 5}
+                                onClick={() => void run(() => sendBillingDocument(doc.id), "Respuesta del proveedor registrada")}
+                                className="rounded-lg bg-sky-500 px-2 py-1 text-white disabled:opacity-50"
+                              >
+                                {doc.attempts ? "Reintentar" : "Enviar"}
+                              </button>
+                            ) : null}
+                            <a href={`/api/billing/${doc.id}/xml`} className="rounded-lg px-2 py-1 text-[var(--pf-accent)] hover:bg-slate-100">
+                              XML
+                            </a>
+                            {doc.hasCdr ? (
+                              <a href={`/api/billing/${doc.id}/cdr`} className="rounded-lg px-2 py-1 text-emerald-700 hover:bg-emerald-50">
+                                CDR
+                              </a>
+                            ) : null}
+                            {doc.saleId ? (
+                              <button type="button" onClick={() => void onPrint(doc)} className="rounded-lg px-2 py-1 text-slate-600 hover:bg-slate-100">
+                                Imprimir
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {tab === "config" && config ? <ConfigPanel config={config} busy={busy} run={run} /> : null}
+    </div>
+  )
+}
+
+function IssueForm({
+  data,
+  busy,
+  onIssue,
+}: {
+  data: Data
+  busy: boolean
+  onIssue: (input: { saleId: string; docType: string; relatedId?: string; buyerDocument?: string; buyerName?: string }, ok: string) => void
+}) {
+  const [saleId, setSaleId] = useState(data.sales[0]?.id ?? "")
+  const [docType, setDocType] = useState("BOLETA")
+  const [relatedId, setRelatedId] = useState("")
+  const [buyerDocument, setBuyerDocument] = useState("")
+  const [buyerName, setBuyerName] = useState("")
+  const isNote = docType === "NOTA_CREDITO" || docType === "NOTA_DEBITO"
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault()
+    onIssue(
+      {
+        saleId,
+        docType,
+        relatedId: isNote ? relatedId || undefined : undefined,
+        buyerDocument: buyerDocument.trim() || undefined,
+        buyerName: buyerName.trim() || undefined,
+      },
+      "Comprobante generado. Envíalo para obtener el CDR.",
+    )
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2">
+      <h2 className="font-semibold text-[var(--pf-navy)] md:col-span-2">Emitir comprobante</h2>
+      <label className="block text-sm font-medium text-slate-700 md:col-span-2">
+        Venta
+        <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={saleId} onChange={(e) => setSaleId(e.target.value)}>
+          {data.sales.map((sale) => (
+            <option key={sale.id} value={sale.id}>
+              {sale.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1 md:col-span-2">
+        {(
+          [
+            ["BOLETA", "Boleta"],
+            ["FACTURA", "Factura"],
+            ["NOTA_CREDITO", "N. crédito"],
+            ["NOTA_DEBITO", "N. débito"],
+          ] as const
+        ).map(([value, text]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setDocType(value)}
+            className={`h-9 rounded-lg text-xs font-semibold ${docType === value ? "bg-white text-[var(--pf-navy)] shadow-sm" : "text-slate-500"}`}
           >
-            {(data?.sales ?? []).map((sale) => (
-              <option key={sale.id} value={sale.id}>
-                {sale.label}
+            {text}
+          </button>
+        ))}
+      </div>
+      {!isNote ? (
+        <>
+          <label className="block text-sm font-medium text-slate-700">
+            {docType === "FACTURA" ? "RUC del cliente (obligatorio)" : "DNI o RUC del cliente (opcional)"}
+            <span className="flex gap-2">
+              <input
+                inputMode="numeric"
+                required={docType === "FACTURA"}
+                className="mt-1 h-11 w-full min-w-0 rounded-xl border border-slate-200 px-3"
+                value={buyerDocument}
+                onChange={(e) => setBuyerDocument(e.target.value)}
+              />
+              <DocumentLookup
+                value={buyerDocument}
+                onFound={(party) => {
+                  setBuyerDocument(party.document)
+                  setBuyerName(party.name)
+                }}
+              />
+            </span>
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            {docType === "FACTURA" ? "Razón social" : "Nombre"}
+            <input
+              required={docType === "FACTURA"}
+              className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3"
+              value={buyerName}
+              onChange={(e) => setBuyerName(e.target.value)}
+              placeholder={docType === "BOLETA" ? "Vacío = cliente de la venta o Público" : ""}
+            />
+          </label>
+        </>
+      ) : (
+        <label className="block text-sm font-medium text-slate-700 md:col-span-2">
+          Comprobante que modifica (solo aceptados)
+          <select required className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={relatedId} onChange={(e) => setRelatedId(e.target.value)}>
+            <option value="">Elige el comprobante</option>
+            {data.accepted.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
               </option>
             ))}
           </select>
         </label>
-        <label className="block text-sm">
-          Comprobante
-          <select
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-            value={docType}
-            onChange={(event) => setDocType(event.target.value)}
-          >
-            <option value="BOLETA">Boleta</option>
-            <option value="FACTURA">Factura</option>
-            <option value="NOTA_CREDITO">Nota de crédito</option>
-            <option value="NOTA_DEBITO">Nota de débito</option>
-          </select>
+      )}
+      <button type="submit" disabled={busy || !saleId} className="h-11 rounded-xl bg-[var(--pf-accent)] px-5 text-sm font-semibold text-white disabled:opacity-60 md:col-span-2 md:w-fit">
+        {busy ? "Generando…" : "Generar comprobante"}
+      </button>
+    </form>
+  )
+}
+
+function ConfigPanel({ config, busy, run }: { config: BillingConfig; busy: boolean; run: (action: () => Promise<unknown>, ok: string) => Promise<void> }) {
+  const [endpoint, setEndpoint] = useState(config.endpoint)
+  const [token, setToken] = useState("")
+  const [environment, setEnvironment] = useState(config.environment)
+  const [igvRate, setIgvRate] = useState(config.igvRate)
+  const [series, setSeries] = useState<Record<string, string>>(Object.fromEntries(config.series.map((item) => [item.docType, item.series])))
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          void run(async () => {
+            await saveBillingConfig({ endpoint, token: token || undefined, environment, igvRate })
+            setToken("")
+          }, "Configuración del proveedor guardada")
+        }}
+        className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      >
+        <h2 className="font-semibold text-[var(--pf-navy)]">Proveedor de facturación (OSE / PSE)</h2>
+        <label className="block text-sm font-medium text-slate-700">
+          URL de envío
+          <input
+            type="url"
+            className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+            value={endpoint}
+            onChange={(e) => setEndpoint(e.target.value)}
+            placeholder="https://api.tu-proveedor.pe/..."
+          />
         </label>
-        <label className="block text-sm">
-          Comprobante aceptado que modifica
-          <select
-            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-            value={relatedId}
-            onChange={(event) => setRelatedId(event.target.value)}
-          >
-            <option value="">Ninguno</option>
-            {(data?.accepted ?? []).map((document) => (
-              <option key={document.id} value={document.id}>
-                {document.label}
-              </option>
-            ))}
-          </select>
+        <label className="block text-sm font-medium text-slate-700">
+          Token {config.hasToken ? <span className="font-normal text-emerald-700">(guardado · vacío = no cambia)</span> : <span className="font-normal text-slate-400">(se guarda cifrado)</span>}
+          <input type="password" autoComplete="off" className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" value={token} onChange={(e) => setToken(e.target.value)} />
         </label>
-        <button
-          type="submit"
-          disabled={pending || !saleId}
-          className="h-10 rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {pending ? "Generando…" : "Generar comprobante"}
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block text-sm font-medium text-slate-700">
+            Ambiente
+            <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={environment} onChange={(e) => setEnvironment(e.target.value)}>
+              <option value="beta">Pruebas (beta)</option>
+              <option value="prod">Producción</option>
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            IGV (%)
+            <input inputMode="decimal" className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-right" value={igvRate} onChange={(e) => setIgvRate(e.target.value)} />
+          </label>
+        </div>
+        <button type="submit" disabled={busy} className="h-11 rounded-xl bg-[var(--pf-accent)] px-5 text-sm font-semibold text-white disabled:opacity-60">
+          Guardar proveedor
         </button>
+        <p className="text-xs text-slate-500">El token nunca se muestra después de guardarlo. Solo se usa en el servidor para enviar los comprobantes.</p>
       </form>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">Fecha</th>
-              <th className="px-3 py-2 font-medium">Comprobante</th>
-              <th className="px-3 py-2 font-medium">Cliente</th>
-              <th className="px-3 py-2 font-medium">Estado</th>
-              <th className="px-3 py-2 font-medium text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data?.documents ?? []).map((document) => (
-              <tr key={document.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{document.issuedAtLabel}</td>
-                <td className="px-3 py-2">
-                  <Link to={`/pendiente/facturacion/${document.id}`} className="text-[var(--pf-accent)] hover:underline">
-                    {document.label}
-                  </Link>
-                </td>
-                <td className="px-3 py-2">{document.customerName}</td>
-                <td className="px-3 py-2">{document.statusLabel}</td>
-                <td className="px-3 py-2 text-right">{document.total}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="font-semibold text-[var(--pf-navy)]">Series</h2>
+        <p className="text-xs text-slate-500">4 caracteres (ej. B001, F001). Una serie con comprobantes emitidos ya no se puede cambiar.</p>
+        {config.series.map((item) => (
+          <form
+            key={item.docType}
+            className="flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void run(() => saveBillingSeries(item.docType, series[item.docType] ?? ""), `Serie de ${item.label} guardada`)
+            }}
+          >
+            <span className="w-28 shrink-0 text-sm font-medium text-slate-700">{item.label}</span>
+            <input
+              disabled={item.locked}
+              maxLength={4}
+              className="h-10 w-24 rounded-xl border border-slate-200 px-3 text-center font-mono uppercase disabled:bg-slate-50"
+              value={series[item.docType] ?? ""}
+              onChange={(e) => setSeries((current) => ({ ...current, [item.docType]: e.target.value.toUpperCase() }))}
+            />
+            <span className="text-xs text-slate-500">próximo N.º {item.nextNumber}</span>
+            {!item.locked ? (
+              <button type="submit" disabled={busy} className="ml-auto rounded-lg px-2 py-1 text-xs font-semibold text-[var(--pf-accent)] hover:bg-slate-100">
+                Guardar
+              </button>
+            ) : (
+              <span className="ml-auto text-xs text-slate-400">En uso</span>
+            )}
+          </form>
+        ))}
       </div>
     </div>
   )
