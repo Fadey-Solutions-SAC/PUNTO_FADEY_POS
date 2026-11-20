@@ -1172,3 +1172,19 @@ export function saveRolePermissions(grants: string[]) {
     body: JSON.stringify({ grants }),
   })
 }
+
+// ---- Copias de seguridad ----
+
+export type BackupRow = { name: string; kind: "auto" | "manual"; sizeLabel: string; createdAtLabel: string }
+
+export function getBackups() {
+  return request<{ canBackup: boolean; backups: BackupRow[] }>("/api/settings/backups")
+}
+
+export function createBackupNow() {
+  return request<{ ok: true; name: string }>("/api/settings/backups", { method: "POST" })
+}
+
+export function backupDownloadUrl(name: string) {
+  return `/api/settings/backups/${encodeURIComponent(name)}/download`
+}

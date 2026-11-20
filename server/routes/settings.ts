@@ -2,6 +2,7 @@ import express, { type Express } from "express"
 import { readTheme, saveTheme } from "../../lib/appearance"
 import { brandLogoUrl, loginCoverUrl, removeBrandLogo, removeLoginCover, saveBrandLogo, saveLoginCover } from "../../lib/cover"
 import { THEMES } from "../../lib/themes"
+import { backupForDownload, createBackup, listBackups } from "../../lib/backup"
 import { errorMessage } from "../../lib/errors"
 import { fromPercentInt } from "../../lib/money"
 import {
@@ -158,6 +159,45 @@ export function registerSettingsRoutes(app: Express) {
       }
     })
   }
+
+  // Copias de seguridad: listar, crear y descargar.
+  app.get("/api/settings/backups", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const canBackup = can(ctx.role, "backup", ctx.grants)
+      const rows = canBackup ? await listBackups(ctx) : []
+      res.json({
+        canBackup,
+        backups: rows.map((row) => ({
+          name: row.name,
+          kind: row.kind,
+          sizeLabel: row.size >= 1_048_576 ? `${(row.size / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(row.size / 1024))} KB`,
+          createdAtLabel: row.createdAt.toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" }),
+        })),
+      })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/settings/backups", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const backup = await createBackup(req.tenant!)
+      res.json({ ok: true, name: backup.name })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/settings/backups/:name/download", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const file = await backupForDownload(req.tenant!, String(req.params.name))
+      const business = req.tenant!.businessName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "negocio"
+      res.download(file, `copia-${business}-${String(req.params.name)}`)
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
 
   app.post("/api/settings/hardware-reader", requireApiTenant, async (req: AuthedRequest, res) => {
     try {

@@ -2,6 +2,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode }
 import { useSearchParams } from "react-router-dom"
 import {
   Building2,
+  DatabaseBackup,
   CreditCard,
   ImageIcon,
   Info,
@@ -24,9 +25,10 @@ import {
 } from "../api"
 import { shrinkImage } from "../image"
 import { UsersPanel } from "../components/UsersPanel"
+import { BackupsPanel } from "../components/BackupsPanel"
 
 type Settings = Awaited<ReturnType<typeof getSettings>>
-type ModuleId = "negocio" | "apariencia" | "marca" | "pagos" | "sucursales" | "usuarios" | "lector" | "sistema"
+type ModuleId = "negocio" | "apariencia" | "marca" | "pagos" | "sucursales" | "usuarios" | "copias" | "lector" | "sistema"
 
 const MODULES: { id: ModuleId; label: string; hint: string; icon: LucideIcon; color: string }[] = [
   { id: "negocio", label: "Negocio", hint: "Nombre, RUC y moneda", icon: Building2, color: "#0d9488" },
@@ -35,6 +37,7 @@ const MODULES: { id: ModuleId; label: string; hint: string; icon: LucideIcon; co
   { id: "pagos", label: "Métodos de pago", hint: "Efectivo, Yape, tarjeta…", icon: CreditCard, color: "#6366f1" },
   { id: "sucursales", label: "Sucursales", hint: "Locales, almacenes y cajas", icon: Store, color: "#f59e0b" },
   { id: "usuarios", label: "Usuarios y permisos", hint: "Accesos, roles y contraseñas", icon: Users, color: "#0ea5e9" },
+  { id: "copias", label: "Copias de seguridad", hint: "Respaldo de toda la información", icon: DatabaseBackup, color: "#334155" },
   { id: "lector", label: "Lector de código", hint: "Escáner USB o Bluetooth", icon: ScanBarcode, color: "#10b981" },
   { id: "sistema", label: "Sistema", hint: "Versión instalada", icon: Info, color: "#64748b" },
 ]
@@ -103,6 +106,7 @@ export function SettingsPage() {
     pagos: data ? `${data.paymentMethods.length} métodos` : "…",
     sucursales: data ? `${data.branches.length} sucursal${data.branches.length === 1 ? "" : "es"}` : "…",
     usuarios: data ? `${data.users.length} usuario${data.users.length === 1 ? "" : "s"}` : "…",
+    copias: "Descargar y automáticas",
     lector: data ? (data.hardwareReader ? "Activado" : "Desactivado") : "…",
     sistema: data?.versionLabel ?? "…",
   }
@@ -352,6 +356,8 @@ export function SettingsPage() {
           ) : null}
 
           {data && active === "usuarios" ? <UsersPanel /> : null}
+
+          {data && active === "copias" ? <BackupsPanel /> : null}
 
           {data && active === "lector" ? (
             <label className="flex items-start gap-3 rounded-xl bg-slate-50 px-3 py-3 text-sm">

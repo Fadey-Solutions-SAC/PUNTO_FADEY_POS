@@ -22,6 +22,8 @@ import { registerSalesRoutes } from "./routes/sales"
 import { registerSettingsRoutes } from "./routes/settings"
 import { registerUsersRoutes } from "./routes/users"
 import { APP_VERSION, formatAppVersion } from "../lib/version"
+import { autoBackup } from "../lib/backup"
+import { errorMessage } from "../lib/errors"
 
 // Días y rangos de fechas en hora de Perú (Render corre en UTC). Ver también scripts/boot.mjs.
 process.env.TZ = process.env.TZ || "America/Lima"
@@ -99,3 +101,14 @@ if (existsSync(clientDist)) {
 app.listen(PORT, () => {
   console.log(`[punto-fadey-api] ${formatAppVersion()} en :${PORT} (Express + Vite)`)
 })
+
+// Copia automática diaria (se guardan las últimas 7 en el disco, junto a la base).
+const runAutoBackup = () => {
+  autoBackup()
+    .then((name) => {
+      if (name) console.log(`[backup] copia automática ${name}`)
+    })
+    .catch((error) => console.error("[backup] no se pudo crear la copia automática:", errorMessage(error)))
+}
+setTimeout(runAutoBackup, 60_000).unref()
+setInterval(runAutoBackup, 6 * 60 * 60 * 1000).unref()
