@@ -21,6 +21,9 @@ import { registerSalesRoutes } from "./routes/sales"
 import { registerSettingsRoutes } from "./routes/settings"
 import { APP_VERSION, formatAppVersion } from "../lib/version"
 
+// Días y rangos de fechas en hora de Perú (Render corre en UTC). Ver también scripts/boot.mjs.
+process.env.TZ = process.env.TZ || "America/Lima"
+
 applyDatabaseEnv()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))

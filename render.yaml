@@ -13,6 +13,8 @@ services:
         value: "20.19.0"
       - key: NODE_ENV
         value: production
+      - key: TZ
+        value: America/Lima
       - key: DB_PATH
         value: /var/data/punto-fadey.db
       - key: DATABASE_URL

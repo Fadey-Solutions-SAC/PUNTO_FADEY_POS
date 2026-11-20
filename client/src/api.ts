@@ -876,6 +876,22 @@ export function issueBillingDocument(input: { saleId: string; docType: string; r
   })
 }
 
+export type ReportTone = "teal" | "indigo" | "emerald" | "red" | "amber" | "violet" | "sky" | "rose" | "slate"
+
+export type ReportData = {
+  description: string
+  chartTitle: string
+  chartKind: "time" | "rank"
+  chartMoney: boolean
+  kpis: { label: string; value: string; tone: ReportTone; hint?: string }[]
+  columns: string[]
+  numeric: number[]
+  rows: string[][]
+  footer?: string[]
+  chart: { label: string; value: number; text: string }[]
+  empty: string
+}
+
 export function getReport(params: {
   area: string
   grupo: string
@@ -885,14 +901,7 @@ export function getReport(params: {
   const query = new URLSearchParams({ area: params.area, grupo: params.grupo })
   if (params.desde) query.set("desde", params.desde)
   if (params.hasta) query.set("hasta", params.hasta)
-  return request<{
-    description: string
-    chartTitle: string
-    kpis: { label: string; value: string }[]
-    columns: string[]
-    rows: string[][]
-    chart: { label: string; value: number; text: string }[]
-  }>(`/api/reports?${query}`)
+  return request<ReportData>(`/api/reports?${query}`)
 }
 
 export function getSettings() {

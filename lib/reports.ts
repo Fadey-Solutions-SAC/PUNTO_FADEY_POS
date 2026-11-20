@@ -50,7 +50,17 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
   ])
   const byDay = new Map<string, { total: number; cost: number }>()
   const byUser = new Map<string, number>()
-  const byProduct = new Map<string, { qty: number; total: number; cost: number }>()
+  // Por producto + presentación (no por el texto guardado en la línea): si el producto
+  // cambió de nombre, sus ventas siguen sumando en una sola fila con el nombre actual.
+  const byProduct = new Map<string, { name: string; qty: number; total: number; cost: number }>()
+  const productKey = (productId: string, productName: string, description: string) => {
+    const parts = description.split(" · ")
+    const presentation = parts.length > 1 ? parts.slice(1).join(" · ") : ""
+    return {
+      key: `${productId}|${presentation.toLowerCase()}`,
+      name: presentation ? `${productName} · ${presentation}` : productName,
+    }
+  }
   const byCategory = new Map<string, { total: number; cost: number }>()
   const byMethod = new Map<string, number>()
   const byCustomer = new Map<string, { name: string; count: number; total: number }>()
@@ -75,11 +85,12 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
     for (const payment of sale.payments) byMethod.set(payment.method, (byMethod.get(payment.method) ?? 0) + payment.amount)
     for (const line of sale.lines) {
       const priced = lineCost(line.costPrice, line.baseQuantity)
-      const row = byProduct.get(line.description) ?? { qty: 0, total: 0, cost: 0 }
+      const id = productKey(line.productId, line.product.name, line.description)
+      const row = byProduct.get(id.key) ?? { name: id.name, qty: 0, total: 0, cost: 0 }
       row.qty += line.quantity
       row.total += line.total
       row.cost += priced
-      byProduct.set(line.description, row)
+      byProduct.set(id.key, row)
       cost += priced
       addDay(day, 0, priced)
       const category = line.product.category?.name ?? "Sin categoría"
@@ -101,13 +112,13 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
     const method = entry.sale.saleType === "CREDIT" ? "CREDIT" : entry.refundMethod
     byMethod.set(method, (byMethod.get(method) ?? 0) - entry.total)
     for (const line of entry.lines) {
-      const description = line.saleLine.description
-      const row = byProduct.get(description) ?? { qty: 0, total: 0, cost: 0 }
+      const id = productKey(line.saleLine.productId, line.saleLine.product.name, line.saleLine.description)
+      const row = byProduct.get(id.key) ?? { name: id.name, qty: 0, total: 0, cost: 0 }
       const returnedCost = lineCost(line.saleLine.costPrice, line.baseQuantity)
       row.qty -= line.quantity
       row.total -= line.total
       row.cost -= returnedCost
-      byProduct.set(description, row)
+      byProduct.set(id.key, row)
       cost -= returnedCost
       addDay(day, 0, -returnedCost)
       const category = line.saleLine.product.category?.name ?? "Sin categoría"
@@ -125,9 +136,10 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
     ticket: sales.length ? Math.round(total / sales.length) : 0,
     byDay: [...byDay.entries()],
     byUser: [...byUser.entries()],
-    byProduct: [...byProduct.entries()],
+    byProduct: [...byProduct.values()].map(({ name, ...row }) => [name, row] as [string, { qty: number; total: number; cost: number }]),
     byCategory: [...byCategory.entries()],
-    byMethod: [...byMethod.entries()],
+    // Sin medios que quedaron en 0 (por ejemplo, una venta a crédito devuelta completa).
+    byMethod: [...byMethod.entries()].filter(([, value]) => value !== 0),
     byCustomer: [...byCustomer.entries()],
   }
 }

@@ -6,6 +6,10 @@ import path from "node:path"
 import { normalizeRawSqliteTables } from "./normalize-raw-sqlite.mjs"
 
 const require = createRequire(import.meta.url)
+
+// Hora de Perú para "ventas del día", cierres e informes. Render corre en UTC: sin esto,
+// una venta de las 8 p. m. se contaba al día siguiente. Se puede cambiar con la variable TZ.
+process.env.TZ = process.env.TZ || "America/Lima"
 const t0 = Date.now()
 const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)} s`
 
