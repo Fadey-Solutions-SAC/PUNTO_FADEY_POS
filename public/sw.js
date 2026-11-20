@@ -5,7 +5,7 @@
  * - Fotos e íconos: se muestran desde la copia y se actualizan en segundo plano.
  * - Las operaciones (POST) nunca se guardan aquí: la venta sin conexión la maneja la app con su cola.
  */
-const VERSION = "pf-v3"
+const VERSION = "pf-v4"
 const SHELL = `${VERSION}-shell`
 const ASSETS = `${VERSION}-assets`
 const API = `${VERSION}-api`
@@ -34,7 +34,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(SHELL)
-      .then((cache) => cache.addAll(["/", "/app.webmanifest", "/icons/icon-192.png?v=3", "/brand/punto-fadey.jpg"]).catch(() => undefined))
+      .then((cache) => cache.addAll(["/", "/app.webmanifest", "/icons/icon-192.png?v=4", "/brand/punto-fadey.jpg"]).catch(() => undefined))
       .then(() => self.skipWaiting()),
   )
 })

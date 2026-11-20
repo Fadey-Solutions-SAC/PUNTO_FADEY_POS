@@ -41,7 +41,7 @@ for (const size of [32, 48, 192, 512]) {
   await sharp(await roundLogo(size)).toFile(out(`icon-${size}.png`))
 }
 for (const size of [192, 512]) {
-  await sharp(await onBackground(size, 0.8, "#05070d")).toFile(out(`icon-maskable-${size}.png`))
+  await sharp(await onBackground(size, 0.8, "#000000")).toFile(out(`icon-maskable-${size}.png`))
 }
 await sharp(await onBackground(180, 1, "#000000")).toFile(out("icon-180.png"))
 
