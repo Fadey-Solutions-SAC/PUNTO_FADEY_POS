@@ -858,6 +858,7 @@ export function getPurchaseReception() {
       quantity: string
       unitCost: string
       presentationId: string
+      trackLots?: boolean
       presentations: { id: string; name: string; unitCost: string }[]
     }[]
   }>("/api/purchases/reception")
@@ -867,7 +868,11 @@ export function postPurchaseReception(input: {
   supplierId: string
   documentNumber?: string
   idempotencyKey: string
-  lines: { productId: string; presentationId?: string; quantity: string; unitCost: string }[]
+  /** false = queda pendiente de recepción (no suma stock). */
+  receiveNow?: boolean
+  payNow?: string
+  payMethod?: "CASH" | "TRANSFER" | "OTHER"
+  lines: { productId: string; presentationId?: string; quantity: string; unitCost: string; lotCode?: string; expiresAt?: string }[]
 }) {
   return request<{ ok: true; id: string }>("/api/purchases/reception", {
     method: "POST",
@@ -1187,4 +1192,65 @@ export function createBackupNow() {
 
 export function backupDownloadUrl(name: string) {
   return `/api/settings/backups/${encodeURIComponent(name)}/download`
+}
+
+
+// ---- Cuentas por pagar y detalle de compra ----
+
+export type PayableRow = {
+  id: string
+  createdAtLabel: string
+  supplierName: string
+  documentNumber: string
+  status: string
+  statusLabel: string
+  total: string
+  paid: string
+  debt: string
+  debtCents: number
+  days: number
+}
+
+export function getPayables() {
+  return request<{
+    totalDebt: string
+    totalDebtCents: number
+    suppliers: { id: string; name: string; debt: string; debtCents: number; count: number; oldestLabel: string }[]
+    payables: PayableRow[]
+    pendingReception: PayableRow[]
+  }>("/api/purchases/payables")
+}
+
+export function getPurchaseDetail(id: string) {
+  return request<{
+    id: string
+    supplierName: string
+    supplierTaxId: string
+    documentNumber: string
+    createdAtLabel: string
+    receivedAtLabel: string
+    warehouseName: string
+    userName: string
+    status: string
+    statusLabel: string
+    subtotal: string
+    discount: string
+    total: string
+    paid: string
+    debt: string
+    debtCents: number
+    debtAmount: string
+    canReceive: boolean
+    canPay: boolean
+    lines: { id: string; description: string; quantityLabel: string; receivedLabel: string; fullyReceived: boolean; trackLots: boolean; unitCost: string; total: string }[]
+    payments: { id: string; createdAtLabel: string; methodLabel: string; amount: string }[]
+  }>(`/api/purchases/${id}`)
+}
+
+export function receivePurchaseNow(id: string, lots: Record<string, { lotCode?: string; expiresAt?: string }> = {}) {
+  return request<{ ok: true }>(`/api/purchases/${id}/receive`, { method: "POST", body: JSON.stringify({ lots }) })
+}
+
+export function payPurchaseNow(id: string, amount: string, method: "CASH" | "TRANSFER" | "OTHER") {
+  return request<{ ok: true }>(`/api/purchases/${id}/pay`, { method: "POST", body: JSON.stringify({ amount, method }) })
 }

@@ -36,7 +36,7 @@ export function PurchaseHistoryPage() {
               <tr key={row.id} className="border-t border-slate-100">
                 <td className="px-3 py-2">{row.createdAtLabel}</td>
                 <td className="px-3 py-2">
-                  <Link to={`/pendiente/compras/${row.id}`} className="text-[var(--pf-accent)] hover:underline">
+                  <Link to={`/compras/${row.id}`} className="text-[var(--pf-accent)] hover:underline">
                     {row.supplierName}
                   </Link>
                 </td>

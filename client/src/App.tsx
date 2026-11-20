@@ -24,6 +24,7 @@ import { PresentationsPage } from "./pages/PresentationsPage"
 import { PricesPage } from "./pages/PricesPage"
 import { ProductFormPage } from "./pages/ProductFormPage"
 import { PurchaseHistoryPage } from "./pages/PurchaseHistoryPage"
+import { PayablesPage, PurchaseDetailPage } from "./pages/PurchasePages"
 import { ReceptionPage } from "./pages/ReceptionPage"
 import { ReportsPage } from "./pages/ReportsPage"
 import { RequirementPage } from "./pages/RequirementPage"
@@ -193,6 +194,8 @@ export function App() {
           <Route path="compras/requerimiento" element={<RequirementPage />} />
           <Route path="compras/recepcion" element={<ReceptionPage />} />
           <Route path="compras/historial" element={<PurchaseHistoryPage />} />
+          <Route path="compras/por-pagar" element={<PayablesPage />} />
+          <Route path="compras/:purchaseId" element={<PurchaseDetailPage />} />
           <Route path="facturacion" element={<BillingPage />} />
           <Route path="informes" element={<ReportsPage />} />
           <Route path="configuracion" element={<SettingsPage />} />

@@ -142,6 +142,7 @@ export async function receptionList(ctx: TenantContext): Promise<ReceptionLine[]
       quantity: presentationQty.toFixed(4).replace(/\.?0+$/, ""),
       unitCost: unitCost.toFixed(2),
       presentationId: presentation.id,
+      trackLots: product.trackLots,
       presentations: product.presentations.map((item) => ({
         id: item.id,
         name: item.name,

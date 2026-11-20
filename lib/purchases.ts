@@ -100,6 +100,8 @@ export async function createPurchase(
     tax?: string
     notes?: string
     receiveNow?: boolean
+    /** Lote y vencimiento por índice de línea (solo productos con control de lotes). */
+    lineLots?: { lotCode?: string; expiresAt?: string }[]
     payNow?: string
     payMethod?: "CASH" | "TRANSFER" | "OTHER"
     lines: PurchaseLineInput[]
@@ -166,7 +168,20 @@ export async function createPurchase(
       },
       include: { lines: true },
     })
-    if (input.receiveNow) await receiveInside(tx, ctx, purchase.id)
+    if (input.receiveNow) {
+      // Lote/vencimiento indicados por línea de entrada, asociados por producto + presentación.
+      const wanted = new Map<string, { lotCode?: string; expiresAt?: string }>()
+      input.lines.forEach((line, index) => {
+        const lot = input.lineLots?.[index]
+        if (lot?.lotCode || lot?.expiresAt) wanted.set(`${line.productId}|${line.presentationId ?? ""}`, lot)
+      })
+      const lots: ReceiveLots = {}
+      for (const line of purchase.lines) {
+        const lot = wanted.get(`${line.productId}|${line.presentationId ?? ""}`) ?? wanted.get(`${line.productId}|`)
+        if (lot) lots[line.id] = lot
+      }
+      await receiveInside(tx, ctx, purchase.id, lots)
+    }
     const payNow = toMoneyInt(input.payNow || "0")
     if (payNow > 0) await payInside(tx, ctx, purchase.id, payNow, input.payMethod || "CASH")
     await tx.auditLog.create({
@@ -183,10 +198,20 @@ export async function createPurchase(
   })
 }
 
-async function receiveInside(tx: Tx, ctx: TenantContext, purchaseId: string) {
+export type ReceiveLots = Record<string, { lotCode?: string; expiresAt?: string }>
+
+/** Lote automático para productos con control de lotes cuando no se indica uno: C<fecha>-<documento>. */
+function autoLot(documentNumber: string | null) {
+  const now = new Date()
+  const day = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`
+  const doc = (documentNumber ?? "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 16)
+  return doc ? `C${day}-${doc}` : `C${day}`
+}
+
+async function receiveInside(tx: Tx, ctx: TenantContext, purchaseId: string, lots: ReceiveLots = {}) {
   const purchase = await tx.purchase.findFirst({
     where: { id: purchaseId, businessId: ctx.businessId },
-    include: { lines: true },
+    include: { lines: { include: { product: { select: { trackLots: true } } } } },
   })
   if (!purchase) throw new AppError("Compra no encontrada")
   if (purchase.status === "CANCELLED" || purchase.status === "RECEIVED") {
@@ -195,6 +220,10 @@ async function receiveInside(tx: Tx, ctx: TenantContext, purchaseId: string) {
   for (const line of purchase.lines) {
     const pending = line.baseQuantity - line.receivedBase
     if (pending <= 0) continue
+    const lot = lots[line.id]
+    const lotCode = line.product.trackLots ? lot?.lotCode?.trim() || autoLot(purchase.documentNumber) : undefined
+    const expiresAt = line.product.trackLots && lot?.expiresAt ? new Date(`${lot.expiresAt}T00:00:00`) : null
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new AppError("Fecha de vencimiento inválida")
     await applyStock(tx, {
       businessId: ctx.businessId,
       warehouseId: purchase.warehouseId,
@@ -206,6 +235,8 @@ async function receiveInside(tx: Tx, ctx: TenantContext, purchaseId: string) {
       reason: purchase.documentNumber ? `Compra ${purchase.documentNumber}` : "Compra",
       referenceType: "PURCHASE",
       referenceId: purchase.id,
+      lotCode,
+      expiresAt,
     })
     await tx.purchaseLine.update({ where: { id: line.id }, data: { receivedBase: line.baseQuantity } })
     await tx.product.updateMany({
@@ -253,10 +284,10 @@ async function payInside(tx: Tx, ctx: TenantContext, purchaseId: string, amount:
   })
 }
 
-export async function receivePurchase(ctx: TenantContext, purchaseId: string) {
+export async function receivePurchase(ctx: TenantContext, purchaseId: string, lots: ReceiveLots = {}) {
   assertCan(ctx, "purchases")
   return prisma.$transaction(async (tx) => {
-    await receiveInside(tx, ctx, purchaseId)
+    await receiveInside(tx, ctx, purchaseId, lots)
     await tx.auditLog.create({
       data: { businessId: ctx.businessId, userId: ctx.userId, action: "PURCHASE_RECEIVE", entity: "Purchase", entityId: purchaseId },
     })
@@ -295,7 +326,7 @@ export async function getPurchase(ctx: TenantContext, id: string) {
   assertCan(ctx, "purchases")
   const purchase = await prisma.purchase.findFirst({
     where: { id, businessId: ctx.businessId },
-    include: { supplier: true, lines: true, payments: true, warehouse: true, user: true },
+    include: { supplier: true, lines: { include: { product: { select: { trackLots: true } } } }, payments: true, warehouse: true, user: true },
   })
   if (!purchase) throw new AppError("Compra no encontrada")
   return purchase

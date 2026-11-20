@@ -11,6 +11,12 @@ export function ReceptionPage() {
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
   const [key] = useState(() => crypto.randomUUID())
+  // Recepción y pago
+  const [receiveNow, setReceiveNow] = useState(true)
+  const [payMode, setPayMode] = useState<"full" | "partial" | "credit">("full")
+  const [payMethod, setPayMethod] = useState<"CASH" | "TRANSFER" | "OTHER">("TRANSFER")
+  const [payAmount, setPayAmount] = useState("")
+  const [lots, setLots] = useState<Record<string, { lotCode?: string; expiresAt?: string }>>({})
 
   useEffect(() => {
     getPurchaseReception()
@@ -22,14 +28,24 @@ export function ReceptionPage() {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Error"))
   }, [])
 
+  const totalCents = rows.reduce((sum, row) => {
+    const qty = Number(String(row.quantity).replace(",", ".")) || 0
+    const cost = Number(String(row.unitCost).replace(",", ".")) || 0
+    return sum + Math.round(qty * cost * 100)
+  }, 0)
+
   async function onSubmit() {
     setPending(true)
     setError("")
     try {
+      const payNow = payMode === "full" ? (totalCents / 100).toFixed(2) : payMode === "partial" ? payAmount : undefined
       const result = await postPurchaseReception({
         supplierId,
         documentNumber,
         idempotencyKey: key,
+        receiveNow,
+        payNow: payNow && Number(payNow) > 0 ? payNow : undefined,
+        payMethod,
         lines: rows
           .filter((row) => Number(row.quantity) > 0)
           .map((row) => ({
@@ -37,9 +53,11 @@ export function ReceptionPage() {
             presentationId: row.presentationId,
             quantity: row.quantity,
             unitCost: row.unitCost || "0",
+            lotCode: receiveNow ? lots[row.productId]?.lotCode : undefined,
+            expiresAt: receiveNow ? lots[row.productId]?.expiresAt : undefined,
           })),
       })
-      navigate(`/pendiente/compras/${result.id}`)
+      navigate(`/compras/${result.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo registrar")
     } finally {
@@ -175,13 +193,112 @@ export function ReceptionPage() {
               </tbody>
             </table>
           </div>
+          {receiveNow && rows.some((row) => row.trackLots && Number(row.quantity) > 0) ? (
+            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">Lote y vencimiento</p>
+              <p className="text-xs text-amber-800">Estos productos controlan lotes. Si lo dejas vacío se crea un lote con la fecha y el documento.</p>
+              {rows
+                .filter((row) => row.trackLots && Number(row.quantity) > 0)
+                .map((row) => (
+                  <div key={row.productId} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_10rem] sm:items-center">
+                    <span className="truncate text-sm font-medium text-slate-700">{row.name}</span>
+                    <input
+                      placeholder="Lote"
+                      className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm"
+                      value={lots[row.productId]?.lotCode ?? ""}
+                      onChange={(e) => setLots((current) => ({ ...current, [row.productId]: { ...current[row.productId], lotCode: e.target.value } }))}
+                    />
+                    <input
+                      type="date"
+                      aria-label="Vence"
+                      className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm"
+                      value={lots[row.productId]?.expiresAt ?? ""}
+                      onChange={(e) => setLots((current) => ({ ...current, [row.productId]: { ...current[row.productId], expiresAt: e.target.value } }))}
+                    />
+                  </div>
+                ))}
+            </div>
+          ) : null}
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm font-semibold text-[var(--pf-navy)]">¿La mercadería ya llegó?</p>
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+                {(
+                  [
+                    [true, "Sí, recibir ahora"],
+                    [false, "No, queda pendiente"],
+                  ] as const
+                ).map(([value, text]) => (
+                  <button
+                    key={String(value)}
+                    type="button"
+                    onClick={() => setReceiveNow(value)}
+                    className={`h-9 rounded-lg text-xs font-semibold ${receiveNow === value ? "bg-white text-[var(--pf-navy)] shadow-sm" : "text-slate-500"}`}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">
+                {receiveNow ? "El stock y el costo de los productos se actualizan al registrar." : "No suma stock: la recibes después desde Por pagar o el historial."}
+              </p>
+            </div>
+            <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-baseline justify-between">
+                <p className="text-sm font-semibold text-[var(--pf-navy)]">Pago al proveedor</p>
+                <p className="text-sm">
+                  Total <b className="tabular-nums text-[var(--pf-navy)]">S/ {(totalCents / 100).toFixed(2)}</b>
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+                {(
+                  [
+                    ["full", "Pagado"],
+                    ["partial", "Adelanto"],
+                    ["credit", "Por pagar"],
+                  ] as const
+                ).map(([value, text]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPayMode(value)}
+                    className={`h-9 rounded-lg text-xs font-semibold ${payMode === value ? "bg-white text-[var(--pf-navy)] shadow-sm" : "text-slate-500"}`}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+              {payMode !== "credit" ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <select className="h-10 rounded-xl border border-slate-200 px-2 text-sm" value={payMethod} onChange={(e) => setPayMethod(e.target.value as "CASH" | "TRANSFER" | "OTHER")}>
+                    <option value="TRANSFER">Transferencia</option>
+                    <option value="CASH">Efectivo (sale de caja)</option>
+                    <option value="OTHER">Otro</option>
+                  </select>
+                  {payMode === "partial" ? (
+                    <input
+                      inputMode="decimal"
+                      placeholder="Monto"
+                      className="h-10 rounded-xl border border-slate-200 px-3 text-right text-sm tabular-nums"
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                    />
+                  ) : (
+                    <span className="grid h-10 place-items-center rounded-xl bg-emerald-50 text-sm font-semibold text-emerald-700">Paga el total</span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Todo el monto queda en Cuentas por pagar.</p>
+              )}
+            </div>
+          </div>
           <button
             type="button"
-            disabled={pending}
+            disabled={pending || totalCents <= 0 || (payMode === "partial" && !(Number(payAmount) > 0))}
             onClick={onSubmit}
-            className="h-10 rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+            className="h-11 rounded-xl bg-[var(--pf-accent)] px-5 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {pending ? "Registrando…" : "Registrar recepción"}
+            {pending ? "Registrando…" : receiveNow ? "Registrar compra y recibir" : "Registrar compra pendiente"}
           </button>
         </>
       )}

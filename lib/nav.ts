@@ -51,6 +51,7 @@ const NAV: NavGroup[] = [
       { href: "/compras/requerimiento", label: "Requerimiento", permission: "purchases" },
       { href: "/compras/recepcion", label: "Recepción", permission: "purchases" },
       { href: "/compras/historial", label: "Historial", permission: "purchases" },
+      { href: "/compras/por-pagar", label: "Por pagar", permission: "purchases" },
     ],
   },
   {

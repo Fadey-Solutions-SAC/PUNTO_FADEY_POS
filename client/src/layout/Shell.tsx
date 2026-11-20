@@ -78,6 +78,7 @@ const VITE_HREF: Record<string, string> = {
   "/compras/requerimiento": "/compras/requerimiento",
   "/compras/recepcion": "/compras/recepcion",
   "/compras/historial": "/compras/historial",
+  "/compras/por-pagar": "/compras/por-pagar",
   "/facturacion": "/facturacion",
   "/informes": "/informes",
   "/configuracion": "/configuracion",
@@ -109,6 +110,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/compras/requerimiento": ClipboardList,
   "/compras/recepcion": ShoppingBag,
   "/compras/historial": History,
+  "/compras/por-pagar": BadgeDollarSign,
   "/clientes": Users,
   "/clientes/historial": History,
   "/clientes/creditos": Wallet,
@@ -152,6 +154,8 @@ function screenTitle(pathname: string, navLabel?: string) {
   if (/^\/ventas\/(?!historial$|devoluciones$|anulaciones$|sincronizar$|pendiente$)[^/]+$/.test(pathname)) return "Venta"
   if (pathname === "/ventas/sincronizar") return "Ventas por sincronizar"
   if (pathname.startsWith("/ventas/pendiente/")) return "Venta sin conexión"
+  if (pathname === "/compras/por-pagar") return "Cuentas por pagar"
+  if (/^\/compras\/(?!proveedores$|requerimiento$|recepcion$|historial$|por-pagar$)[^/]+$/.test(pathname)) return "Compra"
   if (pathname === "/caja/cierre") return "Cierre de caja"
   if (pathname === "/caja/historial") return "Historial de caja"
   if (pathname === "/caja") return "Caja"
