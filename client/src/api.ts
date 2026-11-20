@@ -280,6 +280,9 @@ export function getSaleStatus() {
     discountLimitPct: number
     hardwareReader: boolean
     canSell: boolean
+    allowCredit?: boolean
+    canCredit?: boolean
+    canCreateCustomer?: boolean
     categories: { id: string; name: string }[]
     accesses: { href: string; label: string }[]
     methods: { code: string; label: string }[]
@@ -300,10 +303,29 @@ export function lookupSaleProduct(code: string) {
   return request<{ product: SaleProduct | null }>(`/api/sales/lookup?code=${encodeURIComponent(code)}`)
 }
 
+export type SaleCustomer = {
+  id: string
+  name: string
+  document: string
+  phone: string
+  balanceCents: number
+  balance: string
+  limitCents: number
+  limit: string
+}
+
+export function searchSaleCustomers(q: string) {
+  const query = q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""
+  return request<{ customers: SaleCustomer[] }>(`/api/sales/customers${query}`)
+}
+
 export function confirmSale(input: {
   idempotencyKey: string
   discount?: string
   notes?: string
+  /** CREDIT: queda como deuda del cliente (requiere cliente y permiso). */
+  saleType?: "CASH" | "CREDIT"
+  customerId?: string
   lines: { productId: string; presentationId: string; quantity: string }[]
   payments: { method: string; amount: string; reference?: string }[]
 }) {

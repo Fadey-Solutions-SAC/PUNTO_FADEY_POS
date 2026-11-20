@@ -47,6 +47,10 @@ export function registerSalesRoutes(app: Express) {
         discountLimitPct: ctx.discountLimitPct,
         hardwareReader: pos.hardwareReader,
         canSell: can(ctx.role, "sell", ctx.grants),
+        // Venta a crédito: el negocio debe tenerla activa y el usuario el permiso.
+        allowCredit: ctx.allowCredit,
+        canCredit: ctx.allowCredit && can(ctx.role, "credit", ctx.grants),
+        canCreateCustomer: can(ctx.role, "customers", ctx.grants),
         categories,
         accesses,
         methods: methods
@@ -231,6 +235,41 @@ export function registerSalesRoutes(app: Express) {
     }
   })
 
+  // Clientes para elegir al vender (solo los datos necesarios; basta el permiso de venta).
+  app.get("/api/sales/customers", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "sell", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso de venta" })
+        return
+      }
+      const q = String(req.query.q ?? "").trim()
+      const customers = await prisma.customer.findMany({
+        where: {
+          businessId: ctx.businessId,
+          isActive: true,
+          ...(q ? { OR: [{ name: { contains: q } }, { document: { contains: q } }, { phone: { contains: q } }] } : {}),
+        },
+        orderBy: { name: "asc" },
+        take: 30,
+      })
+      res.json({
+        customers: customers.map((customer) => ({
+          id: customer.id,
+          name: customer.name,
+          document: customer.document ?? "",
+          phone: customer.phone ?? "",
+          balanceCents: customer.balance,
+          balance: formatMoney(customer.balance, ctx.currency),
+          limitCents: customer.creditLimit,
+          limit: customer.creditLimit > 0 ? formatMoney(customer.creditLimit, ctx.currency) : "Sin límite",
+        })),
+      })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
   app.get("/api/sales/history", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
@@ -278,11 +317,14 @@ export function registerSalesRoutes(app: Express) {
       const ctx = req.tenant!
       const lines = Array.isArray(req.body?.lines) ? req.body.lines : []
       const payments = Array.isArray(req.body?.payments) ? req.body.payments : []
+      const saleType = req.body?.saleType === "CREDIT" ? "CREDIT" : "CASH"
+      const customerId = req.body?.customerId ? String(req.body.customerId) : undefined
       const sale = await confirmSale(ctx, {
         idempotencyKey: String(req.body?.idempotencyKey ?? randomUUID()),
         mode: "SALE",
         discount: String(req.body?.discount ?? "0"),
-        saleType: "CASH",
+        saleType,
+        customerId,
         notes: String(req.body?.notes ?? ""),
         lines: lines.map((line: { productId?: string; presentationId?: string; quantity?: string }) => ({
           productId: String(line.productId ?? ""),

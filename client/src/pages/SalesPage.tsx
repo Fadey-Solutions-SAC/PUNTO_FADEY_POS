@@ -7,8 +7,10 @@ import {
   lookupSaleProduct,
   searchSaleProducts,
   SERVER_EVENT,
+  type SaleCustomer,
   type SaleProduct,
 } from "../api"
+import { CustomerPicker } from "../components/CustomerPicker"
 import {
   cacheProducts,
   confirmSaleOrQueue,
@@ -73,6 +75,12 @@ export function SalesPage() {
   const [flash, setFlash] = useState<{ text: string; tone: "ok" | "warn" } | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
+  // Cliente y venta a crédito
+  const [customer, setCustomer] = useState<SaleCustomer | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [saleType, setSaleType] = useState<"CASH" | "CREDIT">("CASH")
+  const [canCredit, setCanCredit] = useState(false)
+  const [canCreateCustomer, setCanCreateCustomer] = useState(false)
 
   const [usingCache, setUsingCache] = useState(false)
   const [queued, setQueued] = useState(() => pendingCount())
@@ -122,6 +130,8 @@ export function SalesPage() {
         setCurrency(status.currency)
         setHardwareReader(status.hardwareReader)
         setCanSell(status.canSell)
+        setCanCredit(Boolean(status.canCredit))
+        setCanCreateCustomer(Boolean(status.canCreateCustomer))
         setCategories(status.categories)
         setAccesses(status.accesses)
         setMethods(status.methods.length ? status.methods : [{ code: "CASH", label: "Efectivo" }])
@@ -192,6 +202,10 @@ export function SalesPage() {
   const missingCents = Math.max(0, totalCents - paidCents)
   const changeCents = Math.max(0, paidCents - totalCents)
   const changeInvalid = changeCents > 0 && cashCents < changeCents
+  const isCredit = saleType === "CREDIT"
+  const creditAfterCents = (customer?.balanceCents ?? 0) + totalCents
+  const creditOverLimit = Boolean(customer && customer.limitCents > 0 && creditAfterCents > customer.limitCents)
+  const creditBlocked = isCredit && (!customer || creditOverLimit)
 
   function addProduct(product: SaleProduct) {
     const key = `${product.id}:${product.presentationId}`
@@ -261,6 +275,7 @@ export function SalesPage() {
     if (!cart.length || cashOpen !== true) return
     setError("")
     setPayKey(crypto.randomUUID())
+    setSaleType("CASH")
     setPayments([{ method: methods[0]?.code ?? "CASH", amount: totalAmount }])
     setSheetOpen(false)
     setPaying(true)
@@ -268,11 +283,20 @@ export function SalesPage() {
 
   async function onCharge() {
     if (!cart.length || pending) return
-    if (missingCents > 0) {
+    if (isCredit) {
+      if (!customer) {
+        setError("Elige el cliente para vender a crédito")
+        return
+      }
+      if (creditOverLimit) {
+        setError(`El cliente supera su límite de crédito (${customer.limit})`)
+        return
+      }
+    } else if (missingCents > 0) {
       setError(`Falta cubrir ${money(missingCents)} ${currency}`)
       return
     }
-    if (changeInvalid) {
+    if (!isCredit && changeInvalid) {
       setError("El vuelto solo puede salir del efectivo")
       return
     }
@@ -290,7 +314,9 @@ export function SalesPage() {
             presentationId: line.presentationId,
             quantity: String(line.quantity),
           })),
-          payments: rows,
+          payments: isCredit ? [] : rows,
+          saleType,
+          customerId: customer?.id,
         },
         {
           lines: cart.map((line) => ({
@@ -302,20 +328,22 @@ export function SalesPage() {
           })),
           totalCents,
           discountCents,
-          receivedCents: paidCents,
-          changeCents,
+          receivedCents: isCredit ? 0 : paidCents,
+          changeCents: isCredit ? 0 : changeCents,
           currency,
         },
       )
       setCart([])
       setDiscount("")
       setPaying(false)
+      setCustomer(null)
+      setSaleType("CASH")
       if (result.offline) {
         navigate(`/ventas/pendiente/${result.id}`)
         return
       }
       navigate(`/ventas/${result.saleId}/ticket`, {
-        state: changeCents > 0 ? { received: money(paidCents), change: money(changeCents), currency } : undefined,
+        state: !isCredit && changeCents > 0 ? { received: money(paidCents), change: money(changeCents), currency } : undefined,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cobrar")
@@ -457,6 +485,23 @@ export function SalesPage() {
       </div>
 
       <div className="space-y-2 border-t border-slate-100 px-4 py-3 text-sm">
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="flex w-full items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-left hover:border-[var(--pf-accent)] hover:bg-slate-50"
+        >
+          <span className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white ${customer ? "bg-amber-500" : "bg-slate-300"}`}>
+            {customer ? customer.name.slice(0, 1).toUpperCase() : "👤"}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] text-slate-500">Cliente</span>
+            <span className="block truncate font-medium text-[var(--pf-navy)]">{customer ? customer.name : "Público general"}</span>
+          </span>
+          {customer && customer.balanceCents > 0 ? (
+            <span className="shrink-0 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">Debe {customer.balance}</span>
+          ) : null}
+          <span className="shrink-0 text-xs font-medium text-[var(--pf-accent)]">{customer ? "Cambiar" : "Elegir"}</span>
+        </button>
         <div className="flex items-center gap-2">
           <span className="text-slate-500">Descuento</span>
           <div className="ml-auto flex overflow-hidden rounded-lg border border-slate-200">
@@ -708,6 +753,19 @@ export function SalesPage() {
         </div>
       ) : null}
 
+      {pickerOpen ? (
+        <CustomerPicker
+          canCreate={canCreateCustomer}
+          onClose={() => setPickerOpen(false)}
+          onPick={(picked) => {
+            setCustomer(picked)
+            setPickerOpen(false)
+            if (!picked && saleType === "CREDIT") setSaleType("CASH")
+            setError("")
+          }}
+        />
+      ) : null}
+
       {flash ? (
         <div
           role="status"
@@ -750,7 +808,80 @@ export function SalesPage() {
               </p>
             </div>
 
-            <div className="space-y-2">
+            {canCredit ? (
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Tipo de venta">
+                {(
+                  [
+                    ["CASH", "Contado"],
+                    ["CREDIT", "A crédito"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={saleType === value}
+                    onClick={() => {
+                      setSaleType(value)
+                      setError("")
+                    }}
+                    className={`h-10 rounded-lg text-sm font-semibold transition ${
+                      saleType === value
+                        ? value === "CREDIT"
+                          ? "bg-amber-500 text-white shadow-sm"
+                          : "bg-white text-[var(--pf-navy)] shadow-sm"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {isCredit ? (
+              <div className="space-y-2">
+                {customer ? (
+                  <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate font-semibold text-amber-950">{customer.name}</p>
+                      <button type="button" className="shrink-0 text-xs font-semibold text-amber-800 underline" onClick={() => setPickerOpen(true)}>
+                        Cambiar
+                      </button>
+                    </div>
+                    <dl className="grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-white px-2 py-1.5">
+                        <dt className="text-[10px] text-slate-500">Debe hoy</dt>
+                        <dd className="font-semibold tabular-nums text-slate-800">{money(customer.balanceCents)}</dd>
+                      </div>
+                      <div className="rounded-lg bg-white px-2 py-1.5">
+                        <dt className="text-[10px] text-slate-500">Deberá</dt>
+                        <dd className={`font-bold tabular-nums ${creditOverLimit ? "text-red-700" : "text-amber-700"}`}>{money(creditAfterCents)}</dd>
+                      </div>
+                      <div className="rounded-lg bg-white px-2 py-1.5">
+                        <dt className="text-[10px] text-slate-500">Límite</dt>
+                        <dd className="font-semibold tabular-nums text-slate-800">{customer.limit}</dd>
+                      </div>
+                    </dl>
+                    {creditOverLimit ? (
+                      <p className="text-xs font-semibold text-red-700">Supera el límite de crédito del cliente. Cobra al contado o sube su límite en Clientes.</p>
+                    ) : (
+                      <p className="text-xs text-amber-900">No entra dinero a caja. El saldo se cobra después en Clientes → Créditos.</p>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    className="w-full rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-3 py-4 text-sm font-semibold text-amber-800"
+                  >
+                    Elegir cliente para la venta a crédito
+                  </button>
+                )}
+              </div>
+            ) : null}
+
+            <div className={`space-y-2 ${isCredit ? "hidden" : ""}`}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-700">Pagos</p>
                 <button
@@ -802,7 +933,7 @@ export function SalesPage() {
               ))}
             </div>
 
-            {payments.length === 1 && payments[0].method === "CASH" ? (
+            {!isCredit && payments.length === 1 && payments[0].method === "CASH" ? (
               <div>
                 <p className="mb-1.5 text-xs text-slate-500">Efectivo recibido</p>
                 <div className="flex flex-wrap gap-2">
@@ -824,7 +955,7 @@ export function SalesPage() {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-2 text-sm [&>*]:min-w-0">
+            <div className={`grid grid-cols-2 gap-2 text-sm [&>*]:min-w-0 ${isCredit ? "hidden" : ""}`}>
               <div className="rounded-xl bg-slate-50 px-3 py-2">
                 <p className="text-xs text-slate-500">Recibido</p>
                 <p className="text-lg font-semibold tabular-nums text-[var(--pf-navy)]">{money(paidCents)}</p>
@@ -847,10 +978,12 @@ export function SalesPage() {
             {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
             <button
               type="submit"
-              disabled={pending || missingCents > 0 || changeInvalid}
-              className="h-12 w-full rounded-xl bg-[#f5c518] text-base font-semibold text-[#1a1403] transition hover:brightness-95 disabled:opacity-50"
+              disabled={pending || (isCredit ? creditBlocked : missingCents > 0 || changeInvalid)}
+              className={`h-12 w-full rounded-xl text-base font-semibold transition hover:brightness-95 disabled:opacity-50 ${
+                isCredit ? "bg-amber-500 text-white" : "bg-[#f5c518] text-[#1a1403]"
+              }`}
             >
-              {pending ? "Cobrando…" : "Confirmar cobro"}
+              {pending ? "Registrando…" : isCredit ? "Registrar venta a crédito" : "Confirmar cobro"}
               {!pending ? <kbd className="ml-2 hidden rounded bg-black/10 px-1.5 text-[10px] font-medium sm:inline">Enter</kbd> : null}
             </button>
           </form>
