@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
-import { Download, PackageMinus, Plus } from "lucide-react"
+import { Download, Plus } from "lucide-react"
 import {
   getLossForm,
   getLosses,
@@ -117,87 +117,83 @@ export function LossesPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-red-500 text-white shadow-sm">
-            <PackageMinus size={22} />
-          </span>
-          <div>
-            <p className="text-sm text-slate-500">
-              Productos vencidos, dañados, robados o de consumo interno. Descuentan stock del almacén {data?.warehouseName ?? "actual"}, quedan
-              en el kardex y se valorizan al costo.
-            </p>
-          </div>
+      <p className="text-sm text-slate-500">
+        Productos vencidos, dañados, robados o de consumo interno. Descuentan stock del almacén {data?.warehouseName ?? "actual"}, quedan en el
+        kardex y se valorizan al costo.
+      </p>
+
+      {/* Filtros a la izquierda; a la derecha, Registrar merma y debajo CSV. */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-stretch">
+        <div className="min-w-0 flex-1">
+          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-wrap items-end gap-2">
+              {presets.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setDesde(item.desde)
+                    setHasta(item.hasta)
+                  }}
+                  className={`h-9 rounded-lg px-3 text-xs font-semibold ring-1 ${
+                    activePreset === item.id ? "bg-red-500 text-white ring-red-500" : "bg-white text-slate-600 ring-slate-200"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <label className="ml-auto text-xs font-medium text-slate-500">
+                Desde
+                <input type="date" className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm" value={desde} max={hasta} onChange={(e) => e.target.value && setDesde(e.target.value)} />
+              </label>
+              <label className="text-xs font-medium text-slate-500">
+                Hasta
+                <input type="date" className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm" value={hasta} min={desde} onChange={(e) => e.target.value && setHasta(e.target.value)} />
+              </label>
+            </div>
+            <div className="-mx-3 flex gap-2 overflow-x-auto border-t border-slate-100 px-3 pt-3">
+              {[{ code: "", label: "Todos" }, ...(data?.types ?? [])].map((item) => {
+                const color = TYPE_COLOR[item.code] ?? "#334155"
+                const active = tipo === item.code
+                return (
+                  <button
+                    key={item.code || "all"}
+                    type="button"
+                    onClick={() => setTipo(item.code)}
+                    className="shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold"
+                    style={active ? { background: color, color: "#fff" } : { background: tint(color, 0.1), color }}
+                  >
+                    {item.label}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
         </div>
-        <div className="flex gap-2">
-          {data && data.rows.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => downloadCsv(data.rows, desde, hasta)}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[var(--pf-navy)] shadow-sm"
-            >
-              <Download size={16} /> CSV
-            </button>
-          ) : null}
-          {data?.canRegister ? (
-            <button
-              type="button"
-              onClick={() => {
-                setMessage("")
-                setFormOpen(true)
-              }}
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-red-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-600"
-            >
-              <Plus size={18} /> Registrar merma
-            </button>
-          ) : null}
+        <div className="flex shrink-0 flex-row gap-2 md:w-48 md:flex-col">
+              {data?.canRegister ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessage("")
+                    setFormOpen(true)
+                  }}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-600"
+                >
+                  <Plus size={18} /> Registrar merma
+                </button>
+              ) : null}
+              {data && data.rows.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(data.rows, desde, hasta)}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[var(--pf-navy)] shadow-sm"
+                >
+                  <Download size={16} /> CSV
+                </button>
+              ) : null}
         </div>
       </div>
-
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="flex flex-wrap items-end gap-2">
-          {presets.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setDesde(item.desde)
-                setHasta(item.hasta)
-              }}
-              className={`h-9 rounded-lg px-3 text-xs font-semibold ring-1 ${
-                activePreset === item.id ? "bg-red-500 text-white ring-red-500" : "bg-white text-slate-600 ring-slate-200"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-          <label className="ml-auto text-xs font-medium text-slate-500">
-            Desde
-            <input type="date" className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm" value={desde} max={hasta} onChange={(e) => e.target.value && setDesde(e.target.value)} />
-          </label>
-          <label className="text-xs font-medium text-slate-500">
-            Hasta
-            <input type="date" className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm" value={hasta} min={desde} onChange={(e) => e.target.value && setHasta(e.target.value)} />
-          </label>
-        </div>
-        <div className="-mx-3 flex gap-2 overflow-x-auto border-t border-slate-100 px-3 pt-3">
-          {[{ code: "", label: "Todos" }, ...(data?.types ?? [])].map((item) => {
-            const color = TYPE_COLOR[item.code] ?? "#334155"
-            const active = tipo === item.code
-            return (
-              <button
-                key={item.code || "all"}
-                type="button"
-                onClick={() => setTipo(item.code)}
-                className="shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold"
-                style={active ? { background: color, color: "#fff" } : { background: tint(color, 0.1), color }}
-              >
-                {item.label}
-              </button>
-            )
-          })}
-        </div>
-      </section>
 
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       {message ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {message}</p> : null}
