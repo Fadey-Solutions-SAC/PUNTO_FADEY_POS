@@ -196,6 +196,7 @@ export function App() {
           <Route path="inventario/transferencias" element={<TransfersPage />} />
           <Route path="inventario/ajustes" element={<AdjustmentsPage />} />
           <Route path="inventario/conteo" element={<CountsPage />} />
+          <Route path="inventario/informes" element={<ReportsPage fixedArea="inventario" />} />
           <Route path="inventario/conteo/:id" element={<CountSheetPage />} />
           <Route path="compras/proveedores" element={<SuppliersPage />} />
           <Route path="compras/requerimiento" element={<RequirementPage />} />

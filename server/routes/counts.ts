@@ -1,5 +1,5 @@
 import type { Express } from "express"
-import { cancelCount, closeCount, countValue, createCount, getCount, listCounts, saveCountLines } from "../../lib/counts"
+import { COUNT_MODES, type CountMode, cancelCount, closeCount, countValue, createCount, getCount, listCounts, saveCountLines } from "../../lib/counts"
 import { prisma } from "../../lib/db"
 import { errorMessage } from "../../lib/errors"
 import { measureOptions, unitConversionsTo } from "../../lib/inventory"
@@ -32,6 +32,8 @@ export function registerCountRoutes(app: Express) {
         counts: counts.map((row) => ({
           id: row.id,
           number: row.number,
+          mode: row.mode,
+          modeLabel: COUNT_MODES[row.mode as CountMode] ?? row.mode,
           status: row.status,
           statusLabel: STATUS_LABEL[row.status] ?? row.status,
           warehouseName: row.warehouse.name,
@@ -58,6 +60,7 @@ export function registerCountRoutes(app: Express) {
       const count = await createCount(req.tenant!, {
         categoryId: req.body?.categoryId ? String(req.body.categoryId) : undefined,
         brandId: req.body?.brandId ? String(req.body.brandId) : undefined,
+        mode: req.body?.mode ? String(req.body.mode) : undefined,
         note: req.body?.note ? String(req.body.note) : undefined,
       })
       res.json({ ok: true, id: count.id })
@@ -79,6 +82,8 @@ export function registerCountRoutes(app: Express) {
       res.json({
         id: count.id,
         number: count.number,
+        mode: count.mode,
+        modeLabel: COUNT_MODES[count.mode as CountMode] ?? count.mode,
         status: count.status,
         statusLabel: STATUS_LABEL[count.status] ?? count.status,
         warehouseName: count.warehouse.name,

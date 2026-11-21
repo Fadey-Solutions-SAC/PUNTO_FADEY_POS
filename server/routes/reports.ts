@@ -344,8 +344,11 @@ export function registerReportsRoutes(app: Express) {
             chartKind: "rank",
             chartMoney: true,
           }
-        } else if (group === "conteos") {
-          const counts = (await listCounts(ctx, range)).filter((row) => row.status === "CLOSED")
+        } else if (group === "conteos" || group.startsWith("conteo_")) {
+          // Un informe por tipo de inventario: ciego, corrección y faltas y sobras.
+          const modeByGroup: Record<string, string> = { conteo_ciego: "BLIND", conteo_correccion: "CORRECTION", conteo_faltas: "DIFFERENCES" }
+          const mode = modeByGroup[group]
+          const counts = (await listCounts(ctx, range)).filter((row) => row.status === "CLOSED" && (!mode || row.mode === mode))
           const sum = (pick: (row: (typeof counts)[number]) => number) => counts.reduce((total, row) => total + pick(row), 0)
           grouped = {
             columns: ["Fecha", "N.º", "Almacén", "Alcance", "Contados", "Con diferencia", "Faltante", "Sobrante", "Neto", "Usuario"],
@@ -411,7 +414,7 @@ export function registerReportsRoutes(app: Express) {
                 ? "Lotes por vencer"
                 : group === "mermas"
                 ? "Mermas por causa (costo)"
-                : group === "conteos"
+                : group === "conteos" || group.startsWith("conteo_")
                 ? "Faltante por conteo (costo)"
                 : "Cantidades por tipo de movimiento",
           kpis: [

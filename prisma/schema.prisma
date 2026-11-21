@@ -853,6 +853,8 @@ model StockCount {
   userId        String
   number        Int
   status        String           @default("OPEN")
+  /// BLIND (ciego: informa, no modifica), CORRECTION (ajusta el stock) o DIFFERENCES (faltas y sobras: informa, no modifica).
+  mode          String           @default("CORRECTION")
   scope         String           @default("Todos los productos")
   note          String?
   /// Al cerrar: productos contados, con diferencia y valores en céntimos (a costo).

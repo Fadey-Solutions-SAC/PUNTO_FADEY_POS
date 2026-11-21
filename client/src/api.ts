@@ -1462,6 +1462,8 @@ export type MeasureOption = { id: string; name: string; factor: number }
 export type CountSummaryRow = {
   id: string
   number: number
+  mode?: string
+  modeLabel?: string
   status: "OPEN" | "CLOSED" | "CANCELLED"
   statusLabel: string
   warehouseName: string
@@ -1498,6 +1500,8 @@ export type CountLine = {
 export type CountDetail = {
   id: string
   number: number
+  mode?: string
+  modeLabel?: string
   status: "OPEN" | "CLOSED" | "CANCELLED"
   statusLabel: string
   warehouseName: string
@@ -1524,7 +1528,7 @@ export function getCounts() {
   }>("/api/inventory/counts")
 }
 
-export function createCount(input: { categoryId?: string; brandId?: string; note?: string }) {
+export function createCount(input: { categoryId?: string; brandId?: string; note?: string; mode?: string }) {
   return request<{ ok: true; id: string }>("/api/inventory/counts", { method: "POST", body: JSON.stringify(input) })
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { ClipboardCheck, Download, Equal, Plus, Printer, Save } from "lucide-react"
+import { ClipboardCheck, Download, Equal, EyeOff, FileSpreadsheet, Plus, Printer, Save, Scale } from "lucide-react"
 import {
   cancelCount,
   closeCount,
@@ -12,6 +12,7 @@ import {
   type CountLine,
 } from "../api"
 import { CodeField, playScanPit, ScannerButton } from "../components/Scanner"
+import { DataGrid, downloadGrid, type GridColumn } from "../components/DataGrid"
 
 const RED = "#dc2626"
 const BLUE = "#2563eb"
@@ -32,6 +33,38 @@ function parseQty(text: string) {
 
 // ---------------------------------------------------------------- Listado
 
+type CountMode = "BLIND" | "CORRECTION" | "DIFFERENCES"
+
+/** Los tres tipos de inventario; cada uno funciona por separado y tiene su propio informe. */
+export const COUNT_TYPES: { id: CountMode; label: string; text: string; report: string; color: string; icon: typeof EyeOff }[] = [
+  {
+    id: "BLIND",
+    label: "Inventario ciego",
+    text: "Cuentan sin ver el stock del sistema. Te informa las diferencias y no modifica nada.",
+    report: "conteo_ciego",
+    color: "#6366f1",
+    icon: EyeOff,
+  },
+  {
+    id: "CORRECTION",
+    label: "Corrección de stock",
+    text: "Compara con el sistema y ajusta la cantidad de cada producto. Queda en el kardex.",
+    report: "conteo_correccion",
+    color: "#0d9488",
+    icon: ClipboardCheck,
+  },
+  {
+    id: "DIFFERENCES",
+    label: "Faltas y sobras",
+    text: "Compara con el sistema y te informa lo que falta y lo que sobra, con su valor. No modifica.",
+    report: "conteo_faltas",
+    color: "#f59e0b",
+    icon: Scale,
+  },
+]
+
+type CountRow = Awaited<ReturnType<typeof getCounts>>["counts"][number]
+
 export function CountsPage() {
   const navigate = useNavigate()
   const [data, setData] = useState<Awaited<ReturnType<typeof getCounts>> | null>(null)
@@ -39,6 +72,7 @@ export function CountsPage() {
   const [brandId, setBrandId] = useState("")
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
+  const [typeFilter, setTypeFilter] = useState("")
 
   useEffect(() => {
     getCounts()
@@ -46,12 +80,12 @@ export function CountsPage() {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Error"))
   }, [])
 
-  async function onStart(event: FormEvent) {
+  async function onStart(event: FormEvent, mode: CountMode) {
     event.preventDefault()
     setBusy(true)
     setError("")
     try {
-      const created = await createCount({ brandId: brandId || undefined, note: note.trim() || undefined })
+      const created = await createCount({ mode, brandId: brandId || undefined, note: note.trim() || undefined })
       navigate(`/inventario/conteo/${created.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar")
@@ -59,17 +93,99 @@ export function CountsPage() {
     }
   }
 
+  const rows = (data?.counts ?? []).filter((row) => !typeFilter || row.mode === typeFilter)
+  const columns: GridColumn<CountRow>[] = [
+    { key: "numero", label: "N.º", value: (row) => String(row.number), render: (row) => <b className="text-[var(--pf-navy)]">{row.number}</b> },
+    {
+      key: "tipo",
+      label: "Tipo",
+      value: (row) => row.modeLabel ?? "",
+      render: (row) => {
+        const type = COUNT_TYPES.find((item) => item.id === row.mode)
+        return (
+          <span className="rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: type?.color ?? "#64748b" }}>
+            {row.modeLabel}
+          </span>
+        )
+      },
+    },
+    { key: "fecha", label: "Fecha", value: (row) => row.closedAtLabel || row.createdAtLabel },
+    { key: "almacen", label: "Almacén", value: (row) => row.warehouseName },
+    { key: "alcance", label: "Alcance", value: (row) => row.scope },
+    { key: "usuario", label: "Usuario", value: (row) => row.userName },
+    {
+      key: "estado",
+      label: "Estado",
+      value: (row) => row.statusLabel,
+      render: (row) => (
+        <span
+          className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+            row.status === "OPEN" ? "bg-amber-50 text-amber-800" : row.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+          }`}
+        >
+          {row.statusLabel}
+        </span>
+      ),
+    },
+    {
+      key: "contados",
+      label: "Contados",
+      align: "right",
+      value: (row) => (row.status === "CLOSED" ? `${row.countedItems} · ${row.diffItems} dif.` : `${row.products} prod.`),
+    },
+    {
+      key: "faltante",
+      label: "Faltante",
+      align: "right",
+      value: (row) => (row.status === "CLOSED" ? row.shortage : "—"),
+      render: (row) => (
+        <span className="font-semibold" style={{ color: RED }}>
+          {row.status === "CLOSED" ? row.shortage : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "sobrante",
+      label: "Sobrante",
+      align: "right",
+      value: (row) => (row.status === "CLOSED" ? row.surplus : "—"),
+      render: (row) => (
+        <span className="font-semibold" style={{ color: BLUE }}>
+          {row.status === "CLOSED" ? row.surplus : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "neto",
+      label: "Neto",
+      align: "right",
+      value: (row) => (row.status === "CLOSED" ? row.net : "—"),
+      render: (row) => <b style={{ color: row.netCents < 0 ? RED : row.netCents > 0 ? BLUE : GREEN }}>{row.status === "CLOSED" ? row.net : "—"}</b>,
+    },
+    {
+      key: "ver",
+      label: "",
+      noExport: true,
+      value: () => "",
+      render: (row) => (
+        <Link to={`/inventario/conteo/${row.id}`} className="text-xs font-semibold text-[var(--pf-accent)]">
+          {row.status === "OPEN" ? "Continuar" : "Ver"}
+        </Link>
+      ),
+    },
+  ]
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Toma de inventario</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Cuenta lo que hay en {data?.warehouseName ?? "el almacén"}, compara con el sistema y guarda el cuadre. El stock se corrige y queda en el kardex y en informes.
+            Elige el tipo de inventario para {data?.warehouseName ?? "el almacén"}. Cada uno funciona por separado y tiene su propio informe.
           </p>
         </div>
-        <Link to="/informes?area=inventario&grupo=conteos" className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--pf-accent)] hover:bg-slate-100">
-          Ver informe de cuadres →
+        <Link to="/inventario/informes?grupo=conteo_correccion" className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--pf-accent)] hover:bg-slate-100">
+          Informes de inventario →
         </Link>
       </div>
 
@@ -78,103 +194,79 @@ export function CountsPage() {
       {data?.openId ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4">
           <p className="text-sm text-amber-900">
-            <b>Hay un conteo en curso</b> en este almacén. Tu avance está guardado.
+            <b>Hay un inventario en curso</b> en este almacén. Tu avance está guardado.
           </p>
           <Link to={`/inventario/conteo/${data.openId}`} className="h-11 rounded-xl bg-amber-500 px-5 text-sm font-semibold leading-[2.75rem] text-white">
-            Continuar conteo
+            Continuar
           </Link>
         </div>
       ) : data?.canManage ? (
-        <form onSubmit={onStart} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <label className="block text-sm font-medium text-slate-700">
-            ¿Qué vas a contar?
-            <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
-              <option value="">Todos los productos</option>
-              {(data.brands ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  Marca {item.name}
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-slate-700">
+              ¿Qué vas a contar?
+              <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                <option value="">Todos los productos</option>
+                {(data.brands ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    Marca {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              Nota <span className="font-normal text-slate-400">(opcional)</span>
+              <input className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. cierre de mes" />
+            </label>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {COUNT_TYPES.map((type) => (
+              <form key={type.id} onSubmit={(event) => void onStart(event, type.id)} className="flex flex-col gap-2 rounded-2xl border-2 p-3" style={{ borderColor: `${type.color}55` }}>
+                <span className="flex items-center gap-2 font-semibold text-[var(--pf-navy)]">
+                  <span className="grid size-9 place-items-center rounded-xl text-white" style={{ background: type.color }}>
+                    <type.icon size={18} />
+                  </span>
+                  {type.label}
+                </span>
+                <span className="flex-1 text-xs text-slate-600">{type.text}</span>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ background: type.color }}
+                >
+                  <Plus className="size-4" /> Iniciar
+                </button>
+              </form>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h2 className="font-semibold text-[var(--pf-navy)]">Inventarios realizados</h2>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block text-xs font-semibold text-slate-500">
+            Tipo
+            <select className="mt-1 block h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+              <option value="">Todos</option>
+              {COUNT_TYPES.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.label}
                 </option>
               ))}
             </select>
           </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Nota <span className="font-normal text-slate-400">(opcional)</span>
-            <input className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. cierre de mes" />
-          </label>
-          <button type="submit" disabled={busy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--pf-accent)] px-5 text-sm font-semibold text-white disabled:opacity-60">
-            <Plus className="size-4" /> Iniciar conteo
+          <button
+            type="button"
+            onClick={() => downloadGrid("inventarios", columns, rows)}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700"
+          >
+            <FileSpreadsheet size={16} /> Excel
           </button>
-        </form>
-      ) : null}
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-4 py-3">
-          <h2 className="font-semibold text-[var(--pf-navy)]">Conteos y cuadres</h2>
         </div>
-        {!data ? (
-          <p className="px-4 py-8 text-center text-sm text-slate-500">Cargando…</p>
-        ) : data.counts.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-slate-500">Todavía no hay conteos. Inicia el primero arriba.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">N.º</th>
-                  <th className="px-3 py-2">Fecha</th>
-                  <th className="px-3 py-2">Almacén · alcance</th>
-                  <th className="px-3 py-2">Estado</th>
-                  <th className="px-3 py-2 text-right">Contados</th>
-                  <th className="px-3 py-2 text-right">Faltante</th>
-                  <th className="px-3 py-2 text-right">Sobrante</th>
-                  <th className="px-3 py-2 text-right">Neto</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.counts.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-bold text-[var(--pf-navy)]">{row.number}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-600">{row.closedAtLabel || row.createdAtLabel}</td>
-                    <td className="px-3 py-2">
-                      <span className="block">{row.warehouseName}</span>
-                      <span className="block text-xs text-slate-500">
-                        {row.scope} · {row.userName}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          row.status === "OPEN" ? "bg-amber-50 text-amber-800" : row.status === "CLOSED" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {row.statusLabel}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {row.status === "CLOSED" ? `${row.countedItems} · ${row.diffItems} dif.` : `${row.products} prod.`}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: RED }}>
-                      {row.status === "CLOSED" ? row.shortage : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: BLUE }}>
-                      {row.status === "CLOSED" ? row.surplus : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-bold tabular-nums" style={{ color: row.netCents < 0 ? RED : row.netCents > 0 ? BLUE : GREEN }}>
-                      {row.status === "CLOSED" ? row.net : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Link to={`/inventario/conteo/${row.id}`} className="text-xs font-semibold text-[var(--pf-accent)]">
-                        {row.status === "OPEN" ? "Continuar" : "Ver"}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
+      {!data ? <p className="text-sm text-slate-500">Cargando…</p> : <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} empty="Todavía no hay inventarios de este tipo." />}
     </div>
   )
 }
@@ -194,7 +286,7 @@ export function CountSheetPage() {
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
-  const [blind, setBlind] = useState(false)
+  const [blindToggle, setBlind] = useState(false)
   const [scanAdds, setScanAdds] = useState(true)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [closing, setClosing] = useState(false)
@@ -221,6 +313,10 @@ export function CountSheetPage() {
   }, [load])
 
   const open = count?.status === "OPEN" && count.canManage && count.sameWarehouse
+  const mode = count?.mode ?? "CORRECTION"
+  const blindMode = mode === "BLIND"
+  const blind = blindMode || blindToggle
+  const typeInfo = COUNT_TYPES.find((item) => item.id === mode) ?? COUNT_TYPES[1]
 
   const flush = useCallback(async () => {
     window.clearTimeout(timer.current)
@@ -373,7 +469,11 @@ export function CountSheetPage() {
       setClosing(false)
       await load()
       setFilter("diff")
-      setNotice("Cuadre guardado. El stock quedó corregido y el resumen ya está en Informes → Inventario → Cuadres.")
+      setNotice(
+        mode === "CORRECTION"
+          ? "Corrección guardada. El stock quedó ajustado y el resumen está en Inventario → Informes de inventario."
+          : "Informe generado. El stock no se modificó. Lo ves aquí y en Inventario → Informes de inventario.",
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar el cuadre")
     } finally {
@@ -420,7 +520,7 @@ export function CountSheetPage() {
             ← Toma de inventario
           </Link>
           <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">
-            Conteo N.º {count.number}{" "}
+            {count.modeLabel ?? "Inventario"} N.º {count.number}{" "}
             <span
               className={`align-middle rounded-full px-2 py-0.5 text-xs font-semibold ${
                 count.status === "OPEN" ? "bg-amber-50 text-amber-800" : closed ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
@@ -442,7 +542,7 @@ export function CountSheetPage() {
             <Printer className="size-4" /> {closed ? "Imprimir cuadre" : "Hoja de conteo"}
           </button>
           {closed ? (
-            <Link to="/informes?area=inventario&grupo=conteos" className="inline-flex h-10 items-center rounded-xl bg-[var(--pf-accent)] px-3 text-sm font-semibold text-white">
+            <Link to={`/inventario/informes?grupo=${typeInfo.report}`} className="inline-flex h-10 items-center rounded-xl bg-[var(--pf-accent)] px-3 text-sm font-semibold text-white">
               Ver en informes
             </Link>
           ) : null}
@@ -466,11 +566,11 @@ export function CountSheetPage() {
             <span className="text-xs text-slate-500">{count.summary.diffItems} con diferencia</span>
           )}
         </Stat>
-        <Stat label="Faltante (costo)" value={closed ? count.summary.shortage : money(stats.shortage, currency)} color={RED} />
-        <Stat label="Sobrante (costo)" value={closed ? count.summary.surplus : money(stats.surplus, currency)} color={BLUE} />
+        <Stat label="Faltante (costo)" value={closed ? count.summary.shortage : blind ? "•••" : money(stats.shortage, currency)} color={RED} />
+        <Stat label="Sobrante (costo)" value={closed ? count.summary.surplus : blind ? "•••" : money(stats.surplus, currency)} color={BLUE} />
         <Stat
           label="Diferencia neta"
-          value={closed ? count.summary.net : money(net, currency)}
+          value={closed ? count.summary.net : blind ? "•••" : money(net, currency)}
           color={closed ? (count.summary.net.includes("-") ? RED : GREEN) : net < 0 ? RED : net > 0 ? BLUE : GREEN}
         />
       </div>
@@ -519,13 +619,19 @@ export function CountSheetPage() {
               <input type="checkbox" checked={scanAdds} onChange={(e) => setScanAdds(e.target.checked)} className="size-4" />
               Cada lectura suma 1
             </label>
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" checked={blind} onChange={(e) => setBlind(e.target.checked)} className="size-4" />
-              Conteo a ciegas (ocultar stock del sistema)
-            </label>
-            <button type="button" onClick={pendingAsSystem} className="rounded-lg px-2 py-1 font-semibold text-[var(--pf-accent)] hover:bg-slate-100">
-              Pendientes = sistema
-            </button>
+            {blindMode ? (
+              <span className="rounded-lg bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">Inventario ciego: el stock del sistema se ve al terminar</span>
+            ) : (
+              <>
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" checked={blindToggle} onChange={(e) => setBlind(e.target.checked)} className="size-4" />
+                  Ocultar stock del sistema
+                </label>
+                <button type="button" onClick={pendingAsSystem} className="rounded-lg px-2 py-1 font-semibold text-[var(--pf-accent)] hover:bg-slate-100">
+                  Pendientes = sistema
+                </button>
+              </>
+            )}
             <span className="ml-auto text-xs text-slate-500">
               {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "✓ Avance guardado" : saveState === "error" ? "⚠ Sin guardar" : dirty.current.size ? "Cambios sin guardar" : ""}
             </span>
@@ -657,7 +763,7 @@ export function CountSheetPage() {
               disabled={stats.counted === 0}
               className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50"
             >
-              <ClipboardCheck className="size-4" /> Guardar cuadre
+              <ClipboardCheck className="size-4" /> {mode === "CORRECTION" ? "Guardar corrección" : "Terminar y generar informe"}
             </button>
           </div>
         </div>
@@ -665,6 +771,8 @@ export function CountSheetPage() {
 
       {closing ? (
         <CloseDialog
+          mode={mode}
+          hideValues={blindMode}
           stats={stats}
           currency={currency}
           busy={busy}
@@ -689,12 +797,16 @@ function Stat({ label, value, color, children }: { label: string; value: string;
 }
 
 function CloseDialog({
+  mode,
+  hideValues,
   stats,
   currency,
   busy,
   onCancel,
   onConfirm,
 }: {
+  mode: string
+  hideValues: boolean
   stats: { counted: number; diff: number; shortage: number; surplus: number; total: number }
   currency: string
   busy: boolean
@@ -706,15 +818,21 @@ function CloseDialog({
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[var(--pf-navy)]/50 p-3" role="dialog" aria-modal="true" aria-label="Guardar cuadre">
       <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md space-y-4 overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-[var(--pf-navy)]">Guardar cuadre</h2>
+        <h2 className="text-lg font-semibold text-[var(--pf-navy)]">{mode === "CORRECTION" ? "Guardar corrección" : "Terminar inventario"}</h2>
         <ul className="space-y-1 text-sm">
           <li>
-            Contados: <b>{stats.counted}</b> de {stats.total} · con diferencia: <b>{stats.diff}</b>
+            Contados: <b>{stats.counted}</b> de {stats.total}
+            {hideValues ? null : (
+              <>
+                {" "}· con diferencia: <b>{stats.diff}</b>
+              </>
+            )}
           </li>
-          <li style={{ color: RED }}>
+          {hideValues ? <li className="text-slate-500">Las diferencias se muestran al generar el informe.</li> : null}
+          <li style={{ color: RED }} className={hideValues ? "hidden" : ""}>
             Faltante: <b>{money(stats.shortage, currency)}</b>
           </li>
-          <li style={{ color: BLUE }}>
+          <li style={{ color: BLUE }} className={hideValues ? "hidden" : ""}>
             Sobrante: <b>{money(stats.surplus, currency)}</b>
           </li>
         </ul>
@@ -732,14 +850,16 @@ function CloseDialog({
           </fieldset>
         ) : null}
         <p className="text-xs text-slate-500">
-          Se compara con el stock del sistema en este momento, se corrige el stock con ajustes en el kardex y el resumen queda en Informes. No se puede deshacer.
+          {mode === "CORRECTION"
+            ? "Se compara con el stock del sistema en este momento, se corrige el stock con ajustes en el kardex y el resumen queda en Informes de inventario. No se puede deshacer."
+            : "Se compara con el stock del sistema en este momento y se genera el informe. El stock NO se modifica."}
         </p>
         <div className="flex gap-2">
           <button type="button" onClick={onCancel} disabled={busy} className="h-11 flex-1 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700">
             Volver
           </button>
           <button type="button" onClick={() => onConfirm(uncounted)} disabled={busy} className="h-11 flex-1 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
-            {busy ? "Guardando…" : "Confirmar cuadre"}
+            {busy ? "Guardando…" : mode === "CORRECTION" ? "Confirmar corrección" : "Generar informe"}
           </button>
         </div>
       </div>

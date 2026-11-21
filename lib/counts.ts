@@ -24,7 +24,18 @@ async function openCountOf(ctx: TenantContext, countId: string) {
   return count
 }
 
-export async function createCount(ctx: TenantContext, input: { categoryId?: string; brandId?: string; note?: string }) {
+/** Tipos de inventario: cada uno funciona por separado y tiene su propio informe. */
+export const COUNT_MODES = {
+  BLIND: "Inventario ciego",
+  CORRECTION: "Corrección de stock",
+  DIFFERENCES: "Faltas y sobras",
+} as const
+export type CountMode = keyof typeof COUNT_MODES
+export function isCountMode(value: unknown): value is CountMode {
+  return typeof value === "string" && value in COUNT_MODES
+}
+
+export async function createCount(ctx: TenantContext, input: { categoryId?: string; brandId?: string; note?: string; mode?: string }) {
   assertCan(ctx, "adjust")
   const open = await prisma.stockCount.findFirst({ where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId, status: "OPEN" } })
   if (open) throw new AppError(`Ya hay un conteo abierto (N.º ${open.number}) en este almacén. Continúalo o anúlalo`)
@@ -57,6 +68,7 @@ export async function createCount(ctx: TenantContext, input: { categoryId?: stri
         warehouseId: ctx.warehouseId,
         userId: ctx.userId,
         number: (last?.number ?? 0) + 1,
+        mode: isCountMode(input.mode) ? input.mode : "CORRECTION",
         scope,
         note: input.note?.trim() || null,
         lines: { create: products.map((product) => ({ productId: product.id })) },
@@ -169,6 +181,8 @@ export async function closeCount(ctx: TenantContext, countId: string, input: { u
         diffItems += 1
         if (diffQty < 0) shortageValue += -diffValue
         else surplusValue += diffValue
+        // Ciego y Faltas y sobras solo informan: no tocan el stock.
+        if (count.mode !== "CORRECTION") continue
         let surplusLot: string | undefined
         if (diffQty > 0 && line.product.trackLots) {
           const lots = await tx.lot.findMany({ where: { warehouseId: count.warehouseId, productId: line.productId }, select: { code: true } })
@@ -197,7 +211,7 @@ export async function closeCount(ctx: TenantContext, countId: string, input: { u
           action: "stock_count.close",
           entity: "StockCount",
           entityId: count.id,
-          detail: `Conteo N.º ${count.number}: ${countedItems} contados, ${diffItems} con diferencia`,
+          detail: `${COUNT_MODES[count.mode as CountMode] ?? "Conteo"} N.º ${count.number}: ${countedItems} contados, ${diffItems} con diferencia`,
         },
       })
       return tx.stockCount.update({

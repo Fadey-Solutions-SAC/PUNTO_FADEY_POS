@@ -38,6 +38,7 @@ const NAV: NavGroup[] = [
       { href: "/inventario/kardex", label: "Kardex" },
       { href: "/inventario/mermas", label: "Mermas y pérdidas", anyOf: ["inventoryMove", "reports"] },
       { href: "/inventario/alertas", label: "Alertas de stock" },
+      { href: "/inventario/informes", label: "Informes de inventario", permission: "reports" },
       { href: "/inventario/almacenes", label: "Almacenes" },
     ],
   },

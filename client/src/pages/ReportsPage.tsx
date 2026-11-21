@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { useSearchParams } from "react-router-dom"
 import {
   Boxes,
   Download,
@@ -48,7 +48,9 @@ const GROUPS: Record<string, { id: string; label: string }[]> = {
     { id: "transferencias", label: "Transferencias" },
     { id: "ajustes", label: "Ajustes" },
     { id: "mermas", label: "Mermas" },
-    { id: "conteos", label: "Cuadres" },
+    { id: "conteo_ciego", label: "Inventario ciego" },
+    { id: "conteo_correccion", label: "Corrección de stock" },
+    { id: "conteo_faltas", label: "Faltas y sobras" },
   ],
   caja: [
     { id: "medios", label: "Medios de pago" },
@@ -118,9 +120,12 @@ function downloadCsv(filename: string, report: ReportData) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export function ReportsPage() {
+/** fixedArea «inventario»: los informes de inventario en su propia área (Inventario → Informes de inventario). */
+export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
   const [params, setParams] = useSearchParams()
-  const area = params.get("area") ?? ""
+  const visibleAreas = fixedArea ? AREAS.filter((item) => item.id === fixedArea) : AREAS.filter((item) => item.id !== "inventario")
+  const requested = params.get("area") ?? ""
+  const area = fixedArea ?? (visibleAreas.some((item) => item.id === requested) ? requested : visibleAreas[0].id)
   const areaInfo = AREAS.find((item) => item.id === area)
   const groups = GROUPS[area] ?? []
   const grupo = groups.some((item) => item.id === params.get("grupo")) ? params.get("grupo")! : groups[0]?.id ?? ""
@@ -132,7 +137,8 @@ export function ReportsPage() {
   const [pending, setPending] = useState(false)
 
   function update(patch: Record<string, string>) {
-    const next = { area, grupo, desde, hasta, ...patch }
+    // En el área fija (Inventario) no se guarda «area» en la dirección.
+    const next = { area: fixedArea ? "" : area, grupo, desde, hasta, ...patch }
     setParams(Object.fromEntries(Object.entries(next).filter(([, value]) => value)) as Record<string, string>)
   }
 
@@ -159,151 +165,136 @@ export function ReportsPage() {
     }
   }, [area, areaInfo, grupo, desde, hasta])
 
-  if (!areaInfo) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Informes</h1>
-          <p className="mt-1 text-sm text-slate-500">Elige qué quieres analizar. Todos los datos salen de las operaciones reales del negocio.</p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {AREAS.map((item) => {
-            const Icon = item.icon
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setParams({ area: item.id })}
-                className="group flex items-start gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                style={{ borderColor: tint(item.color, 0.35), background: `linear-gradient(180deg, ${tint(item.color, 0.07)}, #fff 70%)` }}
-              >
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl text-white shadow-sm" style={{ background: item.color }}>
-                  <Icon size={22} />
-                </span>
-                <span>
-                  <span className="block font-semibold text-[var(--pf-navy)]">{item.title}</span>
-                  <span className="mt-0.5 block text-sm text-slate-500">{item.text}</span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
+  if (!areaInfo) return null
 
   const color = areaInfo.color
   const activePreset = ranges.find((item) => item.desde === desde && item.hasta === hasta)?.id
   const Icon = areaInfo.icon
+  const groupLabel = groups.find((item) => item.id === grupo)?.label ?? ""
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      {/* Áreas: fila con scroll en teléfono */}
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
-        <Link to="/informes" className="shrink-0 rounded-full bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm ring-1 ring-slate-200">
-          ← Áreas
-        </Link>
-        {AREAS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setParams({ area: item.id, desde, hasta })}
-            className="shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm ring-1 transition"
-            style={
-              item.id === area
-                ? { background: item.color, color: "#fff", boxShadow: `0 0 0 1px ${item.color}` }
-                : { background: tint(item.color, 0.08), color: item.color, boxShadow: `0 0 0 1px ${tint(item.color, 0.3)}` }
-            }
-          >
-            {item.title}
-          </button>
-        ))}
-      </div>
+    <div className="mx-auto max-w-7xl space-y-3">
+      <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">{fixedArea === "inventario" ? "Informes de inventario" : "Informes"}</h1>
 
-      <section className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: tint(color, 0.3) }}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl text-white shadow-sm" style={{ background: color }}>
-              <Icon size={22} />
-            </span>
-            <div>
-              <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">{areaInfo.title}</h1>
-              <p className="text-sm text-slate-500">
-                Del <b className="text-slate-700">{fmtDate(desde)}</b> al <b className="text-slate-700">{fmtDate(hasta)}</b>
-                {report ? ` · ${report.description}` : ""}
-              </p>
-            </div>
-          </div>
-          {report && report.rows.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => downloadCsv(`informe-${area}-${grupo}-${desde}_${hasta}.csv`, report)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm hover:brightness-110"
-              style={{ background: color }}
-            >
-              <Download size={16} /> Excel (CSV)
-            </button>
-          ) : null}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-end gap-2">
-          <div className="flex flex-wrap gap-1.5">
-            {ranges.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => update({ desde: item.desde, hasta: item.hasta })}
-                className="h-9 rounded-lg px-3 text-xs font-semibold ring-1 transition"
-                style={
-                  activePreset === item.id
-                    ? { background: color, color: "#fff", boxShadow: `0 0 0 1px ${color}` }
-                    : { background: "#fff", color: "#475569", boxShadow: "0 0 0 1px #e2e8f0" }
-                }
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <label className="ml-auto text-xs font-medium text-slate-500">
-            Desde
-            <input
-              type="date"
-              className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-800"
-              value={desde}
-              max={hasta}
-              onChange={(event) => event.target.value && update({ desde: event.target.value })}
-            />
-          </label>
-          <label className="text-xs font-medium text-slate-500">
-            Hasta
-            <input
-              type="date"
-              className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-800"
-              value={hasta}
-              min={desde}
-              onChange={(event) => event.target.value && update({ hasta: event.target.value })}
-            />
-          </label>
-        </div>
-
-        <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto border-t border-slate-100 px-4 pt-3">
-          {groups.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => update({ grupo: item.id })}
-              className="shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition"
-              style={
-                item.id === grupo
-                  ? { background: tint(color, 0.15), color, boxShadow: `inset 0 0 0 1.5px ${color}` }
-                  : { background: "#f8fafc", color: "#475569" }
-              }
-            >
-              {item.label}
-            </button>
+      {/* Teléfono: selector único con todos los informes. */}
+      <label className="block md:hidden">
+        <span className="text-xs font-semibold text-slate-500">Informe</span>
+        <select
+          className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-2 text-sm font-semibold text-[var(--pf-navy)]"
+          value={`${area}|${grupo}`}
+          onChange={(event) => {
+            const [nextArea, nextGroup] = event.target.value.split("|")
+            update({ area: nextArea, grupo: nextGroup })
+          }}
+        >
+          {visibleAreas.map((item) => (
+            <optgroup key={item.id} label={item.title}>
+              {(GROUPS[item.id] ?? []).map((group) => (
+                <option key={group.id} value={`${item.id}|${group.id}`}>
+                  {item.title} · {group.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
-        </div>
-      </section>
+        </select>
+      </label>
+
+      <div className="grid gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
+        {/* PC y tablet: panel lateral con cada informe, seleccionable por separado. */}
+        <aside className="hidden self-start rounded-2xl border border-slate-200 bg-white p-2 shadow-sm md:sticky md:top-20 md:block">
+          {visibleAreas.map((item) => {
+            const AreaIcon = item.icon
+            return (
+              <div key={item.id} className="mb-1">
+                <p className="flex items-center gap-2 px-2 pb-1 pt-2 text-xs font-bold uppercase tracking-wide" style={{ color: item.color }}>
+                  <AreaIcon size={14} /> {item.title}
+                </p>
+                {(GROUPS[item.id] ?? []).map((group) => {
+                  const active = item.id === area && group.id === grupo
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => update({ area: item.id, grupo: group.id })}
+                      className="block w-full rounded-lg px-3 py-1.5 text-left text-sm transition"
+                      style={active ? { background: tint(item.color, 0.15), color: item.color, fontWeight: 700 } : { color: "#475569" }}
+                    >
+                      {group.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </aside>
+
+        <div className="min-w-0 space-y-4">
+          {/* Informe elegido con sus filtros a la derecha; la información va abajo. */}
+          <section className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border bg-white p-3 shadow-sm" style={{ borderColor: tint(color, 0.3) }}>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl text-white shadow-sm" style={{ background: color }}>
+                <Icon size={20} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-[var(--pf-navy)]">
+                  {areaInfo.title} · {groupLabel}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Del <b className="text-slate-700">{fmtDate(desde)}</b> al <b className="text-slate-700">{fmtDate(hasta)}</b>
+                  {report ? ` · ${report.description}` : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap gap-1">
+                {ranges.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => update({ desde: item.desde, hasta: item.hasta })}
+                    className="h-9 rounded-lg px-2.5 text-xs font-semibold ring-1 transition"
+                    style={
+                      activePreset === item.id
+                        ? { background: color, color: "#fff", boxShadow: `0 0 0 1px ${color}` }
+                        : { background: "#fff", color: "#475569", boxShadow: "0 0 0 1px #e2e8f0" }
+                    }
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <label className="text-xs font-medium text-slate-500">
+                Desde
+                <input
+                  type="date"
+                  className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-800"
+                  value={desde}
+                  max={hasta}
+                  onChange={(event) => event.target.value && update({ desde: event.target.value })}
+                />
+              </label>
+              <label className="text-xs font-medium text-slate-500">
+                Hasta
+                <input
+                  type="date"
+                  className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-800"
+                  value={hasta}
+                  min={desde}
+                  onChange={(event) => event.target.value && update({ hasta: event.target.value })}
+                />
+              </label>
+              {report && report.rows.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(`informe-${area}-${grupo}-${desde}_${hasta}.csv`, report)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-white shadow-sm hover:brightness-110"
+                  style={{ background: color }}
+                >
+                  <Download size={15} /> Excel
+                </button>
+              ) : null}
+            </div>
+          </section>
 
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
@@ -401,6 +392,8 @@ export function ReportsPage() {
           </div>
         </div>
       ) : null}
+        </div>
+      </div>
     </div>
   )
 }
