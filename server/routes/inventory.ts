@@ -5,6 +5,8 @@ import {
   cancelTransfer,
   listKardex,
   receiveTransfer,
+  expiryGroups,
+  correctExpiryGroups,
   sendTransfer,
   setStock,
 } from "../../lib/inventory"
@@ -76,6 +78,33 @@ export function registerInventoryRoutes(app: Express) {
           notice: lot.expiresAt ? expiryLabel(lot.expiresAt) : "—",
         })),
       })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Corrección de informe (Productos a vencer): lotes con fecha y cantidad sin fecha de cada producto.
+  app.get("/api/inventory/expiry", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      res.json({ warehouseName: ctx.warehouseName, canEdit: can(ctx.role, "adjust", ctx.grants), products: await expiryGroups(ctx) })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/inventory/expiry", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const lots = Array.isArray(req.body?.lots) ? req.body.lots : []
+      await correctExpiryGroups(req.tenant!, {
+        productId: String(req.body?.productId ?? ""),
+        lots: lots.map((lot: { id?: string; expiresAt?: string; quantity?: string }) => ({
+          id: lot.id ? String(lot.id) : undefined,
+          expiresAt: String(lot.expiresAt ?? ""),
+          quantity: String(lot.quantity ?? ""),
+        })),
+      })
+      res.json({ ok: true })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
     }

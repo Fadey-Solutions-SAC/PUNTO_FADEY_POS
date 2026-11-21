@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
 import { assertCan } from "@/lib/roles"
-import { D, QTY_SCALE, mulScale, toMoneyInt, toQtyInt } from "@/lib/money"
+import { D, QTY_SCALE, formatQty, fromQtyInt, mulScale, toMoneyInt, toQtyInt } from "@/lib/money"
 import type { TenantContext } from "@/lib/types"
 
 type Tx = Prisma.TransactionClient
@@ -174,6 +174,106 @@ async function syncExpiry(
     await tx.lot.updateMany({ where: { id: lot.id, businessId: args.businessId }, data: { quantity: { decrement: take } } })
     remaining -= take
   }
+}
+
+/** Lotes con fecha del almacén actual por producto, con su cantidad sin fecha. */
+export async function expiryGroups(ctx: TenantContext) {
+  const [balances, lots] = await Promise.all([
+    prisma.stockBalance.findMany({
+      where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId, quantity: { gt: 0 } },
+      include: { product: { select: { id: true, name: true, isActive: true, baseUnit: { select: { symbol: true } } } } },
+    }),
+    prisma.lot.findMany({
+      where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId, quantity: { gt: 0 }, expiresAt: { not: null } },
+      orderBy: { expiresAt: "asc" },
+    }),
+  ])
+  return balances
+    .filter((balance) => balance.product.isActive)
+    .map((balance) => {
+      const own = lots.filter((lot) => lot.productId === balance.productId)
+      const dated = own.reduce((sum, lot) => sum + lot.quantity, 0)
+      return {
+        productId: balance.productId,
+        name: balance.product.name,
+        unit: balance.product.baseUnit.symbol,
+        stock: fromQtyInt(balance.quantity).toString(),
+        undated: fromQtyInt(Math.max(0, balance.quantity - dated)).toString(),
+        lots: own.map((lot) => ({
+          id: lot.id,
+          code: lot.code,
+          expiresAt: lot.expiresAt ? lot.expiresAt.toISOString().slice(0, 10) : "",
+          quantity: fromQtyInt(lot.quantity).toString(),
+        })),
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "es"))
+}
+
+/**
+ * Corrige los lotes con fecha de un producto en el almacén actual: cambia fecha o cantidad, agrega o quita lotes.
+ * No mueve el stock: los lotes con fecha nunca pueden sumar más que el stock (el resto queda «sin fecha»).
+ */
+export async function correctExpiryGroups(
+  ctx: TenantContext,
+  input: { productId: string; lots: { id?: string; expiresAt: string; quantity: string }[] },
+) {
+  assertCan(ctx, "adjust")
+  const balance = await prisma.stockBalance.findUnique({
+    where: { warehouseId_productId: { warehouseId: ctx.warehouseId, productId: input.productId } },
+    include: { product: { select: { name: true } } },
+  })
+  if (!balance || balance.businessId !== ctx.businessId) throw new AppError("Producto sin stock en este almacén")
+  const wanted = input.lots
+    .filter((lot) => lot.expiresAt || lot.quantity)
+    .map((lot) => {
+      const date = new Date(`${lot.expiresAt}T00:00:00`)
+      if (!lot.expiresAt || Number.isNaN(date.getTime())) throw new AppError("Cada lote necesita su fecha de vencimiento")
+      const quantity = toQtyInt(lot.quantity || "0")
+      if (quantity < 0) throw new AppError("La cantidad no puede ser negativa")
+      return { id: lot.id, expiresAt: date, quantity }
+    })
+  const total = wanted.reduce((sum, lot) => sum + lot.quantity, 0)
+  if (total > balance.quantity) {
+    throw new AppError(`Los lotes suman ${formatQty(total)} y el stock es ${formatQty(balance.quantity)}. No pueden pasar el stock.`)
+  }
+  const current = await prisma.lot.findMany({
+    where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId, productId: input.productId, expiresAt: { not: null } },
+  })
+  await prisma.$transaction(async (tx) => {
+    const keep = new Set(wanted.map((lot) => lot.id).filter(Boolean))
+    for (const lot of current) {
+      if (!keep.has(lot.id)) await tx.lot.update({ where: { id: lot.id }, data: { quantity: 0 } })
+    }
+    for (const lot of wanted) {
+      const owned = lot.id ? current.find((item) => item.id === lot.id) : undefined
+      if (owned) {
+        await tx.lot.update({ where: { id: owned.id }, data: { expiresAt: lot.expiresAt, quantity: lot.quantity } })
+      } else if (lot.quantity > 0) {
+        const day = lot.expiresAt.toISOString().slice(0, 10).replace(/-/g, "")
+        await tx.lot.create({
+          data: {
+            businessId: ctx.businessId,
+            warehouseId: ctx.warehouseId,
+            productId: input.productId,
+            code: `AJ${day}-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+            expiresAt: lot.expiresAt,
+            quantity: lot.quantity,
+          },
+        })
+      }
+    }
+    await tx.auditLog.create({
+      data: {
+        businessId: ctx.businessId,
+        userId: ctx.userId,
+        action: "EXPIRY_CORRECTION",
+        entity: "Product",
+        entityId: input.productId,
+        detail: `${balance.product.name}: ${wanted.map((lot) => `${lot.expiresAt.toISOString().slice(0, 10)} × ${formatQty(lot.quantity)}`).join(", ") || "sin lotes con fecha"}`,
+      },
+    })
+  })
 }
 
 async function syncLots(

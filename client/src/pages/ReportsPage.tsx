@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { getReport, type ReportData, type ReportTone } from "../api"
 import { PALETTE, tint } from "../colors"
+import { ExpiryCorrection } from "../components/ExpiryCorrection"
 
 const AREAS: { id: string; title: string; text: string; icon: LucideIcon; color: string }[] = [
   { id: "ventas", title: "Ventas", text: "Ingresos, operaciones, productos y medios de pago.", icon: TrendingUp, color: "#0d9488" },
@@ -136,6 +137,9 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
   const [report, setReport] = useState<ReportData | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
+  // Productos a vencer: ventana «Corrección de informe» y recarga al guardar.
+  const [correcting, setCorrecting] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   function update(patch: Record<string, string>) {
     // En el área fija (Inventario) no se guarda «area» en la dirección.
@@ -164,7 +168,7 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
     return () => {
       cancelled = true
     }
-  }, [area, areaInfo, grupo, desde, hasta])
+  }, [area, areaInfo, grupo, desde, hasta, reloadKey])
 
   if (!areaInfo) return null
 
@@ -292,6 +296,15 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
                   onChange={(event) => event.target.value && update({ hasta: event.target.value })}
                 />
               </label>
+              {area === "inventario" && grupo === "vencimientos" ? (
+                <button
+                  type="button"
+                  onClick={() => setCorrecting(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-amber-500 px-3 text-sm font-semibold text-white shadow-sm hover:bg-amber-600"
+                >
+                  Corrección de informe
+                </button>
+              ) : null}
               {report && report.rows.length > 0 ? (
                 <button
                   type="button"
@@ -403,6 +416,7 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
       ) : null}
         </div>
       </div>
+      {correcting ? <ExpiryCorrection onClose={() => setCorrecting(false)} onSaved={() => setReloadKey((value) => value + 1)} /> : null}
     </div>
   )
 }

@@ -134,6 +134,7 @@ export function ReceptionPage() {
                   <th className="px-3 py-2 font-medium">Cantidad</th>
                   <th className="px-3 py-2 font-medium">Costo</th>
                   <th className="px-3 py-2 font-medium">Precio venta</th>
+                  {receiveNow ? <th className="px-3 py-2 font-medium">Vence (opcional)</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -211,32 +212,26 @@ export function ReceptionPage() {
                         }
                       />
                     </td>
+                    {receiveNow ? (
+                      <td className="px-3 py-2">
+                        <input
+                          type="date"
+                          aria-label={`Vencimiento de ${row.name}`}
+                          className="h-10 rounded-xl border border-amber-300 bg-amber-50/50 px-2 text-sm"
+                          value={lots[row.productId]?.expiresAt ?? ""}
+                          onChange={(e) => setLots((current) => ({ ...current, [row.productId]: { ...current[row.productId], expiresAt: e.target.value } }))}
+                        />
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {receiveNow && rows.some((row) => Number(row.quantity) > 0) ? (
-            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-semibold text-amber-900">Fecha de vencimiento (opcional)</p>
-              <p className="text-xs text-amber-800">
-                Cada compra con fecha queda como un grupo aparte. El sistema avisa 30 días antes y otra vez 15 días antes, y lo muestra en Informes → Productos a vencer.
-              </p>
-              {rows
-                .filter((row) => Number(row.quantity) > 0)
-                .map((row) => (
-                  <div key={row.productId} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
-                    <span className="truncate text-sm font-medium text-slate-700">{row.name}</span>
-                    <input
-                      type="date"
-                      aria-label="Vence"
-                      className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm"
-                      value={lots[row.productId]?.expiresAt ?? ""}
-                      onChange={(e) => setLots((current) => ({ ...current, [row.productId]: { ...current[row.productId], expiresAt: e.target.value } }))}
-                    />
-                  </div>
-                ))}
-            </div>
+          {receiveNow ? (
+            <p className="text-xs text-slate-500">
+              <b>Vence:</b> si pones la fecha, esa cantidad queda como un lote propio con aviso 30 y 15 días antes. Sin fecha se registra igual, sin aviso.
+            </p>
           ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

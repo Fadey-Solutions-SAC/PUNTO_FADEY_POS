@@ -232,6 +232,15 @@ export async function inventoryReport(ctx: TenantContext) {
     expiries: lots
       .filter((lot) => lot.expiresAt)
       .map((lot) => ({ name: lot.product.name, code: lot.code, expiresAt: lot.expiresAt, quantity: lot.quantity, value: lineCost(lot.product.costPrice, lot.quantity) })),
+    // Sin fecha: lo que queda del stock fuera de los lotes con fecha (no genera aviso).
+    undated: balances
+      .map((balance) => {
+        const dated = lots.filter((lot) => lot.productId === balance.productId && lot.expiresAt).reduce((sum, lot) => sum + lot.quantity, 0)
+        const quantity = Math.max(0, balance.quantity - dated)
+        return { name: balance.product.name, quantity, value: lineCost(balance.product.costPrice, quantity) }
+      })
+      .filter((row) => row.quantity > 0)
+      .sort((a, b) => a.name.localeCompare(b.name, "es")),
   }
 }
 

@@ -400,11 +400,14 @@ export function registerReportsRoutes(app: Express) {
           grouped = {
             columns: ["Producto", "Grupo (compra)", "Vence", "Días", "Estado", "Cantidad", "Valor al costo"],
             numeric: [3, 5, 6],
-            rows: lots.map((lot) => {
-              const days = daysTo(lot.expiresAt!)
-              return [lot.name, lot.code, formatDate(lot.expiresAt!).slice(0, 8), String(days), stateOf(days), formatQty(lot.quantity), money(lot.value)]
-            }),
-            footer: ["Total", "", "", "", "", "", money(lots.reduce((sum, lot) => sum + lot.value, 0))],
+            rows: [
+              ...lots.map((lot) => {
+                const days = daysTo(lot.expiresAt!)
+                return [lot.name, lot.code, formatDate(lot.expiresAt!).slice(0, 8), String(days), stateOf(days), formatQty(lot.quantity), money(lot.value)]
+              }),
+              ...stock.undated.map((row) => [row.name, "Sin fecha", "—", "—", "Sin fecha", formatQty(row.quantity), money(row.value)]),
+            ],
+            footer: ["Total", "", "", "", "", "", money(lots.reduce((sum, lot) => sum + lot.value, 0) + stock.undated.reduce((sum, row) => sum + row.value, 0))],
             chart: ["Vencido", "Vence en 15 días", "Vence en 30 días", "Más de 30 días"]
               .filter((label) => byState.has(label))
               .map((label) => ({ label, value: byState.get(label) ?? 0, text: money(byState.get(label) ?? 0) })),

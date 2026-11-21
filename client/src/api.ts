@@ -737,6 +737,23 @@ export function saveCatalogPriceItem(input: { listId: string; productId: string;
   })
 }
 
+export type ExpiryProduct = {
+  productId: string
+  name: string
+  unit: string
+  stock: string
+  undated: string
+  lots: { id: string; code: string; expiresAt: string; quantity: string }[]
+}
+
+export function getExpiryGroups() {
+  return request<{ warehouseName: string; canEdit: boolean; products: ExpiryProduct[] }>("/api/inventory/expiry")
+}
+
+export function saveExpiryGroups(productId: string, lots: { id?: string; expiresAt: string; quantity: string }[]) {
+  return request<{ ok: true }>("/api/inventory/expiry", { method: "POST", body: JSON.stringify({ productId, lots }) })
+}
+
 export function getInventoryAlerts() {
   return request<{
     warehouseName: string
