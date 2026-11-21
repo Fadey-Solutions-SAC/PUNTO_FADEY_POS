@@ -206,11 +206,15 @@ export async function createPurchase(
       const wanted = new Map<string, { lotCode?: string; expiresAt?: string }>()
       input.lines.forEach((line, index) => {
         const lot = input.lineLots?.[index]
-        if (lot?.lotCode || lot?.expiresAt) wanted.set(`${line.productId}|${line.presentationId ?? ""}`, lot)
+        if (lot?.lotCode || lot?.expiresAt) {
+          wanted.set(`${line.productId}|${line.presentationId ?? ""}`, lot)
+          // Compra en unidad (kg, und…): la línea se guarda sin presentación; se asocia por producto.
+          if (!wanted.has(`${line.productId}|*`)) wanted.set(`${line.productId}|*`, lot)
+        }
       })
       const lots: ReceiveLots = {}
       for (const line of purchase.lines) {
-        const lot = wanted.get(`${line.productId}|${line.presentationId ?? ""}`) ?? wanted.get(`${line.productId}|`)
+        const lot = wanted.get(`${line.productId}|${line.presentationId ?? ""}`) ?? wanted.get(`${line.productId}|`) ?? wanted.get(`${line.productId}|*`)
         if (lot) lots[line.id] = lot
       }
       await receiveInside(tx, ctx, purchase.id, lots)
@@ -254,9 +258,13 @@ async function receiveInside(tx: Tx, ctx: TenantContext, purchaseId: string, lot
     const pending = line.baseQuantity - line.receivedBase
     if (pending <= 0) continue
     const lot = lots[line.id]
-    const lotCode = line.product.trackLots ? lot?.lotCode?.trim() || autoLot(purchase.documentNumber) : undefined
-    const expiresAt = line.product.trackLots && lot?.expiresAt ? new Date(`${lot.expiresAt}T00:00:00`) : null
+    const expiresAt = lot?.expiresAt ? new Date(`${lot.expiresAt}T00:00:00`) : null
     if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new AppError("Fecha de vencimiento inválida")
+    const lotCode = line.product.trackLots
+      ? lot?.lotCode?.trim() || autoLot(purchase.documentNumber)
+      : expiresAt
+        ? lot?.lotCode?.trim() || `${autoLot(purchase.documentNumber)}-V${lot!.expiresAt!.replace(/-/g, "")}`
+        : undefined
     await applyStock(tx, {
       businessId: ctx.businessId,
       warehouseId: purchase.warehouseId,

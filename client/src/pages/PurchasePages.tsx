@@ -113,20 +113,14 @@ export function PurchaseDetailPage() {
           <button type="button" disabled={busy} onClick={() => void onReceive()} className="h-11 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-60">
             Recibir mercadería
           </button>
-          {data.lines.some((line) => line.trackLots && !line.fullyReceived) ? (
+          {data.lines.some((line) => !line.fullyReceived) ? (
             <div className="w-full space-y-2 rounded-xl bg-white/70 p-3">
-              <p className="text-xs font-semibold text-amber-900">Lote y vencimiento (productos con control de lotes). Si lo dejas vacío se crea un lote con la fecha y el documento.</p>
+              <p className="text-xs font-semibold text-amber-900">Fecha de vencimiento (opcional): cada compra con fecha queda como un grupo aparte y avisa 30 y 15 días antes.</p>
               {data.lines
-                .filter((line) => line.trackLots && !line.fullyReceived)
+                .filter((line) => !line.fullyReceived)
                 .map((line) => (
-                  <div key={line.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_10rem] sm:items-center">
+                  <div key={line.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
                     <span className="truncate text-sm font-medium text-slate-700">{line.description}</span>
-                    <input
-                      placeholder="Lote"
-                      className="h-9 rounded-lg border border-slate-200 px-2 text-sm"
-                      value={lots[line.id]?.lotCode ?? ""}
-                      onChange={(e) => setLots((current) => ({ ...current, [line.id]: { ...current[line.id], lotCode: e.target.value } }))}
-                    />
                     <input
                       type="date"
                       aria-label="Vence"

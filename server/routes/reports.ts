@@ -382,16 +382,34 @@ export function registerReportsRoutes(app: Express) {
             chartMoney: true,
           }
         } else if (group === "vencimientos") {
-          const lots = [...stock.expiries].sort(
-            (a, b) => (a.expiresAt?.getTime() ?? Infinity) - (b.expiresAt?.getTime() ?? Infinity),
-          )
+          // Productos a vencer: cada grupo (compra) con su fecha, días que faltan y estado.
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const daysTo = (date: Date) => {
+            const day = new Date(date)
+            day.setHours(0, 0, 0, 0)
+            return Math.round((day.getTime() - today.getTime()) / 86400000)
+          }
+          const stateOf = (days: number) => (days < 0 ? "Vencido" : days <= 15 ? "Vence en 15 días" : days <= 30 ? "Vence en 30 días" : "Más de 30 días")
+          const lots = [...stock.expiries].sort((a, b) => (a.expiresAt?.getTime() ?? Infinity) - (b.expiresAt?.getTime() ?? Infinity))
+          const byState = new Map<string, number>()
+          for (const lot of lots) {
+            const label = stateOf(daysTo(lot.expiresAt!))
+            byState.set(label, (byState.get(label) ?? 0) + lot.value)
+          }
           grouped = {
-            columns: ["Producto", "Lote", "Vence", "Cantidad"],
-            numeric: [3],
-            rows: lots.map((lot) => [lot.name, lot.code, lot.expiresAt ? formatDate(lot.expiresAt) : "—", formatQty(lot.quantity)]),
-            chart: lots.map((lot) => ({ label: lot.name, value: lot.quantity, text: formatQty(lot.quantity) })),
+            columns: ["Producto", "Grupo (compra)", "Vence", "Días", "Estado", "Cantidad", "Valor al costo"],
+            numeric: [3, 5, 6],
+            rows: lots.map((lot) => {
+              const days = daysTo(lot.expiresAt!)
+              return [lot.name, lot.code, formatDate(lot.expiresAt!).slice(0, 8), String(days), stateOf(days), formatQty(lot.quantity), money(lot.value)]
+            }),
+            footer: ["Total", "", "", "", "", "", money(lots.reduce((sum, lot) => sum + lot.value, 0))],
+            chart: ["Vencido", "Vence en 15 días", "Vence en 30 días", "Más de 30 días"]
+              .filter((label) => byState.has(label))
+              .map((label) => ({ label, value: byState.get(label) ?? 0, text: money(byState.get(label) ?? 0) })),
             chartKind: "rank",
-            chartMoney: false,
+            chartMoney: true,
           }
         } else {
           const rows = [...stock.rows].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "es"))
@@ -406,23 +424,45 @@ export function registerReportsRoutes(app: Express) {
           }
         }
         report = {
-          description: `Existencias actuales del almacén ${ctx.warehouseName}. Los movimientos usan el período elegido.`,
+          description:
+            group === "vencimientos"
+              ? `Grupos de productos con fecha de vencimiento en el almacén ${ctx.warehouseName}, del más próximo al más lejano. Avisa 30 y 15 días antes.`
+              : `Existencias actuales del almacén ${ctx.warehouseName}. Los movimientos usan el período elegido.`,
           chartTitle:
             group === "existencias" || !group
               ? "Valor del inventario por producto"
               : group === "vencimientos"
-                ? "Lotes por vencer"
+                ? "Valor por vencer según plazo"
                 : group === "mermas"
                 ? "Mermas por causa (costo)"
                 : group === "conteos" || group.startsWith("conteo_")
                 ? "Faltante por conteo (costo)"
                 : "Cantidades por tipo de movimiento",
-          kpis: [
-            { label: "Productos", value: String(stock.rows.length), tone: "sky" },
-            { label: "Valor al costo", value: money(stock.value), tone: "teal" },
-            { label: "Stock bajo", value: String(stock.low.length), tone: "amber" },
-            { label: "Agotados", value: String(stock.empty.length), tone: "red" },
-          ],
+          kpis:
+            group === "vencimientos"
+              ? (() => {
+                  // Resumen de vencimientos: vencidos, en 15 días, en 30 días y valor en riesgo.
+                  const today = new Date()
+                  today.setHours(0, 0, 0, 0)
+                  const days = (date: Date) => Math.round((new Date(date).setHours(0, 0, 0, 0) - today.getTime()) / 86400000)
+                  const pick = (test: (d: number) => boolean) => stock.expiries.filter((lot) => test(days(lot.expiresAt!)))
+                  const sum = (list: typeof stock.expiries) => list.reduce((total, lot) => total + lot.value, 0)
+                  const expired = pick((d) => d < 0)
+                  const in15 = pick((d) => d >= 0 && d <= 15)
+                  const in30 = pick((d) => d > 15 && d <= 30)
+                  return [
+                    { label: `Vencidos (${expired.length})`, value: money(sum(expired)), tone: "red" as const },
+                    { label: `Vencen en 15 días (${in15.length})`, value: money(sum(in15)), tone: "rose" as const },
+                    { label: `Vencen en 30 días (${in30.length})`, value: money(sum(in30)), tone: "amber" as const },
+                    { label: "Valor en riesgo", value: money(sum(expired) + sum(in15) + sum(in30)), tone: "violet" as const },
+                  ]
+                })()
+              : [
+                  { label: "Productos", value: String(stock.rows.length), tone: "sky" },
+                  { label: "Valor al costo", value: money(stock.value), tone: "teal" },
+                  { label: "Stock bajo", value: String(stock.low.length), tone: "amber" },
+                  { label: "Agotados", value: String(stock.empty.length), tone: "red" },
+                ],
           empty: "Sin datos para mostrar.",
           ...grouped,
         }

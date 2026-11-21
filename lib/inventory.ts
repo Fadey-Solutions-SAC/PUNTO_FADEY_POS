@@ -95,6 +95,7 @@ export async function applyStock(
   }
 
   if (product.trackLots) await syncLots(tx, args)
+  else await syncExpiry(tx, args)
 
   const balance = await tx.stockBalance.findUniqueOrThrow({
     where: { warehouseId_productId: { warehouseId: args.warehouseId, productId: args.productId } },
@@ -119,6 +120,60 @@ export async function applyStock(
     },
   })
   return balance
+}
+
+/**
+ * Vencimientos por grupo (cada compra con su fecha): al entrar con fecha se crea o suma su grupo;
+ * al salir (venta, merma, ajuste, transferencia) se descuenta primero lo que vence antes.
+ * No exige lote: lo que entra sin fecha no se registra como grupo.
+ */
+async function syncExpiry(
+  tx: Tx,
+  args: {
+    businessId: string
+    warehouseId: string
+    productId: string
+    direction: "IN" | "OUT"
+    quantity: number
+    lotCode?: string
+    expiresAt?: Date | null
+  },
+) {
+  if (args.direction === "IN") {
+    if (!args.expiresAt) return
+    const day = args.expiresAt.toISOString().slice(0, 10).replace(/-/g, "")
+    const code = args.lotCode?.trim() || `V${day}`
+    await tx.lot.upsert({
+      where: { warehouseId_productId_code: { warehouseId: args.warehouseId, productId: args.productId, code } },
+      create: {
+        businessId: args.businessId,
+        warehouseId: args.warehouseId,
+        productId: args.productId,
+        code,
+        expiresAt: args.expiresAt,
+        quantity: args.quantity,
+      },
+      update: { quantity: { increment: args.quantity }, expiresAt: args.expiresAt },
+    })
+    return
+  }
+  const lots = await tx.lot.findMany({
+    where: { warehouseId: args.warehouseId, productId: args.productId, businessId: args.businessId, quantity: { gt: 0 } },
+  })
+  if (lots.length === 0) return
+  const ordered = [...lots].sort((a, b) => {
+    if (!a.expiresAt && !b.expiresAt) return a.code.localeCompare(b.code)
+    if (!a.expiresAt) return 1
+    if (!b.expiresAt) return -1
+    return a.expiresAt.getTime() - b.expiresAt.getTime()
+  })
+  let remaining = args.quantity
+  for (const lot of ordered) {
+    if (remaining <= 0) break
+    const take = Math.min(remaining, lot.quantity)
+    await tx.lot.updateMany({ where: { id: lot.id, businessId: args.businessId }, data: { quantity: { decrement: take } } })
+    remaining -= take
+  }
 }
 
 async function syncLots(

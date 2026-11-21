@@ -21,8 +21,37 @@ function startOfDay(date: Date) {
   return value
 }
 
+function expiryLabel(expiresAt: Date) {
+  const days = Math.round((startOfDay(expiresAt).getTime() - startOfDay(new Date()).getTime()) / DAY)
+  if (days < 0) return days === -1 ? "venció hace 1 día" : `venció hace ${-days} días`
+  if (days === 0) return "vence hoy"
+  if (days === 1) return "vence mañana"
+  return `vence en ${days} días`
+}
+
 export async function listNotices(ctx: TenantContext): Promise<SystemNotice[]> {
-  // Sin lotes ni vencimientos: los avisos son solo de stock bajo o agotado.
+  // Productos por vencer: aviso 30 días antes y otro (nuevo) 15 días antes.
+  const horizon = startOfDay(new Date())
+  horizon.setDate(horizon.getDate() + 30)
+  horizon.setHours(23, 59, 59, 999)
+  const lots = await prisma.lot.findMany({
+    where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId, quantity: { gt: 0 }, expiresAt: { lte: horizon } },
+    include: { product: { select: { name: true, baseUnit: { select: { symbol: true } } } } },
+    orderBy: { expiresAt: "asc" },
+  })
+  const expiryNotices: SystemNotice[] = []
+  for (const lot of lots) {
+    if (!lot.expiresAt) continue
+    const days = Math.round((startOfDay(lot.expiresAt).getTime() - startOfDay(new Date()).getTime()) / DAY)
+    const stage = days <= 15 ? "15" : "30"
+    expiryNotices.push({
+      id: `exp${stage}-${lot.id}`,
+      kind: "expiry",
+      title: lot.product.name,
+      detail: `${formatQty(lot.quantity)} ${lot.product.baseUnit.symbol} ${expiryLabel(lot.expiresAt)}${stage === "15" ? " · ¡urgente!" : ""}`,
+      href: "/inventario/alertas",
+    })
+  }
   const [products, balances] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: ctx.businessId, isActive: true, variants: { none: { isActive: true } } },
@@ -35,7 +64,7 @@ export async function listNotices(ctx: TenantContext): Promise<SystemNotice[]> {
     }),
   ])
   const stock = new Map(balances.map((row) => [row.productId, row.quantity]))
-  const notices: SystemNotice[] = []
+  const notices: SystemNotice[] = [...expiryNotices]
   for (const product of products) {
     const quantity = stock.get(product.id) ?? 0
     const low = quantity <= 0 || (product.minStock > 0 && quantity <= product.minStock)

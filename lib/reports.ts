@@ -229,7 +229,9 @@ export async function inventoryReport(ctx: TenantContext) {
     low: rows.filter((row) => row.state === "Bajo"),
     empty: rows.filter((row) => row.state === "Agotado"),
     rows,
-    expiries: lots.filter((lot) => lot.expiresAt).map((lot) => ({ name: lot.product.name, code: lot.code, expiresAt: lot.expiresAt, quantity: lot.quantity })),
+    expiries: lots
+      .filter((lot) => lot.expiresAt)
+      .map((lot) => ({ name: lot.product.name, code: lot.code, expiresAt: lot.expiresAt, quantity: lot.quantity, value: lineCost(lot.product.costPrice, lot.quantity) })),
   }
 }
 

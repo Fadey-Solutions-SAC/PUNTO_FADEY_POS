@@ -119,6 +119,32 @@ prisma.product
   })
   .catch((error) => console.error("[lotes] no se pudo actualizar:", errorMessage(error)))
 
+// Vencimientos: los grupos (lotes) nunca suman más que el stock real; el exceso sale de lo que vence antes.
+prisma.lot
+  .findMany({ where: { quantity: { gt: 0 } }, orderBy: [{ expiresAt: "asc" }, { code: "asc" }] })
+  .then(async (lots) => {
+    const groups = new Map<string, typeof lots>()
+    for (const lot of lots) {
+      const key = `${lot.warehouseId}|${lot.productId}`
+      groups.set(key, [...(groups.get(key) ?? []), lot])
+    }
+    let trimmed = 0
+    for (const [key, list] of groups) {
+      const [warehouseId, productId] = key.split("|")
+      const balance = await prisma.stockBalance.findUnique({ where: { warehouseId_productId: { warehouseId, productId } } })
+      let excess = list.reduce((sum, lot) => sum + lot.quantity, 0) - Math.max(0, balance?.quantity ?? 0)
+      for (const lot of list) {
+        if (excess <= 0) break
+        const take = Math.min(excess, lot.quantity)
+        await prisma.lot.update({ where: { id: lot.id }, data: { quantity: { decrement: take } } })
+        excess -= take
+        trimmed += 1
+      }
+    }
+    if (trimmed) console.log(`[vencimientos] ${trimmed} grupo(s) ajustados al stock real`)
+  })
+  .catch((error) => console.error("[vencimientos] no se pudo ajustar:", errorMessage(error)))
+
 // Marcas en mayúsculas: las antiguas se pasan a mayúsculas si no chocan con otra marca igual.
 prisma.brand
   .findMany({ select: { id: true, businessId: true, name: true } })

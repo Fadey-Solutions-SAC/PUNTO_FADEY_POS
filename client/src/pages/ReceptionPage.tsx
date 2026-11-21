@@ -216,21 +216,17 @@ export function ReceptionPage() {
               </tbody>
             </table>
           </div>
-          {receiveNow && rows.some((row) => row.trackLots && Number(row.quantity) > 0) ? (
+          {receiveNow && rows.some((row) => Number(row.quantity) > 0) ? (
             <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-semibold text-amber-900">Lote y vencimiento</p>
-              <p className="text-xs text-amber-800">Estos productos controlan lotes. Si lo dejas vacío se crea un lote con la fecha y el documento.</p>
+              <p className="text-sm font-semibold text-amber-900">Fecha de vencimiento (opcional)</p>
+              <p className="text-xs text-amber-800">
+                Cada compra con fecha queda como un grupo aparte. El sistema avisa 30 días antes y otra vez 15 días antes, y lo muestra en Informes → Productos a vencer.
+              </p>
               {rows
-                .filter((row) => row.trackLots && Number(row.quantity) > 0)
+                .filter((row) => Number(row.quantity) > 0)
                 .map((row) => (
-                  <div key={row.productId} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_10rem] sm:items-center">
+                  <div key={row.productId} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-center">
                     <span className="truncate text-sm font-medium text-slate-700">{row.name}</span>
-                    <input
-                      placeholder="Lote"
-                      className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm"
-                      value={lots[row.productId]?.lotCode ?? ""}
-                      onChange={(e) => setLots((current) => ({ ...current, [row.productId]: { ...current[row.productId], lotCode: e.target.value } }))}
-                    />
                     <input
                       type="date"
                       aria-label="Vence"

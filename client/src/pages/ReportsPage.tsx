@@ -51,6 +51,7 @@ const GROUPS: Record<string, { id: string; label: string }[]> = {
     { id: "conteo_ciego", label: "Inventario ciego" },
     { id: "conteo_correccion", label: "Corrección de stock" },
     { id: "conteo_faltas", label: "Faltas y sobras" },
+    { id: "vencimientos", label: "Productos a vencer" },
   ],
   caja: [
     { id: "medios", label: "Medios de pago" },

@@ -35,7 +35,7 @@ export function registerInventoryRoutes(app: Express) {
     try {
       const ctx = req.tenant!
       const horizon = startOfDay(new Date())
-      horizon.setDate(horizon.getDate() + 15)
+      horizon.setDate(horizon.getDate() + 30)
       horizon.setHours(23, 59, 59, 999)
       const [catalog, lots] = await Promise.all([
         loadCatalog(ctx),
