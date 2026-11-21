@@ -426,7 +426,6 @@ export function CountSheetPage() {
   const [blindToggle, setBlind] = useState(false)
   const [scanAdds, setScanAdds] = useState(true)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
-  const [closing, setClosing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState("")
   const dirty = useRef(new Set<string>())
@@ -603,7 +602,6 @@ export function CountSheetPage() {
     try {
       if (!(await flush())) return
       await closeCount(id, uncounted)
-      setClosing(false)
       await load()
       setFilter("diff")
       setNotice(
@@ -897,8 +895,8 @@ export function CountSheetPage() {
             </button>
             <button
               type="button"
-              onClick={() => setClosing(true)}
-              disabled={stats.counted === 0}
+              onClick={() => void onClose("KEEP")}
+              disabled={stats.counted === 0 || busy}
               className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50"
             >
               <ClipboardCheck className="size-4" /> {mode === "CORRECTION" ? "Guardar corrección" : "Terminar y generar informe"}
@@ -907,17 +905,6 @@ export function CountSheetPage() {
         </div>
       ) : null}
 
-      {closing ? (
-        <CloseDialog
-          mode={mode}
-          hideValues={blindMode}
-          stats={stats}
-          currency={currency}
-          busy={busy}
-          onCancel={() => setClosing(false)}
-          onConfirm={(uncounted) => void onClose(uncounted)}
-        />
-      ) : null}
     </div>
   )
 }
@@ -930,77 +917,6 @@ function Stat({ label, value, color, children }: { label: string; value: string;
         {value}
       </p>
       {children}
-    </div>
-  )
-}
-
-function CloseDialog({
-  mode,
-  hideValues,
-  stats,
-  currency,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  mode: string
-  hideValues: boolean
-  stats: { counted: number; diff: number; shortage: number; surplus: number; total: number }
-  currency: string
-  busy: boolean
-  onCancel: () => void
-  onConfirm: (uncounted: "KEEP" | "ZERO") => void
-}) {
-  const [uncounted, setUncounted] = useState<"KEEP" | "ZERO">("KEEP")
-  const pending = stats.total - stats.counted
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[var(--pf-navy)]/50 p-3" role="dialog" aria-modal="true" aria-label="Guardar cuadre">
-      <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md space-y-4 overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-[var(--pf-navy)]">{mode === "CORRECTION" ? "Guardar corrección" : "Terminar inventario"}</h2>
-        <ul className="space-y-1 text-sm">
-          <li>
-            Contados: <b>{stats.counted}</b> de {stats.total}
-            {hideValues ? null : (
-              <>
-                {" "}· con diferencia: <b>{stats.diff}</b>
-              </>
-            )}
-          </li>
-          {hideValues ? <li className="text-slate-500">Las diferencias se muestran al generar el informe.</li> : null}
-          <li style={{ color: RED }} className={hideValues ? "hidden" : ""}>
-            Faltante: <b>{money(stats.shortage, currency)}</b>
-          </li>
-          <li style={{ color: BLUE }} className={hideValues ? "hidden" : ""}>
-            Sobrante: <b>{money(stats.surplus, currency)}</b>
-          </li>
-        </ul>
-        {pending > 0 ? (
-          <fieldset className="space-y-2 rounded-xl bg-slate-50 p-3 text-sm">
-            <legend className="px-1 font-semibold text-slate-700">{pending} producto(s) sin contar</legend>
-            <label className="flex items-start gap-2">
-              <input type="radio" checked={uncounted === "KEEP"} onChange={() => setUncounted("KEEP")} className="mt-1" />
-              <span>Dejar su stock como está (no se tocan)</span>
-            </label>
-            <label className="flex items-start gap-2">
-              <input type="radio" checked={uncounted === "ZERO"} onChange={() => setUncounted("ZERO")} className="mt-1" />
-              <span>Ponerlos en 0 (no hay en el almacén)</span>
-            </label>
-          </fieldset>
-        ) : null}
-        <p className="text-xs text-slate-500">
-          {mode === "CORRECTION"
-            ? "Se compara con el stock del sistema en este momento, se corrige el stock con ajustes en el kardex y el resumen queda en Informes de inventario. No se puede deshacer."
-            : "Se compara con el stock del sistema en este momento y se genera el informe. El stock NO se modifica."}
-        </p>
-        <div className="flex gap-2">
-          <button type="button" onClick={onCancel} disabled={busy} className="h-11 flex-1 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700">
-            Volver
-          </button>
-          <button type="button" onClick={() => onConfirm(uncounted)} disabled={busy} className="h-11 flex-1 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
-            {busy ? "Guardando…" : mode === "CORRECTION" ? "Confirmar corrección" : "Generar informe"}
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

@@ -77,7 +77,7 @@ export function CatalogImport({ onClose, onDone }: { onClose: () => void; onDone
         </ol>
         <p className="text-xs text-slate-500">El stock no se importa: entra por Inventario → Entradas o por compras.</p>
 
-        <label className={`flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-sm font-semibold ${busy ? "opacity-60" : "border-slate-300 text-[var(--pf-accent)] hover:bg-slate-50"}`}>
+        <label className={`relative flex cursor-pointer items-center overflow-hidden justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-sm font-semibold ${busy ? "opacity-60" : "border-slate-300 text-[var(--pf-accent)] hover:bg-slate-50"}`}>
           {fileName ? `📄 ${fileName} (cambiar)` : "Elegir archivo .csv"}
           <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void onFile(e)} disabled={busy} />
         </label>

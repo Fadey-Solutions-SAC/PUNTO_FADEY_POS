@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { Search } from "lucide-react"
 import { getCustomers, saveCustomer } from "../api"
 import { DocumentLookup } from "../components/DocumentLookup"
 
@@ -70,12 +71,15 @@ export function CustomersPage() {
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          className="min-w-[12rem] flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-          placeholder="Buscar cliente"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <label className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-[var(--pf-accent)]/20">
+          <Search size={16} className="shrink-0 text-slate-400" />
+          <input
+            className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none"
+            placeholder="Buscar cliente por nombre o documento…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
         <button
           type="button"
           onClick={() => {

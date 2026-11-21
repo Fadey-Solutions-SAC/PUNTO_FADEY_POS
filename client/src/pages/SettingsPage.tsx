@@ -426,7 +426,7 @@ function ImageSlot({
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <label
-          className={`inline-flex h-10 cursor-pointer items-center rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white shadow-sm ${
+          className={`relative inline-flex h-10 cursor-pointer items-center overflow-hidden rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white shadow-sm ${
             pending ? "pointer-events-none opacity-60" : ""
           }`}
         >
