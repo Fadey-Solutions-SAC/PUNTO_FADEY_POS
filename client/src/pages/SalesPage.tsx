@@ -591,6 +591,11 @@ export function SalesPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-[var(--pf-navy)]">{line.name}</p>
                   <p className="text-xs text-slate-500">
+                    {line.brandName ? (
+                      <b className="font-semibold" style={{ color: categoryColor(line.brandId) }}>
+                        {line.brandName} ·{" "}
+                      </b>
+                    ) : null}
                     {line.presentationName} · {line.unitPriceLabel}
                   </p>
                 </div>
@@ -848,6 +853,15 @@ export function SalesPage() {
                   <span className="flex items-start justify-between gap-2">
                     <span className="min-w-0">
                       <span className="line-clamp-2 text-[15px] font-extrabold uppercase leading-tight text-[var(--pf-navy)]">{product.name}</span>
+                      {product.brandName ? (
+                        <span
+                          className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                          style={{ background: tint(categoryColor(product.brandId), 0.14), color: categoryColor(product.brandId) }}
+                        >
+                          <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(product.brandId) }} />
+                          <span className="truncate">{product.brandName}</span>
+                        </span>
+                      ) : null}
                       <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
                         <span aria-hidden className="font-mono tracking-tighter text-slate-400">||||</span>
                         <span className="truncate">
