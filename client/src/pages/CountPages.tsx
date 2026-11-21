@@ -77,12 +77,12 @@ const MODULE_VIEWS = [
 export function CountsPage() {
   const [params, setParams] = useSearchParams()
   const view = MODULE_VIEWS.some((item) => item.id === params.get("v")) ? params.get("v")! : ""
-  return (
-    <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-      {/* Teléfono: selector; PC y tablet: panel lateral. */}
+  const side = (
+    <>
+      {/* Teléfono: selector; PC y tablet: opciones en columna. */}
       <select
         aria-label="Opción de inventario"
-        className="h-11 rounded-xl border border-slate-300 bg-white px-2 text-sm font-semibold text-[var(--pf-navy)] lg:hidden"
+        className="h-11 w-full rounded-xl border border-slate-300 bg-white px-2 text-sm font-semibold text-[var(--pf-navy)] lg:hidden"
         value={view}
         onChange={(event) => setParams(event.target.value ? { v: event.target.value } : {})}
       >
@@ -92,7 +92,7 @@ export function CountsPage() {
           </option>
         ))}
       </select>
-      <aside className="hidden self-start rounded-2xl border border-slate-200 bg-white p-2 shadow-sm lg:sticky lg:top-0 lg:block">
+      <div className="hidden lg:block">
         {MODULE_VIEWS.map((item) => {
           const active = item.id === view
           return (
@@ -100,7 +100,7 @@ export function CountsPage() {
               key={item.id}
               type="button"
               onClick={() => setParams(item.id ? { v: item.id } : {})}
-              className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50"
+              className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition hover:bg-white"
               style={active ? { background: `${item.color}1f`, color: item.color } : { color: "#475569" }}
             >
               <span
@@ -116,13 +116,44 @@ export function CountsPage() {
             </button>
           )
         })}
-      </aside>
-      <div className="min-w-0">{view === "kardex" ? <KardexPage /> : view === "mermas" ? <LossesPage /> : <CountsHome />}</div>
+      </div>
+    </>
+  )
+  if (!view) return <CountsHome side={side} />
+  const info = MODULE_VIEWS.find((item) => item.id === view)!
+  return (
+    <div className="space-y-4">
+      <TopCard side={side}>
+        <div className="flex h-full items-center gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl text-white shadow-sm" style={{ background: info.color }}>
+            <info.icon size={22} />
+          </span>
+          <div>
+            <p className="text-lg font-semibold text-[var(--pf-navy)]">{info.label}</p>
+            <p className="text-sm text-slate-500">
+              {view === "kardex"
+                ? "Todos los movimientos de stock: entradas, salidas y el saldo después de cada uno."
+                : "Registra y revisa lo que se pierde en el almacén, con su costo."}
+            </p>
+          </div>
+        </div>
+      </TopCard>
+      {view === "kardex" ? <KardexPage /> : <LossesPage />}
     </div>
   )
 }
 
-function CountsHome() {
+/** Recuadro superior del módulo: opciones a la izquierda y el contenido de la opción a la derecha. */
+function TopCard({ side, children }: { side: ReactNode; children: ReactNode }) {
+  return (
+    <section className="grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <nav className="border-b border-slate-100 bg-slate-50/70 p-2 lg:border-b-0 lg:border-r">{side}</nav>
+      <div className="min-w-0 p-4">{children}</div>
+    </section>
+  )
+}
+
+function CountsHome({ side }: { side: ReactNode }) {
   const navigate = useNavigate()
   const [data, setData] = useState<Awaited<ReturnType<typeof getCounts>> | null>(null)
   const [error, setError] = useState("")
@@ -236,9 +267,10 @@ function CountsHome() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <TopCard side={side}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="text-sm text-slate-500">
             Elige el tipo de inventario para {data?.warehouseName ?? "el almacén"}. Cada uno funciona por separado y tiene su propio informe.
           </p>
         </div>
@@ -259,7 +291,7 @@ function CountsHome() {
           </Link>
         </div>
       ) : data?.canManage ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div>
           <div className="grid gap-3 md:grid-cols-3">
             {COUNT_TYPES.map((type) => (
               <form
@@ -291,6 +323,7 @@ function CountsHome() {
           </div>
         </div>
       ) : null}
+      </TopCard>
 
       <div className="flex flex-wrap items-end justify-between gap-2">
         <h2 className="font-semibold text-[var(--pf-navy)]">Inventarios realizados</h2>
