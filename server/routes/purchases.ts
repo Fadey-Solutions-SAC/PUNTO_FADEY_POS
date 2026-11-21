@@ -2,7 +2,7 @@ import type { Express } from "express"
 import { randomUUID } from "node:crypto"
 import { AppError, errorMessage } from "../../lib/errors"
 import { PURCHASE_LABEL } from "../../lib/labels"
-import { formatDate, formatMoney, formatQty } from "../../lib/money"
+import { formatDate, limaDay, formatMoney, formatQty } from "../../lib/money"
 import {
   createPurchase,
   getPurchase,
@@ -78,6 +78,7 @@ export function registerPurchasesRoutes(app: Express) {
         purchases: purchases.map((purchase) => ({
           id: purchase.id,
           createdAtLabel: formatDate(purchase.createdAt),
+          day: limaDay(purchase.createdAt),
           supplierName: purchase.supplier.tradeName,
           documentNumber: purchase.documentNumber ?? "—",
           status: purchase.status,

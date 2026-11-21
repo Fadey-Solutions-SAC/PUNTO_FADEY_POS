@@ -10,7 +10,7 @@ import {
 import { CASH_DENOMS, denomTotalCents } from "../../lib/denominations"
 import { errorMessage } from "../../lib/errors"
 import { CASH_LABEL } from "../../lib/labels"
-import { formatDate, formatMoney, fromMoneyInt } from "../../lib/money"
+import { formatDate, limaDay, formatMoney, fromMoneyInt } from "../../lib/money"
 import { readTheme } from "../../lib/appearance"
 import { brandLogoUrl } from "../../lib/cover"
 import { dashboardData } from "../../lib/dashboard"
@@ -244,6 +244,7 @@ export function registerCashRoutes(app: Express) {
           branchName: row.branch.name,
           openedAt: row.openedAt.toISOString(),
           openedAtLabel: formatDate(row.openedAt),
+          day: limaDay(row.openedAt),
           closedAt: row.closedAt?.toISOString() ?? null,
           opening: moneyOut(row.openingAmount, ctx.currency),
           expected: row.expectedAmount != null ? moneyOut(row.expectedAmount, ctx.currency) : null,

@@ -1,7 +1,7 @@
 import type { Express } from "express"
 import { listCustomers, registerAbono, saveCustomer } from "../../lib/customers"
 import { errorMessage } from "../../lib/errors"
-import { formatDate, formatMoney } from "../../lib/money"
+import { formatDate, limaDay, formatMoney } from "../../lib/money"
 import { listPaymentMethods } from "../../lib/payment-methods"
 import { prisma } from "../../lib/db"
 import { can } from "../../lib/roles"
@@ -82,6 +82,7 @@ export function registerCustomersRoutes(app: Express) {
         sales: sales.map((sale) => ({
           id: sale.id,
           createdAtLabel: formatDate(sale.createdAt),
+          day: limaDay(sale.createdAt),
           customerName: sale.customer?.name ?? "—",
           typeLabel: sale.saleType === "CREDIT" ? "Crédito" : "Contado",
           total: formatMoney(sale.total, ctx.currency),

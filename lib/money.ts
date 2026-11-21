@@ -115,3 +115,8 @@ export function formatDate(value: Date | string) {
     timeStyle: "short",
   }).format(new Date(value))
 }
+
+/** Día calendario en Perú (aaaa-mm-dd), para filtrar historiales por fecha. */
+export function limaDay(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit" }).format(date)
+}

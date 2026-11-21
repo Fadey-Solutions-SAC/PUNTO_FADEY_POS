@@ -9,7 +9,7 @@ import {
   setStock,
 } from "../../lib/inventory"
 import { MOVE_LABEL, TRANSFER_LABEL } from "../../lib/labels"
-import { formatDate, formatQty } from "../../lib/money"
+import { formatDate, limaDay, formatQty } from "../../lib/money"
 import { prisma } from "../../lib/db"
 import { can } from "../../lib/roles"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
@@ -136,6 +136,7 @@ export function registerInventoryRoutes(app: Express) {
         movements: movements.map((movement) => ({
           id: movement.id,
           createdAtLabel: formatDate(movement.createdAt),
+          day: limaDay(movement.createdAt),
           warehouseName: movement.warehouse.name,
           productName: movement.product.name,
           typeLabel: MOVE_LABEL[movement.type] ?? movement.type,

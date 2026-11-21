@@ -220,6 +220,7 @@ export function getCashHistory() {
       userName: string
       branchName: string
       openedAtLabel: string
+      day?: string
       opening: MoneyOut
       expected: MoneyOut | null
       counted: MoneyOut | null
@@ -356,11 +357,21 @@ export function getSaleTicket(saleId: string, width?: number) {
   }>(`/api/sales/${saleId}/ticket${width ? `?width=${width}` : ""}`)
 }
 
-export function getSalesHistory(status?: "VOIDED") {
-  const q = status ? `?status=${status}` : ""
+export type HistoryFilters = { desde?: string; hasta?: string; producto?: string; medio?: string }
+
+function historyQuery(filters: HistoryFilters & { status?: string }) {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value)
+  const text = params.toString()
+  return text ? `?${text}` : ""
+}
+
+export function getSalesHistory(status?: "VOIDED" | "COMPLETED", filters: HistoryFilters = {}) {
   return request<{
     currency: string
     canVoid: boolean
+    canReturn?: boolean
+    methods?: { code: string; label: string }[]
     sales: {
       id: string
       code: string
@@ -370,9 +381,30 @@ export function getSalesHistory(status?: "VOIDED") {
       customerName: string
       userName: string
       total: string
+      totalCents?: number
+      products?: string
+      voidedAtLabel?: string
       payments: string
     }[]
-  }>(`/api/sales/history${q}`)
+  }>(`/api/sales/history${historyQuery({ ...filters, status })}`)
+}
+
+export function getSalesReturns(filters: HistoryFilters = {}) {
+  return request<{
+    canReturn: boolean
+    returns: {
+      id: string
+      saleId: string
+      saleCode: string
+      createdAtLabel: string
+      customerName: string
+      userName: string
+      products: string
+      method: string
+      total: string
+      totalCents: number
+    }[]
+  }>(`/api/sales/returns${historyQuery(filters)}`)
 }
 
 export function getSaleDetail(saleId: string) {
@@ -577,6 +609,7 @@ export function getCustomerHistory(cliente?: string) {
     sales: {
       id: string
       createdAtLabel: string
+      day?: string
       customerName: string
       typeLabel: string
       total: string
@@ -715,6 +748,7 @@ export function getInventoryKardex(producto?: string) {
     movements: {
       id: string
       createdAtLabel: string
+      day?: string
       warehouseName: string
       productName: string
       typeLabel: string
@@ -831,6 +865,7 @@ export function getPurchaseHistory() {
     purchases: {
       id: string
       createdAtLabel: string
+      day?: string
       supplierName: string
       documentNumber: string
       statusLabel: string

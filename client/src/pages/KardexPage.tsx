@@ -1,9 +1,17 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { FileSpreadsheet } from "lucide-react"
 import { getInventoryKardex } from "../api"
+import { DataGrid, downloadGrid, FilterBar, FilterField, filterInput, type GridColumn } from "../components/DataGrid"
+
+type Row = Awaited<ReturnType<typeof getInventoryKardex>>["movements"][number]
 
 export function KardexPage() {
-  const [rows, setRows] = useState<Awaited<ReturnType<typeof getInventoryKardex>>["movements"]>([])
+  const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState("")
+  const [desde, setDesde] = useState("")
+  const [hasta, setHasta] = useState("")
+  const [product, setProduct] = useState("")
+  const [type, setType] = useState("")
 
   useEffect(() => {
     getInventoryKardex()
@@ -11,44 +19,70 @@ export function KardexPage() {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Error"))
   }, [])
 
+  const types = useMemo(() => [...new Set(rows.map((row) => row.typeLabel))].sort(), [rows])
+  const filtered = rows.filter((row) => {
+    if (desde && row.day && row.day < desde) return false
+    if (hasta && row.day && row.day > hasta) return false
+    if (product && !row.productName.toLowerCase().includes(product.toLowerCase())) return false
+    if (type && row.typeLabel !== type) return false
+    return true
+  })
+
+  const columns: GridColumn<Row>[] = [
+    { key: "fecha", label: "Fecha", value: (row) => row.createdAtLabel, width: 130 },
+    { key: "almacen", label: "Almacén", value: (row) => row.warehouseName },
+    { key: "producto", label: "Producto", value: (row) => row.productName, width: 160 },
+    { key: "tipo", label: "Tipo", value: (row) => row.typeLabel },
+    {
+      key: "cantidad",
+      label: "Cantidad",
+      align: "right",
+      value: (row) => row.quantityLabel,
+      render: (row) => (
+        <span className={`font-semibold ${row.quantityLabel.startsWith("-") ? "text-red-600" : "text-emerald-700"}`}>{row.quantityLabel}</span>
+      ),
+    },
+    { key: "saldo", label: "Saldo", align: "right", value: (row) => row.balanceLabel },
+    { key: "responsable", label: "Responsable", value: (row) => row.userName },
+    { key: "motivo", label: "Motivo", value: (row) => row.reason ?? "", width: 160, wrap: true },
+  ]
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Kardex</h1>
-        <p className="mt-1 text-sm text-slate-500">Entradas, salidas y saldo después de cada movimiento.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Kardex</h1>
+          <p className="mt-1 text-sm text-slate-500">{filtered.length} movimiento(s). Entradas, salidas y saldo después de cada movimiento.</p>
+        </div>
+        <FilterBar>
+          <FilterField label="Desde">
+            <input type="date" className={filterInput} value={desde} onChange={(e) => setDesde(e.target.value)} />
+          </FilterField>
+          <FilterField label="Hasta">
+            <input type="date" className={filterInput} value={hasta} onChange={(e) => setHasta(e.target.value)} />
+          </FilterField>
+          <FilterField label="Producto">
+            <input className={`${filterInput} w-40`} placeholder="Nombre del producto" value={product} onChange={(e) => setProduct(e.target.value)} />
+          </FilterField>
+          <FilterField label="Tipo">
+            <select className={filterInput} value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="">Todos</option>
+              {types.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </FilterField>
+          <button
+            type="button"
+            onClick={() => downloadGrid("kardex", columns, filtered)}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700"
+          >
+            <FileSpreadsheet size={16} /> Excel
+          </button>
+        </FilterBar>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-[48rem] text-left text-sm">
-          <thead className="bg-slate-50 text-slate-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">Fecha</th>
-              <th className="px-3 py-2 font-medium">Almacén</th>
-              <th className="px-3 py-2 font-medium">Producto</th>
-              <th className="px-3 py-2 font-medium">Tipo</th>
-              <th className="px-3 py-2 font-medium">Cantidad</th>
-              <th className="px-3 py-2 font-medium">Saldo</th>
-              <th className="px-3 py-2 font-medium">Responsable</th>
-              <th className="px-3 py-2 font-medium">Motivo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t border-slate-100">
-                <td className="px-3 py-2 whitespace-nowrap">{row.createdAtLabel}</td>
-                <td className="px-3 py-2">{row.warehouseName}</td>
-                <td className="px-3 py-2">{row.productName}</td>
-                <td className="px-3 py-2">{row.typeLabel}</td>
-                <td className="px-3 py-2">{row.quantityLabel}</td>
-                <td className="px-3 py-2">{row.balanceLabel}</td>
-                <td className="px-3 py-2">{row.userName}</td>
-                <td className="px-3 py-2">{row.reason}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {rows.length === 0 && !error ? <p className="px-3 py-6 text-center text-sm text-slate-500">Sin movimientos.</p> : null}
-      </div>
+      <DataGrid columns={columns} rows={filtered} rowKey={(row) => row.id} empty="Sin movimientos con estos filtros." />
     </div>
   )
 }

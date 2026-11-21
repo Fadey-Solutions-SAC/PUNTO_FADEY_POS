@@ -19,8 +19,6 @@ const NAV: NavGroup[] = [
     items: [
       { href: "/ventas", label: "Caja", anyOf: ["sell", "cash"] },
       { href: "/ventas/historial", label: "Historial", permission: "sell" },
-      { href: "/ventas/devoluciones", label: "Devoluciones", permission: "returnSale" },
-      { href: "/ventas/anulaciones", label: "Anulaciones", permission: "voidSale" },
     ],
   },
   {

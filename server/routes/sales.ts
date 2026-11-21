@@ -292,21 +292,36 @@ export function registerSalesRoutes(app: Express) {
         res.status(403).json({ error: "Sin permiso" })
         return
       }
-      const onlyVoided = String(req.query.status ?? "") === "VOIDED"
+      const status = String(req.query.status ?? "")
+      const onlyVoided = status === "VOIDED"
+      const onlyCompleted = status === "COMPLETED"
+      // Filtros opcionales: fechas (desde/hasta, día de Lima), nombre de producto y medio de pago.
+      const desde = req.query.desde ? new Date(`${String(req.query.desde)}T00:00:00`) : null
+      const hasta = req.query.hasta ? new Date(`${String(req.query.hasta)}T23:59:59.999`) : null
+      const product = String(req.query.producto ?? "").trim()
+      const method = String(req.query.medio ?? "").trim()
+      const filtered = Boolean(desde || hasta || product || method)
       const sales = await prisma.sale.findMany({
         where: {
           businessId: ctx.businessId,
-          status: onlyVoided ? "VOIDED" : { not: "DRAFT" },
+          status: onlyVoided ? "VOIDED" : onlyCompleted ? "COMPLETED" : { not: "DRAFT" },
+          ...(desde || hasta
+            ? { createdAt: { ...(desde && !Number.isNaN(desde.getTime()) ? { gte: desde } : {}), ...(hasta && !Number.isNaN(hasta.getTime()) ? { lte: hasta } : {}) } }
+            : {}),
+          ...(product ? { lines: { some: { description: { contains: product } } } } : {}),
+          ...(method ? { payments: { some: { method } } } : {}),
         },
-        include: { user: true, customer: true, payments: true },
+        include: { user: true, customer: true, payments: true, lines: { select: { description: true } } },
         orderBy: { createdAt: "desc" },
-        take: 150,
+        take: filtered ? 1000 : 300,
       })
       const methods = await listPaymentMethods(ctx)
       const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
       res.json({
         currency: ctx.currency,
         canVoid: can(ctx.role, "voidSale", ctx.grants),
+        canReturn: can(ctx.role, "returnSale", ctx.grants),
+        methods: methods.map((item) => ({ code: item.code, label: item.label })),
         sales: sales.map((sale) => ({
           id: sale.id,
           code: sale.id.slice(-6).toUpperCase(),
@@ -317,9 +332,59 @@ export function registerSalesRoutes(app: Express) {
           customerName: sale.customer?.name ?? "Público",
           userName: sale.user.name,
           total: formatMoney(sale.total, ctx.currency),
+          totalCents: sale.total,
+          products: sale.lines.map((line) => line.description).join(", "),
+          voidedAtLabel: sale.voidedAt ? formatDate(sale.voidedAt) : "",
           payments: sale.payments
             .map((payment) => labels[payment.method] ?? PAYMENT_LABEL[payment.method] ?? payment.method)
             .join(", "),
+        })),
+      })
+    } catch (error) {
+      res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Devoluciones registradas (para el historial de ventas), con los mismos filtros.
+  app.get("/api/sales/returns", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "sell", ctx.grants) && !can(ctx.role, "reports", ctx.grants) && !can(ctx.role, "returnSale", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso" })
+        return
+      }
+      const desde = req.query.desde ? new Date(`${String(req.query.desde)}T00:00:00`) : null
+      const hasta = req.query.hasta ? new Date(`${String(req.query.hasta)}T23:59:59.999`) : null
+      const product = String(req.query.producto ?? "").trim()
+      const method = String(req.query.medio ?? "").trim()
+      const rows = await prisma.saleReturn.findMany({
+        where: {
+          businessId: ctx.businessId,
+          ...(desde || hasta
+            ? { createdAt: { ...(desde && !Number.isNaN(desde.getTime()) ? { gte: desde } : {}), ...(hasta && !Number.isNaN(hasta.getTime()) ? { lte: hasta } : {}) } }
+            : {}),
+          ...(product ? { lines: { some: { saleLine: { description: { contains: product } } } } } : {}),
+          ...(method ? { refundMethod: method } : {}),
+        },
+        include: { user: true, sale: { include: { customer: true } }, lines: { include: { saleLine: { select: { description: true } } } } },
+        orderBy: { createdAt: "desc" },
+        take: 500,
+      })
+      const methods = await listPaymentMethods(ctx)
+      const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
+      res.json({
+        canReturn: can(ctx.role, "returnSale", ctx.grants),
+        returns: rows.map((row) => ({
+          id: row.id,
+          saleId: row.saleId,
+          saleCode: row.saleId.slice(-6).toUpperCase(),
+          createdAtLabel: formatDate(row.createdAt),
+          customerName: row.sale.customer?.name ?? "Público",
+          userName: row.user.name,
+          products: row.lines.map((line) => `${line.saleLine.description} ×${formatQty(line.quantity)}`).join(", "),
+          method: row.refundMethod === "CREDIT" ? "A la deuda del cliente" : (labels[row.refundMethod] ?? PAYMENT_LABEL[row.refundMethod] ?? row.refundMethod),
+          total: formatMoney(row.total, ctx.currency),
+          totalCents: row.total,
         })),
       })
     } catch (error) {
