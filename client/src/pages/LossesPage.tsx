@@ -43,7 +43,7 @@ function ranges() {
 }
 
 function downloadCsv(rows: LossRow[], desde: string, hasta: string) {
-  const header = ["Fecha", "Producto", "Código", "Tipo", "Causa", "Cantidad", "Costo unitario", "Costo total", "Lote", "Nota", "Usuario", "Estado"]
+  const header = ["Fecha", "Producto", "Código", "Tipo", "Causa", "Cantidad", "Costo unitario", "Costo total", "Nota", "Usuario", "Estado"]
   const lines = [header, ...rows.map((row) => [
     row.createdAtLabel,
     row.productName,
@@ -53,7 +53,6 @@ function downloadCsv(rows: LossRow[], desde: string, hasta: string) {
     row.quantityLabel,
     row.unitCost,
     row.totalCost,
-    row.lotCode,
     row.note,
     row.userName,
     row.status === "VOIDED" ? `Revertida: ${row.voidReason}` : "Activa",
@@ -274,7 +273,6 @@ export function LossesPage() {
                           <td className="whitespace-nowrap px-3 py-2 text-slate-600">{row.createdAtLabel}</td>
                           <td className="px-3 py-2">
                             <span className="font-medium text-[var(--pf-navy)]">{row.productName}</span>
-                            {row.lotCode ? <span className="block text-xs text-slate-500">Lote {row.lotCode}</span> : null}
                             {row.note ? <span className="block text-xs text-slate-500">{row.note}</span> : null}
                           </td>
                           <td className="px-3 py-2">
@@ -630,7 +628,7 @@ function LossForm({
             className="mt-1 min-h-16 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="Ej. se rompieron al descargar, lote vencido el 15/11…"
+            placeholder="Ej. se rompieron al descargar, producto vencido…"
           />
         </label>
 

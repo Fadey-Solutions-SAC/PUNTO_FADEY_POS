@@ -21,19 +21,9 @@ function startOfDay(date: Date) {
   return value
 }
 
-function expiryLabel(expiresAt: Date) {
-  const days = Math.round((startOfDay(expiresAt).getTime() - startOfDay(new Date()).getTime()) / DAY)
-  if (days < 0) return days === -1 ? "Vencido hace 1 día" : `Vencido hace ${-days} días`
-  if (days === 0) return "Vence hoy"
-  if (days === 1) return "Vence mañana"
-  return `Vence en ${days} días`
-}
-
 export async function listNotices(ctx: TenantContext): Promise<SystemNotice[]> {
-  const horizon = startOfDay(new Date())
-  horizon.setDate(horizon.getDate() + 15)
-  horizon.setHours(23, 59, 59, 999)
-  const [products, balances, lots] = await Promise.all([
+  // Sin lotes ni vencimientos: los avisos son solo de stock bajo o agotado.
+  const [products, balances] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: ctx.businessId, isActive: true, variants: { none: { isActive: true } } },
       select: { id: true, name: true, minStock: true, baseUnit: { select: { symbol: true } } },
@@ -43,29 +33,9 @@ export async function listNotices(ctx: TenantContext): Promise<SystemNotice[]> {
       where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId },
       select: { productId: true, quantity: true },
     }),
-    prisma.lot.findMany({
-      where: {
-        businessId: ctx.businessId,
-        warehouseId: ctx.warehouseId,
-        quantity: { gt: 0 },
-        expiresAt: { lte: horizon },
-      },
-      include: { product: { select: { name: true } } },
-      orderBy: { expiresAt: "asc" },
-    }),
   ])
   const stock = new Map(balances.map((row) => [row.productId, row.quantity]))
   const notices: SystemNotice[] = []
-  for (const lot of lots) {
-    if (!lot.expiresAt) continue
-    notices.push({
-      id: `lot-${lot.id}`,
-      kind: "expiry",
-      title: lot.product.name,
-      detail: `Lote ${lot.code} · ${expiryLabel(lot.expiresAt)}`,
-      href: "/inventario/alertas",
-    })
-  }
   for (const product of products) {
     const quantity = stock.get(product.id) ?? 0
     const low = quantity <= 0 || (product.minStock > 0 && quantity <= product.minStock)

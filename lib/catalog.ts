@@ -135,7 +135,8 @@ export async function saveProduct(ctx: TenantContext, input: ProductInput) {
         ...(input.taxType !== undefined
           ? { taxType: input.taxType === "EXONERADO" || input.taxType === "INAFECTO" ? input.taxType : "GRAVADO" }
           : {}),
-        trackLots: input.trackLots,
+        // El sistema ya no maneja lotes ni vencimientos.
+        trackLots: false,
         isActive: input.isActive,
         ...prices,
       }
@@ -700,7 +701,7 @@ export async function importCatalogCsv(ctx: TenantContext, text: string, options
         retailPrice: money(read("retailPrice")) || (existing ? fromMoneyInt(existing.retailPrice).toFixed(2) : "0"),
         minStock: read("minStock").replace(",", ".") || (existing ? fromQtyInt(existing.minStock).toFixed(4) : "0"),
         // Un producto existente conserva su control de lotes y su estado.
-        trackLots: existing?.trackLots ?? false,
+        trackLots: false,
         isActive: existing?.isActive ?? true,
         barcodes,
         presentations,

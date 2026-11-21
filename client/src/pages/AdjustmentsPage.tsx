@@ -8,16 +8,13 @@ export function AdjustmentsPage() {
   const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [pendingId, setPendingId] = useState("")
   const [message, setMessage] = useState("")
-  /** Lote elegido por producto ("" = automático; "__new" = escribir uno nuevo). */
-  const [lotChoice, setLotChoice] = useState<Record<string, string>>({})
-  const [newLot, setNewLot] = useState<Record<string, string>>({})
+
 
   async function reload() {
     const payload = await getInventoryAdjustments()
     setData(payload)
     setQuantities(Object.fromEntries(payload.products.map((product) => [product.id, product.stock])))
-    setLotChoice(Object.fromEntries(payload.products.map((product) => [product.id, product.lots.length === 1 ? product.lots[0].code : ""])))
-    setNewLot({})
+
   }
 
   useEffect(() => {
@@ -43,15 +40,11 @@ export function AdjustmentsPage() {
     setError("")
     setMessage("")
     try {
-      const choice = lotChoice[productId] ?? ""
-      const lotCode = choice === "__new" ? (newLot[productId] ?? "").trim() : choice
-      if (choice === "__new" && !lotCode) throw new Error("Escribe el código del lote nuevo")
       await postInventoryAdjustment({
         productId,
         presentationId,
         quantity: quantities[productId] ?? "0",
         reason,
-        lotCode: lotCode || undefined,
       })
       await reload()
       setMessage(`${name}: stock ajustado`)
@@ -84,12 +77,11 @@ export function AdjustmentsPage() {
             {category}
           </h2>
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] table-fixed text-left text-sm">
+          <table className="w-full min-w-[560px] table-fixed text-left text-sm">
             <colgroup>
               <col />
               <col className="w-28" />
               <col className="w-32" />
-              <col className="w-64" />
               <col className="w-28" />
             </colgroup>
             <thead className="bg-slate-50 text-slate-500">
@@ -97,7 +89,6 @@ export function AdjustmentsPage() {
                 <th className="px-3 py-2 font-medium">Producto</th>
                 <th className="px-3 py-2 font-medium">Stock</th>
                 <th className="px-3 py-2 font-medium">Contado</th>
-                <th className="px-3 py-2 font-medium">Lote</th>
                 <th className="px-3 py-2 font-medium" />
               </tr>
             </thead>
@@ -121,39 +112,6 @@ export function AdjustmentsPage() {
                         setQuantities((current) => ({ ...current, [product.id]: event.target.value }))
                       }
                     />
-                  </td>
-                  <td className="px-3 py-2">
-                    {product.trackLots ? (
-                      <div className="space-y-1">
-                        <select
-                          aria-label={`Lote de ${product.name}`}
-                          className="h-10 w-full rounded-xl border border-slate-200 px-2 text-xs"
-                          value={lotChoice[product.id] ?? ""}
-                          onChange={(event) => setLotChoice((current) => ({ ...current, [product.id]: event.target.value }))}
-                        >
-                          {product.lots.length !== 1 ? (
-                            <option value="">{product.lots.length === 0 ? "Automático (lote nuevo AJ)" : "Automático (sale por vencimiento)"}</option>
-                          ) : null}
-                          {product.lots.map((lot) => (
-                            <option key={lot.code} value={lot.code}>
-                              {lot.code} · {lot.quantity} {product.unit}
-                              {lot.expiresAt ? ` · vence ${lot.expiresAt}` : ""}
-                            </option>
-                          ))}
-                          <option value="__new">+ Lote nuevo…</option>
-                        </select>
-                        {lotChoice[product.id] === "__new" ? (
-                          <input
-                            className="h-9 w-full rounded-xl border border-slate-200 px-2 text-xs"
-                            placeholder="Código del lote"
-                            value={newLot[product.id] ?? ""}
-                            onChange={(event) => setNewLot((current) => ({ ...current, [product.id]: event.target.value }))}
-                          />
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <button

@@ -108,7 +108,6 @@ export function EntriesPage() {
                     <td className="whitespace-nowrap px-3 py-2 text-slate-600">{row.createdAtLabel}</td>
                     <td className="px-3 py-2">
                       <span className="font-medium text-[var(--pf-navy)]">{row.productName}</span>
-                      {row.lotCode ? <span className="block text-xs text-slate-500">Lote {row.lotCode}</span> : null}
                     </td>
                     <td className="px-3 py-2 text-slate-600">{row.reason}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-emerald-700">+{row.quantityLabel}</td>

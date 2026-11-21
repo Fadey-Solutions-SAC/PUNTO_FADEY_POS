@@ -27,6 +27,7 @@ import { registerSettingsRoutes } from "./routes/settings"
 import { registerUsersRoutes } from "./routes/users"
 import { APP_VERSION, formatAppVersion } from "../lib/version"
 import { autoBackup } from "../lib/backup"
+import { prisma } from "../lib/db"
 import { errorMessage } from "../lib/errors"
 
 // Días y rangos de fechas en hora de Perú (Render corre en UTC). Ver también scripts/boot.mjs.
@@ -109,6 +110,14 @@ if (existsSync(clientDist)) {
 app.listen(PORT, () => {
   console.log(`[punto-fadey-api] ${formatAppVersion()} en :${PORT} (Express + Vite)`)
 })
+
+// El sistema ya no maneja lotes ni vencimientos: ningún producto los controla.
+prisma.product
+  .updateMany({ where: { trackLots: true }, data: { trackLots: false } })
+  .then((result) => {
+    if (result.count) console.log(`[lotes] ${result.count} producto(s) dejaron de controlar lotes`)
+  })
+  .catch((error) => console.error("[lotes] no se pudo actualizar:", errorMessage(error)))
 
 // Copia automática diaria (se guardan las últimas 7 en el disco, junto a la base).
 const runAutoBackup = () => {
