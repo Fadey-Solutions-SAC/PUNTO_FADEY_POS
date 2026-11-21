@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react"
-import { ChevronDown, FileSpreadsheet, Plus } from "lucide-react"
+import { BadgeDollarSign, ChevronDown, FileSpreadsheet, Plus } from "lucide-react"
+import { Link } from "react-router-dom"
 import { getSuppliers, saveSupplier } from "../api"
 import { DocumentLookup } from "../components/DocumentLookup"
 import { DataGrid, downloadGrid, filterInput, type GridColumn } from "../components/DataGrid"
@@ -94,6 +95,13 @@ export function SuppliersPage() {
         <div>
           <p className="mt-1 text-sm text-slate-500">{rows.length} proveedor(es) de este negocio.</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <Link
+          to="/compras/por-pagar"
+          className="inline-flex h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-amber-600"
+        >
+          <BadgeDollarSign size={16} /> Por pagar
+        </Link>
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -102,6 +110,7 @@ export function SuppliersPage() {
         >
           <Plus size={16} /> Nuevo proveedor <ChevronDown size={16} className={`transition ${open ? "rotate-180" : ""}`} />
         </button>
+        </div>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       {message ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {message}</p> : null}
@@ -131,7 +140,7 @@ export function SuppliersPage() {
           <Field label="Razón social" wide>
             <input className={input} value={form.legalName} onChange={(e) => set("legalName")(e.target.value)} placeholder="Ej. DISTRIBUIDORA LIMA NORTE S.A.C." />
           </Field>
-          <Field label="Condición de pago" hint="Contado: pagas al recibir. Crédito: queda en Compras → Por pagar.">
+          <Field label="Condición de pago" hint="Contado: pagas al recibir. Crédito: queda en Proveedores → Por pagar.">
             <select className={input} value={form.paymentTerm} onChange={(e) => set("paymentTerm")(e.target.value)}>
               <option value="CONTADO">Contado</option>
               <option value="CREDITO">Crédito</option>
