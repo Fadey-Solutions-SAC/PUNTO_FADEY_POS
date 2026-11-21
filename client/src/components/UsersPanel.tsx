@@ -33,7 +33,7 @@ export function UsersPanel() {
   }, [load])
 
   async function onDelete(user: UserRow) {
-    if (!window.confirm(`¿Quitar el acceso de ${user.name}? Ya no podrá entrar a este negocio.`)) return
+    if (!window.confirm(`¿Eliminar el acceso de ${user.name}? Ya no podrá entrar a este negocio.`)) return
     setError("")
     try {
       await deleteUser(user.id)
@@ -83,7 +83,7 @@ export function UsersPanel() {
       </div>
 
       {!data.canManage ? (
-        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">Solo el dueño del negocio puede crear, editar o quitar usuarios y permisos.</p>
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">Solo el dueño del negocio puede crear, editar o eliminar usuarios y permisos.</p>
       ) : null}
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       {message ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {message}</p> : null}
@@ -131,7 +131,7 @@ export function UsersPanel() {
                       </button>
                       {!owner && user.id !== data.currentUserId ? (
                         <button type="button" onClick={() => void onDelete(user)} className="rounded-lg px-2 py-1 font-semibold text-red-700 hover:bg-red-50">
-                          Quitar
+                          Eliminar
                         </button>
                       ) : null}
                     </div>
@@ -345,7 +345,7 @@ function UserForm({
             {form.mode === "role" ? <p className="text-xs text-slate-500">Usa los permisos de su rol; si cambias los permisos del rol, se aplican a este usuario.</p> : null}
           </div>
         ) : (
-          <p className="rounded-xl bg-teal-50 px-3 py-2 text-sm text-teal-900">El dueño tiene acceso total y no se puede quitar.</p>
+          <p className="rounded-xl bg-teal-50 px-3 py-2 text-sm text-teal-900">El dueño tiene acceso total y no se puede eliminar.</p>
         )}
 
         {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}

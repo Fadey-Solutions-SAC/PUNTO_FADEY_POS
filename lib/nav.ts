@@ -26,12 +26,10 @@ const NAV: NavGroup[] = [
   {
     title: "Productos",
     items: [
-      { href: "/productos", label: "Catálogo" },
+      { href: "/productos", label: "Productos y marcas" },
       { href: "/productos/categorias", label: "Categorías y marcas" },
-      { href: "/productos/unidades", label: "Unidades" },
       { href: "/productos/presentaciones", label: "Presentaciones" },
       { href: "/productos/codigos", label: "Códigos de barras" },
-      { href: "/productos/precios", label: "Listas de precios" },
     ],
   },
   {
@@ -43,7 +41,7 @@ const NAV: NavGroup[] = [
       { href: "/inventario/ajustes", label: "Ajustes", permission: "adjust" },
       { href: "/inventario/kardex", label: "Kardex" },
       { href: "/inventario/mermas", label: "Mermas y pérdidas", anyOf: ["inventoryMove", "reports"] },
-      { href: "/inventario/alertas", label: "Alertas" },
+      { href: "/inventario/alertas", label: "Alertas de stock" },
       { href: "/inventario/almacenes", label: "Almacenes" },
     ],
   },
@@ -60,7 +58,7 @@ const NAV: NavGroup[] = [
   {
     title: "Clientes",
     items: [
-      { href: "/clientes", label: "Registro", permission: "customers" },
+      { href: "/clientes", label: "Clientes", permission: "customers" },
       { href: "/clientes/historial", label: "Historial", permission: "customers" },
       { href: "/clientes/creditos", label: "Créditos", permission: "customers" },
     ],

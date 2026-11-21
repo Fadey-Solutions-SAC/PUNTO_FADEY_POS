@@ -4,9 +4,10 @@ import {
   Building2,
   DatabaseBackup,
   CreditCard,
-  ImageIcon,
   Info,
   Palette,
+  Ruler,
+  Warehouse,
   Printer,
   ScanBarcode,
   Store,
@@ -28,17 +29,19 @@ import { UsersPanel } from "../components/UsersPanel"
 import { BackupsPanel } from "../components/BackupsPanel"
 import { WipeDataPanel } from "../components/WipeDataPanel"
 import { PlacesPanel } from "../components/PlacesPanel"
+import { UnitsPage } from "./UnitsPage"
 import { AssistantSettings } from "../components/AssistantSettings"
 
 type Settings = Awaited<ReturnType<typeof getSettings>>
-type ModuleId = "negocio" | "apariencia" | "marca" | "pagos" | "sucursales" | "usuarios" | "impresion" | "copias" | "lector" | "sistema"
+type ModuleId = "negocio" | "apariencia" | "pagos" | "sucursales" | "almacenes" | "unidades" | "usuarios" | "impresion" | "copias" | "lector" | "sistema"
 
 const MODULES: { id: ModuleId; label: string; hint: string; icon: LucideIcon; color: string }[] = [
-  { id: "negocio", label: "Negocio", hint: "Nombre, RUC y moneda", icon: Building2, color: "#0d9488" },
-  { id: "marca", label: "Logo y portada", hint: "Imagen del negocio", icon: ImageIcon, color: "#ec4899" },
+  { id: "negocio", label: "Negocio", hint: "Nombre, RUC, moneda, logo y portada", icon: Building2, color: "#0d9488" },
   { id: "apariencia", label: "Apariencia", hint: "Color del sistema", icon: Palette, color: "#8b5cf6" },
-  { id: "pagos", label: "Métodos de pago", hint: "Efectivo, Yape, tarjeta…", icon: CreditCard, color: "#6366f1" },
-  { id: "sucursales", label: "Sucursales y cajas", hint: "Locales, almacenes y cajas", icon: Store, color: "#f59e0b" },
+  { id: "pagos", label: "Medios de pago", hint: "Efectivo, Yape, tarjeta…", icon: CreditCard, color: "#6366f1" },
+  { id: "sucursales", label: "Sucursales y cajas", hint: "Locales y cajas", icon: Store, color: "#f59e0b" },
+  { id: "almacenes", label: "Almacenes", hint: "Crear y elegir almacenes", icon: Warehouse, color: "#d97706" },
+  { id: "unidades", label: "Unidades", hint: "Peso, volumen y conversiones", icon: Ruler, color: "#14b8a6" },
   { id: "usuarios", label: "Usuarios y permisos", hint: "Accesos, roles y contraseñas", icon: Users, color: "#0ea5e9" },
   { id: "impresion", label: "Impresión y SUNAT", hint: "Asistente local: ticketera y comprobantes", icon: Printer, color: "#0f766e" },
   { id: "copias", label: "Copias de seguridad", hint: "Respaldo de toda la información", icon: DatabaseBackup, color: "#334155" },
@@ -104,10 +107,11 @@ export function SettingsPage() {
 
   const summary: Record<ModuleId, string> = {
     negocio: data?.business.name || "—",
-    marca: data ? `${data.logo ? "Con logo" : "Sin logo"} · ${data.cover ? "con portada" : "sin portada"}` : "…",
     apariencia: data?.themes.find((item) => item.id === data.theme)?.label ?? "…",
-    pagos: data ? `${data.paymentMethods.length} métodos` : "…",
+    pagos: data ? `${data.paymentMethods.length} medios` : "…",
     sucursales: data ? `${data.branches.length} sucursal${data.branches.length === 1 ? "" : "es"}` : "…",
+    almacenes: data ? `${data.branches.reduce((n, b) => n + (b.warehouseList?.length ?? 0), 0)} almacenes` : "…",
+    unidades: "Unidades de medida",
     usuarios: data ? `${data.users.length} usuario${data.users.length === 1 ? "" : "s"}` : "…",
     impresion: "Ticketera y facturación",
     copias: "Descargar y automáticas",
@@ -207,8 +211,9 @@ export function SettingsPage() {
             </form>
           ) : null}
 
-          {data && active === "marca" ? (
-            <div className="grid gap-4 md:grid-cols-2">
+          {data && active === "negocio" ? (
+            <div className="grid gap-4 border-t border-slate-100 pt-4 md:grid-cols-2">
+              <h3 className="font-semibold text-[var(--pf-navy)] md:col-span-2">Logo y portada</h3>
               <ImageSlot
                 title="Logo"
                 description="Se ve en la pantalla de inicio de sesión de este negocio. Cuadrado, PNG o JPG."
@@ -219,7 +224,7 @@ export function SettingsPage() {
                   run(async () => uploadSettingsImage("logo", await shrinkImage(file, { max: 512, keepAlpha: true })), "Logo actualizado")
                 }
                 onRemove={() =>
-                  run(() => deleteSettingsImage("logo"), "Logo quitado")
+                  run(() => deleteSettingsImage("logo"), "Logo eliminado")
                 }
               />
               <ImageSlot
@@ -230,7 +235,7 @@ export function SettingsPage() {
                 onPick={(file) =>
                   run(async () => uploadSettingsImage("cover", await shrinkImage(file, { max: 1920, quality: 0.82 })), "Portada actualizada")
                 }
-                onRemove={() => run(() => deleteSettingsImage("cover"), "Portada quitada")}
+                onRemove={() => run(() => deleteSettingsImage("cover"), "Portada eliminada")}
               />
               <p className="text-xs text-slate-500 md:col-span-2">
                 Cada negocio tiene su propio logo y portada para su pantalla de inicio de sesión (se muestran los del último
@@ -323,6 +328,10 @@ export function SettingsPage() {
           ) : null}
 
           {data && active === "sucursales" ? <PlacesPanel branches={data.branches} onChanged={reload} /> : null}
+
+          {data && active === "almacenes" ? <PlacesPanel branches={data.branches} onChanged={reload} mode="warehouses" /> : null}
+
+          {active === "unidades" ? <UnitsPage embedded /> : null}
 
           {data && active === "usuarios" ? <UsersPanel /> : null}
 
@@ -448,7 +457,7 @@ function ImageSlot({
             onClick={onRemove}
             className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-medium text-red-700 hover:bg-red-50"
           >
-            Quitar
+            Eliminar
           </button>
         ) : null}
       </div>

@@ -579,7 +579,7 @@ export function SalesPage() {
                   className="ml-auto text-xs text-slate-400 hover:text-red-700"
                   onClick={() => changeQty(line.key, 0)}
                 >
-                  Quitar
+                  Eliminar
                 </button>
               </div>
             </div>
@@ -1071,7 +1071,7 @@ export function SalesPage() {
                     disabled={payments.length === 1}
                     onClick={() => setPayments((current) => current.filter((_, i) => i !== index))}
                   >
-                    Quitar
+                    Eliminar
                   </button>
                 </div>
               ))}

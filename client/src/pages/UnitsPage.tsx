@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { createCatalogUnit, getCatalogUnits } from "../api"
 
-export function UnitsPage() {
+/** embedded: dentro de Configuración (sin título de página). */
+export function UnitsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<Awaited<ReturnType<typeof getCatalogUnits>> | null>(null)
   const [error, setError] = useState("")
   const [name, setName] = useState("")
@@ -38,7 +39,7 @@ export function UnitsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
+      <div className={embedded ? "hidden" : ""}>
         <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Unidades</h1>
         <p className="mt-1 text-sm text-slate-500">
           Conversiones de peso, longitud o volumen. Las cajas se definen como presentación.

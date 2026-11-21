@@ -12,7 +12,18 @@ import {
 type Branch = Awaited<ReturnType<typeof getSettings>>["branches"][number]
 
 /** Sucursales con sus almacenes y cajas; cambiar el lugar de trabajo. */
-export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onChanged: () => Promise<void> }) {
+/** mode «branches»: sucursales y cajas. mode «warehouses»: solo almacenes (módulo aparte en Configuración). */
+export function PlacesPanel({
+  branches,
+  onChanged,
+  mode = "branches",
+}: {
+  branches: Branch[]
+  onChanged: () => Promise<void>
+  mode?: "branches" | "warehouses"
+}) {
+  const showWarehouses = mode === "warehouses"
+  const showRegisters = mode === "branches"
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
@@ -72,6 +83,8 @@ export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onCha
               {branch.current ? <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white">Sucursal actual</span> : null}
             </div>
 
+            {showWarehouses ? (
+            <>
             <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Almacenes</p>
             <ul className="mt-1 space-y-1">
               {(branch.warehouseList ?? []).map((warehouse) => (
@@ -104,7 +117,11 @@ export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onCha
                 </li>
               ))}
             </ul>
+            </>
+            ) : null}
 
+            {showRegisters ? (
+            <>
             <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Cajas</p>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {(branch.registerList ?? []).map((register) => (
@@ -113,10 +130,10 @@ export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onCha
                   {branch.current ? (
                     <button
                       type="button"
-                      aria-label={`Quitar ${register.name}`}
+                      aria-label={`Eliminar ${register.name}`}
                       disabled={busy}
                       onClick={() => {
-                        if (window.confirm(`¿Quitar ${register.name}? Si tiene historial, solo se desactiva.`)) void run(() => deleteRegisterApi(register.id), "Caja quitada")
+                        if (window.confirm(`¿Eliminar ${register.name}? Si tiene historial, solo se desactiva.`)) void run(() => deleteRegisterApi(register.id), "Caja eliminada")
                       }}
                       className="text-slate-400 hover:text-red-700"
                     >
@@ -127,12 +144,15 @@ export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onCha
               ))}
               {(branch.registerList ?? []).length === 0 ? <span className="text-xs text-slate-400">Sin cajas</span> : null}
             </div>
+            </>
+            ) : null}
           </div>
         ))}
       </div>
 
       {current ? (
         <div className="grid gap-3 md:grid-cols-2">
+          {showWarehouses ? (
           <form
             onSubmit={(event) => submit(event, () => createWarehouseApi(warehouseName), "Almacén creado", () => setWarehouseName(""))}
             className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-3"
@@ -142,6 +162,8 @@ export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onCha
               Agregar
             </button>
           </form>
+          ) : null}
+          {showRegisters ? (
           <form
             onSubmit={(event) => submit(event, () => createRegisterApi(registerName), "Caja creada", () => setRegisterName(""))}
             className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-3"
@@ -151,9 +173,11 @@ export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onCha
               Agregar
             </button>
           </form>
+          ) : null}
         </div>
       ) : null}
 
+      {showRegisters ? (
       <form
         onSubmit={(event) => submit(event, () => createSettingsBranch(branchName), "Sucursal creada con su almacén principal y Caja 1", () => setBranchName(""))}
         className="flex gap-2 rounded-2xl border border-dashed border-slate-300 p-3"
@@ -163,7 +187,10 @@ export function PlacesPanel({ branches, onChanged }: { branches: Branch[]; onCha
           Crear sucursal
         </button>
       </form>
-      <p className="text-xs text-slate-500">Los almacenes y cajas nuevos se crean en la sucursal actual. Para agregarlos en otra, primero cambia a esa sucursal.</p>
+      ) : null}
+      <p className="text-xs text-slate-500">
+        {showWarehouses ? "Los almacenes nuevos" : "Las cajas nuevas"} se crean en la sucursal actual. Para agregarlos en otra, primero cambia a esa sucursal.
+      </p>
     </div>
   )
 }
