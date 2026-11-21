@@ -11,7 +11,7 @@ import {
 } from "../api"
 import { tint } from "../colors"
 import { ProductPhoto } from "../components/ProductPhoto"
-import { CodeField, playScanPit, ScannerButton } from "../components/Scanner"
+import { playScanPit, ScannerButton } from "../components/Scanner"
 
 type Data = Awaited<ReturnType<typeof getLosses>>
 
@@ -516,7 +516,6 @@ function LossForm({
               />
               <ScannerButton onCode={onCode} />
             </div>
-            <CodeField onCode={onCode} placeholder="O pasa el lector de código y Enter" />
             <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
               {filtered.map((item) => (
                 <li key={item.id}>

@@ -21,6 +21,7 @@ import { can, ROLE_LABEL, type Role } from "../../lib/roles"
 import { formatQty } from "../../lib/money"
 import { PAYMENT_LABEL } from "../../lib/labels"
 import { navigation } from "../../lib/nav"
+import { readPosSettings } from "../../lib/pos-settings"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
 
 function moneyOut(amount: number, currency: string) {
@@ -35,10 +36,11 @@ export function registerCashRoutes(app: Express) {
   app.get("/api/panel/bootstrap", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
-      const [theme, logo, notices] = await Promise.all([
+      const [theme, logo, notices, pos] = await Promise.all([
         readTheme(ctx.businessId),
         brandLogoUrl(ctx.businessId),
         listNotices(ctx),
+        readPosSettings(ctx.businessId),
       ])
       res.json({
         user: {
@@ -59,6 +61,7 @@ export function registerCashRoutes(app: Express) {
         theme,
         logo,
         version: APP_VERSION,
+        hardwareReader: pos.hardwareReader,
         notices: notices.map((item) => ({
           id: item.id,
           kind: item.kind,

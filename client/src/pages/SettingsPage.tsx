@@ -20,13 +20,13 @@ import {
   deleteSettingsPaymentMethod,
   getSettings,
   saveSettingsBusiness,
-  saveSettingsHardwareReader,
   saveSettingsTheme,
   uploadSettingsImage,
 } from "../api"
 import { shrinkImage } from "../image"
 import { UsersPanel } from "../components/UsersPanel"
 import { BackupsPanel } from "../components/BackupsPanel"
+import { ReaderSettings } from "../components/ReaderSettings"
 import { WipeDataPanel } from "../components/WipeDataPanel"
 import { PlacesPanel } from "../components/PlacesPanel"
 import { UnitsPage } from "./UnitsPage"
@@ -343,23 +343,7 @@ export function SettingsPage() {
             </div>
           ) : null}
 
-          {data && active === "lector" ? (
-            <label className="flex items-start gap-3 rounded-xl bg-slate-50 px-3 py-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4"
-                checked={Boolean(data.hardwareReader)}
-                disabled={pending}
-                onChange={(event) => void run(() => saveSettingsHardwareReader(event.target.checked))}
-              />
-              <span>
-                <span className="block font-medium text-[var(--pf-navy)]">Usar lector de hardware continuo</span>
-                <span className="block text-xs text-slate-500">
-                  En venta aparece un campo siempre listo para el lector USB o Bluetooth.
-                </span>
-              </span>
-            </label>
-          ) : null}
+          {data && active === "lector" ? <ReaderSettings enabled={Boolean(data.hardwareReader)} onChanged={reload} /> : null}
 
           {data && active === "sistema" ? (
             <dl className="grid gap-2 text-sm sm:grid-cols-3">

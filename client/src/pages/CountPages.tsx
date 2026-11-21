@@ -11,7 +11,7 @@ import {
   type CountDetail,
   type CountLine,
 } from "../api"
-import { CodeField, playScanPit, ScannerButton } from "../components/Scanner"
+import { CodeField, playScanPit, ScannerButton, useReaderEnabled } from "../components/Scanner"
 import { DataGrid, downloadGrid, type GridColumn } from "../components/DataGrid"
 
 const RED = "#dc2626"
@@ -277,6 +277,7 @@ type Filter = "all" | "pending" | "counted" | "diff"
 
 export function CountSheetPage() {
   const { id = "" } = useParams()
+  const reader = useReaderEnabled()
   const navigate = useNavigate()
   const [count, setCount] = useState<CountDetail | null>(null)
   const [entries, setEntries] = useState<Record<string, Entry>>({})
@@ -579,9 +580,10 @@ export function CountSheetPage() {
         {open ? (
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
-              <CodeField onCode={onScan} placeholder="Escanea o escribe el código y Enter (suma 1 y te lleva al producto)" />
+              {/* Con lector activado se usa el botón «Lector»; sin él, este campo permite escribir el código. */}
+              {reader ? null : <CodeField onCode={onScan} placeholder="Escribe el código y Enter (suma 1 y te lleva al producto)" />}
             </div>
-            <ScannerButton onCode={onScan} />
+            <ScannerButton onCode={onScan} continuous />
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">

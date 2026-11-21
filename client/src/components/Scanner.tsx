@@ -67,8 +67,34 @@ export function CodeField({
   )
 }
 
-export function ScannerButton({ onCode }: { onCode: (code: string) => void }) {
+// Lector de código (USB o Bluetooth): se activa en Configuración → Lector de código.
+const READER_EVENT = "pf-reader-change"
+let readerEnabled = false
+
+export function setReaderEnabled(enabled: boolean) {
+  readerEnabled = enabled
+  window.dispatchEvent(new Event(READER_EVENT))
+}
+
+export function useReaderEnabled() {
+  const [enabled, setEnabled] = useState(readerEnabled)
+  useEffect(() => {
+    const sync = () => setEnabled(readerEnabled)
+    sync()
+    window.addEventListener(READER_EVENT, sync)
+    return () => window.removeEventListener(READER_EVENT, sync)
+  }, [])
+  return enabled
+}
+
+/**
+ * Cámara y, si el lector está activado, el botón «Lector» a su derecha.
+ * continuous: la ventana del lector queda abierta para pasar varios códigos (venta, conteo).
+ */
+export function ScannerButton({ onCode, continuous = false }: { onCode: (code: string) => void; continuous?: boolean }) {
   const [open, setOpen] = useState(false)
+  const [readerOpen, setReaderOpen] = useState(false)
+  const reader = useReaderEnabled()
   return (
     <>
       <button
@@ -79,8 +105,95 @@ export function ScannerButton({ onCode }: { onCode: (code: string) => void }) {
         <span aria-hidden>📷</span>
         Cámara
       </button>
+      {reader ? (
+        <button
+          type="button"
+          className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+          onClick={() => setReaderOpen(true)}
+          title="Usar el lector de código USB o Bluetooth"
+        >
+          <span aria-hidden>▥</span>
+          Lector
+        </button>
+      ) : null}
       {open ? <ScannerDialog onClose={() => setOpen(false)} onCode={onCode} /> : null}
+      {readerOpen ? <ReaderDialog onClose={() => setReaderOpen(false)} onCode={onCode} continuous={continuous} /> : null}
     </>
+  )
+}
+
+/** Ventana que espera el código del lector (el lector «escribe» el código y pulsa Enter). */
+function ReaderDialog({ onClose, onCode, continuous }: { onClose: () => void; onCode: (code: string) => void; continuous: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [value, setValue] = useState("")
+  const [hits, setHits] = useState<string[]>([])
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] grid place-items-center bg-[var(--pf-navy)]/60 p-3"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Lector de código"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+        else event.preventDefault()
+        inputRef.current?.focus()
+      }}
+    >
+      <div className="w-full max-w-sm space-y-3 rounded-2xl bg-white p-5 text-center shadow-xl">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[var(--pf-navy)]">Lector de código</h2>
+          <button type="button" className="text-sm text-slate-500 hover:text-slate-800" onClick={onClose}>
+            Cerrar <kbd className="ml-1 hidden rounded border border-slate-200 px-1 text-[10px] sm:inline">Esc</kbd>
+          </button>
+        </div>
+        <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-emerald-50 text-4xl text-emerald-600 ring-2 ring-emerald-200">
+          <span className="animate-pulse" aria-hidden>▥</span>
+        </div>
+        <p className="text-sm font-medium text-slate-700">Pasa el código por el lector ahora</p>
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onBlur={() => window.setTimeout(() => inputRef.current?.focus(), 0)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return
+            event.preventDefault()
+            const code = value.trim()
+            setValue("")
+            if (!code) return
+            playScanPit()
+            if (navigator.vibrate) navigator.vibrate(60)
+            onCode(code)
+            if (continuous) setHits((current) => [code, ...current].slice(0, 5))
+            else onClose()
+          }}
+          placeholder="Esperando lectura… (o escribe el código y Enter)"
+          className="h-11 w-full rounded-xl border border-emerald-200 bg-emerald-50/40 px-3 text-center font-mono text-sm outline-none focus:ring-2 focus:ring-emerald-300"
+          autoComplete="off"
+          inputMode="none"
+        />
+        {hits.length ? (
+          <ul className="space-y-1 text-left text-xs">
+            {hits.map((code, index) => (
+              <li key={`${code}-${index}`} className="rounded-lg bg-emerald-50 px-2 py-1 font-mono text-emerald-800">
+                ✓ {code}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {continuous ? <p className="text-xs text-slate-500">Puedes pasar varios códigos seguidos. Cierra cuando termines.</p> : null}
+      </div>
+    </div>
   )
 }
 

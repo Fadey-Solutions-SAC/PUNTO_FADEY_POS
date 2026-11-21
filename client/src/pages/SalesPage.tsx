@@ -26,7 +26,7 @@ import {
   searchCachedProducts,
   OFFLINE_EVENT,
 } from "../offline"
-import { CodeField, playScanPit, ScannerButton } from "../components/Scanner"
+import { playScanPit, ScannerButton } from "../components/Scanner"
 import { categoryColor, tint } from "../colors"
 import { ProductPhoto } from "../components/ProductPhoto"
 
@@ -66,7 +66,7 @@ export function SalesPage() {
   const [methods, setMethods] = useState<{ code: string; label: string }[]>([])
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
   const [accesses, setAccesses] = useState<{ href: string; label: string }[]>([])
-  const [hardwareReader, setHardwareReader] = useState(false)
+  const [, setHardwareReader] = useState(false)
   const [canSell, setCanSell] = useState(true)
   const [query, setQuery] = useState("")
   const [brandId, setBrandId] = useState("")
@@ -785,9 +785,8 @@ export function SalesPage() {
                 <kbd className="hidden rounded border border-slate-200 px-1.5 text-[10px] text-slate-400 sm:inline">F3</kbd>
               )}
             </label>
-            <ScannerButton onCode={onCode} />
+            <ScannerButton onCode={onCode} continuous />
           </div>
-          {hardwareReader ? <CodeField onCode={onCode} autoFocus placeholder="Lector USB o Bluetooth" /> : null}
 
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
             <Chip active={brandId === ""} onClick={() => setBrandId("")}>

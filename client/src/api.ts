@@ -116,6 +116,8 @@ export type PanelBootstrap = {
   theme?: string
   logo?: string | null
   version?: string
+  /** Lector de código (USB/Bluetooth) activado en Configuración. */
+  hardwareReader?: boolean
   notices?: PanelNotice[]
   nav: { title: string; items: { href: string; label: string }[] }[]
   permissions: {

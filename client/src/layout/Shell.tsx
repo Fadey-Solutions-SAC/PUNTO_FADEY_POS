@@ -38,6 +38,7 @@ import {
 import type { PanelBootstrap } from "../api"
 import { isServerReachable, logout, SERVER_EVENT } from "../api"
 import { formatAppPath } from "../nav"
+import { setReaderEnabled } from "../components/Scanner"
 import { clearOfflineCache, OFFLINE_EVENT, pendingCount } from "../offline"
 
 type LucideIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
@@ -215,6 +216,10 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
       window.removeEventListener("storage", sync)
     }
   }, [])
+
+  useEffect(() => {
+    setReaderEnabled(Boolean(panel.hardwareReader))
+  }, [panel.hardwareReader])
 
   const navItems = panel.nav.flatMap((group) => group.items)
   const activeHref = navItems
