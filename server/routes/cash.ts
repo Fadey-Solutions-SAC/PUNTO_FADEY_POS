@@ -278,10 +278,38 @@ export function registerCashRoutes(app: Express) {
           label: labels[code] ?? code,
           expected: moneyOut(expected, ctx.currency),
         }))
+      const [sales, returns] = await Promise.all([
+        prisma.sale.findMany({
+          where: { businessId: ctx.businessId, sessionId: session.id, status: { in: ["COMPLETED", "VOIDED"] } },
+          select: { status: true, total: true, saleType: true },
+        }),
+        prisma.saleReturn.findMany({ where: { businessId: ctx.businessId, sessionId: session.id }, select: { total: true, refundMethod: true } }),
+      ])
+      const completed = sales.filter((sale) => sale.status === "COMPLETED")
+      const sum = (rows: { total: number }[]) => rows.reduce((total, row) => total + row.total, 0)
       res.json({
         currency: ctx.currency,
         denoms: CASH_DENOMS,
         registerName: session.register.name,
+        userName: summary.session.user.name,
+        openedAtLabel: formatDate(summary.session.openedAt),
+        shift: {
+          salesCount: completed.length,
+          salesTotal: moneyOut(sum(completed), ctx.currency),
+          creditTotal: moneyOut(sum(completed.filter((sale) => sale.saleType === "CREDIT")), ctx.currency),
+          voidedCount: sales.length - completed.length,
+          voidedTotal: moneyOut(sum(sales.filter((sale) => sale.status === "VOIDED")), ctx.currency),
+          returnsCount: returns.length,
+          returnsTotal: moneyOut(sum(returns), ctx.currency),
+          movements: summary.session.movements.map((movement) => ({
+            id: movement.id,
+            typeLabel: CASH_LABEL[movement.type] ?? movement.type,
+            reason: movement.reason ?? "",
+            amount: moneyOut(movement.amount, ctx.currency),
+            out: movement.type === "EXPENSE" || movement.type === "WITHDRAWAL",
+            atLabel: formatDate(movement.createdAt),
+          })),
+        },
         opening: moneyOut(summary.session.openingAmount, ctx.currency),
         expectedCash: moneyOut(summary.expected, ctx.currency),
         income: moneyOut(summary.income, ctx.currency),
@@ -304,10 +332,28 @@ export function registerCashRoutes(app: Express) {
       if ((!counted || counted === "0") && denoms && typeof denoms === "object") {
         counted = fromMoneyInt(denomTotalCents(denoms as Record<string, string>)).toFixed(2)
       }
+      // Confirmación de los otros medios (Yape, tarjeta, transferencia…): se guarda en el detalle del cierre.
+      const methodCounts = req.body?.methodCounts && typeof req.body.methodCounts === "object" ? (req.body.methodCounts as Record<string, string>) : {}
+      let methodDetail = ""
+      if (Object.keys(methodCounts).length) {
+        const session = await currentSession(ctx)
+        if (session) {
+          const [summary, methods] = await Promise.all([summarizeSession(ctx, session.id), listPaymentMethods(ctx)])
+          const labels = Object.fromEntries(methods.map((item) => [item.code, item.label]))
+          methodDetail = Object.entries(methodCounts)
+            .map(([code, value]) => {
+              const expected = summary.byMethod[code] ?? 0
+              const confirmed = Math.round(Number(String(value).replace(",", ".")) * 100) || 0
+              const diff = confirmed - expected
+              return `${labels[code] ?? code}: confirmado ${fromMoneyInt(confirmed).toFixed(2)} · esperado ${fromMoneyInt(expected).toFixed(2)}${diff ? ` · diferencia ${fromMoneyInt(diff).toFixed(2)}` : " · cuadra"}`
+            })
+            .join("\n")
+        }
+      }
       await closeSession(ctx, {
         counted,
         notes: String(req.body?.notes ?? ""),
-        arqueoDetail: String(req.body?.arqueoDetail ?? ""),
+        arqueoDetail: [String(req.body?.arqueoDetail ?? ""), methodDetail ? `Otros medios:\n${methodDetail}` : ""].filter(Boolean).join("\n"),
       })
       res.json({ ok: true })
     } catch (error) {

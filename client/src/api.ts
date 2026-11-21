@@ -239,6 +239,18 @@ export type ClosePreview = {
   expense: MoneyOut
   byMethod: Record<string, MoneyOut>
   posRows: { code: string; label: string; expected: MoneyOut }[]
+  userName?: string
+  openedAtLabel?: string
+  shift?: {
+    salesCount: number
+    salesTotal: MoneyOut
+    creditTotal: MoneyOut
+    voidedCount: number
+    voidedTotal: MoneyOut
+    returnsCount: number
+    returnsTotal: MoneyOut
+    movements: { id: string; typeLabel: string; reason: string; amount: MoneyOut; out: boolean; atLabel: string }[]
+  }
 }
 
 export function getClosePreview() {
@@ -250,6 +262,8 @@ export function closeCash(input: {
   notes?: string
   arqueoDetail?: string
   denominations?: Record<string, string>
+  /** Monto confirmado por cada otro medio (Yape, tarjeta…). */
+  methodCounts?: Record<string, string>
 }) {
   return request<{ ok: true }>("/api/cash/close", {
     method: "POST",
