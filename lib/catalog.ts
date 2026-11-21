@@ -78,9 +78,11 @@ async function ownedBrand(businessId: string, id?: string) {
 }
 
 async function brandByName(businessId: string, name: string) {
-  const clean = name.trim()
+  // Las marcas se guardan en mayúsculas; si ya existe con otras mayúsculas/minúsculas, se usa esa.
+  const clean = upperName(name)
   if (!clean) return null
-  const current = await prisma.brand.findFirst({ where: { businessId, name: clean } })
+  const brands = await prisma.brand.findMany({ where: { businessId }, select: { id: true, name: true } })
+  const current = brands.find((brand) => upperName(brand.name) === clean)
   if (current) return current.id
   try {
     const created = await prisma.brand.create({ data: { businessId, name: clean } })
@@ -390,7 +392,8 @@ export async function getProductForm(ctx: TenantContext, id: string) {
 
 export async function saveNamed(ctx: TenantContext, kind: "category" | "brand", name: string, id?: string) {
   assertCan(ctx, "catalogWrite")
-  const clean = kind === "category" ? upperName(name) : name.trim()
+  // Categorías y marcas siempre en mayúsculas.
+  const clean = upperName(name)
   if (clean.length < 2) throw new AppError("Indica un nombre")
   try {
     if (kind === "category") {

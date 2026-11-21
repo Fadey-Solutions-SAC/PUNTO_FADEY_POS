@@ -117,9 +117,9 @@ export function CatalogPage() {
               <input
                 autoFocus
                 className="h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm"
-                placeholder="Ej. Gloria"
+                placeholder="Ej. GLORIA"
                 value={newBrand}
-                onChange={(event) => setNewBrand(event.target.value)}
+                onChange={(event) => setNewBrand(event.target.value.toLocaleUpperCase("es-PE"))}
               />
               <button type="submit" className="h-10 rounded-xl bg-slate-600 px-3 text-sm font-semibold text-white">
                 Crear

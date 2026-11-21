@@ -119,6 +119,23 @@ prisma.product
   })
   .catch((error) => console.error("[lotes] no se pudo actualizar:", errorMessage(error)))
 
+// Marcas en mayúsculas: las antiguas se pasan a mayúsculas si no chocan con otra marca igual.
+prisma.brand
+  .findMany({ select: { id: true, businessId: true, name: true } })
+  .then(async (brands) => {
+    let changed = 0
+    for (const brand of brands) {
+      const upper = brand.name.trim().toLocaleUpperCase("es-PE")
+      if (upper === brand.name) continue
+      const clash = brands.some((other) => other.id !== brand.id && other.businessId === brand.businessId && other.name === upper)
+      if (clash) continue
+      await prisma.brand.update({ where: { id: brand.id }, data: { name: upper } })
+      changed += 1
+    }
+    if (changed) console.log(`[marcas] ${changed} marca(s) pasaron a mayúsculas`)
+  })
+  .catch((error) => console.error("[marcas] no se pudo actualizar:", errorMessage(error)))
+
 // Copia automática diaria (se guardan las últimas 7 en el disco, junto a la base).
 const runAutoBackup = () => {
   autoBackup()

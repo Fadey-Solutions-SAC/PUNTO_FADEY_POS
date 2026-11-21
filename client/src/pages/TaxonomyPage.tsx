@@ -92,9 +92,9 @@ export function TaxonomyPage({ brandsOnly = false, focusAdd = 0 }: { brandsOnly?
             ref={addRef}
             required
             className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm"
-            placeholder={`Nueva ${label} · Ej. ${kind === "brands" ? "Gloria" : "Abarrotes"}`}
+            placeholder={`Nueva ${label} · Ej. ${kind === "brands" ? "GLORIA" : "ABARROTES"}`}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setName(e.target.value.toLocaleUpperCase("es-PE"))}
           />
           <button type="submit" disabled={busy} className="h-11 rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60">
             Agregar
@@ -117,7 +117,7 @@ export function TaxonomyPage({ brandsOnly = false, focusAdd = 0 }: { brandsOnly?
                   }, "Nombre actualizado")
                 }}
               >
-                <input autoFocus className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" value={editing.name} onChange={(e) => setEditing({ id: item.id, name: e.target.value })} placeholder="Ej. Gloria" />
+                <input autoFocus className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" value={editing.name} onChange={(e) => setEditing({ id: item.id, name: e.target.value.toLocaleUpperCase("es-PE") })} placeholder="Ej. GLORIA" />
                 <button type="submit" disabled={busy} className="rounded-lg bg-[var(--pf-accent)] px-3 text-xs font-semibold text-white">
                   Guardar
                 </button>

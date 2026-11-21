@@ -28,7 +28,7 @@ import {
 } from "../offline"
 import { playScanPit, ScannerButton } from "../components/Scanner"
 import { categoryColor, tint } from "../colors"
-import { ProductPhoto } from "../components/ProductPhoto"
+import { Box } from "lucide-react"
 
 type CartLine = SaleProduct & { quantity: number; key: string }
 type PayRow = { method: string; amount: string }
@@ -812,39 +812,43 @@ export function SalesPage() {
                   key={key}
                   onClick={() => addProduct(product)}
                   aria-label={`Agregar ${product.name}`}
-                  className={`group relative flex min-h-28 flex-col rounded-2xl border bg-white p-3 text-left shadow-sm transition active:scale-[0.98] ${
+                  className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white p-2.5 pt-3.5 text-left shadow-sm transition active:scale-[0.98] ${
                     inCart > 0
                       ? "border-[var(--pf-accent)] ring-2 ring-[var(--pf-accent)]/20"
-                      : "border-slate-200 hover:border-[var(--pf-accent)]/50 hover:shadow"
+                      : "border-slate-200 hover:border-orange-300 hover:shadow-md"
                   } ${out ? "opacity-60" : ""}`}
                 >
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-3 top-0 h-1 rounded-b-full"
-                    style={{ background: categoryColor(product.brandId) }}
-                  />
+                  <span aria-hidden className="absolute inset-x-4 top-0 h-1.5 rounded-b-full bg-gradient-to-r from-orange-400 to-orange-600" />
                   {inCart > 0 ? (
-                    <span className="absolute -right-1.5 -top-1.5 grid min-w-6 place-items-center rounded-full bg-[var(--pf-accent)] px-1.5 text-xs font-bold text-white shadow">
+                    <span className="absolute right-1.5 top-1.5 z-10 grid min-w-6 place-items-center rounded-full bg-[var(--pf-accent)] px-1.5 text-xs font-bold text-white shadow">
                       {inCart}
                     </span>
                   ) : null}
-                  <span className="flex items-start gap-2">
-                    <ProductPhoto name={product.name} imagePath={product.imagePath} categoryId={product.brandId} size={36} />
-                    <span className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--pf-navy)]">{product.name}</span>
-                  </span>
-                  <span className="mt-0.5 truncate text-[11px] text-slate-400">
-                    {product.code} · {product.presentationName}
-                  </span>
-                  <span className="mt-auto flex items-end justify-between gap-1 pt-2">
-                    <span className="text-lg font-extrabold tabular-nums" style={{ color: categoryColor(product.brandId) }}>
+                  {/* Nombre y código a la izquierda; precio en etiqueta naranja a la derecha. */}
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="line-clamp-2 text-[15px] font-extrabold uppercase leading-tight text-[var(--pf-navy)]">{product.name}</span>
+                      <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
+                        <span aria-hidden className="font-mono tracking-tighter text-slate-400">||||</span>
+                        <span className="truncate">
+                          {product.code} · {product.presentationName}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 px-2 py-1 text-sm font-extrabold tabular-nums text-white shadow-sm">
                       {product.unitPriceLabel}
                     </span>
+                  </span>
+                  {/* Foto grande con el stock encima. */}
+                  <span className="relative mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-100">
+                    <CardImage name={product.name} imagePath={product.imagePath} color={categoryColor(product.brandId)} />
                     {typeof stock === "number" ? (
                       <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
-                          out ? "bg-red-50 text-red-700" : low ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"
+                        className={`absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[11px] font-bold shadow-sm backdrop-blur ${
+                          out ? "bg-red-50/95 text-red-700" : low ? "bg-amber-50/95 text-amber-800" : "bg-sky-50/95 text-[var(--pf-navy)]"
                         }`}
                       >
+                        <Box size={12} className={out ? "text-red-600" : low ? "text-amber-600" : "text-sky-600"} />
                         {out ? "Agotado" : `${product.stockLabel} ${product.unit ?? ""}`.trim()}
                       </span>
                     ) : null}
@@ -858,7 +862,7 @@ export function SalesPage() {
               </p>
             ) : null}
             {loadingProducts && products.length === 0
-              ? Array.from({ length: 8 }, (_, i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />)
+              ? Array.from({ length: 8 }, (_, i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-slate-200/60" />)
               : null}
           </div>
 
@@ -1251,6 +1255,26 @@ export function SalesPage() {
         </div>
       ) : null}
     </div>
+  )
+}
+
+/** Foto grande de la tarjeta; sin foto, las iniciales sobre el color de la marca. */
+function CardImage({ name, imagePath, color }: { name: string; imagePath?: string | null; color: string }) {
+  const [broken, setBroken] = useState(false)
+  if (imagePath && !broken) {
+    return <img src={imagePath} alt="" loading="lazy" onError={() => setBroken(true)} className="size-full object-cover transition group-hover:scale-[1.03]" />
+  }
+  const letters =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("") || "?"
+  return (
+    <span className="grid size-full place-items-center text-3xl font-extrabold text-white/90" style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
+      {letters}
+    </span>
   )
 }
 
