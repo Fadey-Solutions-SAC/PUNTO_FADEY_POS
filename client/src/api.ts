@@ -252,6 +252,7 @@ export type ClosePreview = {
     returnsCount: number
     returnsTotal: MoneyOut
     movements: { id: string; typeLabel: string; reason: string; amount: MoneyOut; out: boolean; atLabel: string }[]
+    products?: { name: string; quantityLabel: string; total: MoneyOut }[]
   }
 }
 

@@ -290,6 +290,21 @@ export function registerCashRoutes(app: Express) {
       ])
       const completed = sales.filter((sale) => sale.status === "COMPLETED")
       const sum = (rows: { total: number }[]) => rows.reduce((total, row) => total + row.total, 0)
+      // Productos vendidos en el turno (ventas cobradas y a crédito, sin anuladas).
+      const soldLines = await prisma.saleLine.findMany({
+        where: { sale: { businessId: ctx.businessId, sessionId: session.id, status: "COMPLETED" } },
+        select: { productId: true, baseQuantity: true, total: true, product: { select: { name: true, baseUnit: { select: { symbol: true } } } } },
+      })
+      const soldMap = new Map<string, { name: string; unit: string; quantity: number; total: number }>()
+      for (const line of soldLines) {
+        const row = soldMap.get(line.productId) ?? { name: line.product.name, unit: line.product.baseUnit.symbol, quantity: 0, total: 0 }
+        row.quantity += line.baseQuantity
+        row.total += line.total
+        soldMap.set(line.productId, row)
+      }
+      const products = [...soldMap.values()]
+        .sort((a, b) => b.total - a.total)
+        .map((row) => ({ name: row.name, quantityLabel: `${formatQty(row.quantity)} ${row.unit}`, total: moneyOut(row.total, ctx.currency) }))
       res.json({
         currency: ctx.currency,
         denoms: CASH_DENOMS,
@@ -304,6 +319,7 @@ export function registerCashRoutes(app: Express) {
           voidedTotal: moneyOut(sum(sales.filter((sale) => sale.status === "VOIDED")), ctx.currency),
           returnsCount: returns.length,
           returnsTotal: moneyOut(sum(returns), ctx.currency),
+          products,
           movements: summary.session.movements.map((movement) => ({
             id: movement.id,
             typeLabel: CASH_LABEL[movement.type] ?? movement.type,

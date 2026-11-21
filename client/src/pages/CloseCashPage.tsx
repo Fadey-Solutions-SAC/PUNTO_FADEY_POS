@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Banknote, CheckCircle2, CircleAlert, Coins, CreditCard, Receipt, RotateCcw, Ban, Wallet } from "lucide-react"
 import { closeCash, getClosePreview, type ClosePreview } from "../api"
@@ -53,8 +53,31 @@ export function CloseCashPage() {
 
   const countedLabel = cashManual.trim() || (denomTotal / 100).toFixed(2)
 
+  // Conteo rápido: empieza en S/ 200 y, al escribir la cantidad, pasa solo a la siguiente (de mayor a menor).
+  const advanceTimer = useRef<number | undefined>(undefined)
+  function focusDenom(index: number) {
+    const next = document.querySelector<HTMLInputElement>(`[data-denom-index="${index}"]`)
+    if (next) {
+      next.focus()
+      next.select()
+    }
+  }
+  function advanceFrom(index: number, delay: number) {
+    window.clearTimeout(advanceTimer.current)
+    advanceTimer.current = window.setTimeout(() => focusDenom(index + 1), delay)
+  }
+  useEffect(() => {
+    if (!data) return
+    const id = window.setTimeout(() => focusDenom(0), 50)
+    return () => window.clearTimeout(id)
+  }, [data ? "ok" : ""])
+  useEffect(() => () => window.clearTimeout(advanceTimer.current), [])
+
   function setDenom(key: string, value: string) {
     const clean = value.replace(/[^\d]/g, "")
+    const index = data ? data.denoms.findIndex((item) => item.key === key) : -1
+    // Pasa a la siguiente denominación poco después de escribir (da tiempo a números de 2 cifras).
+    if (clean && index >= 0) advanceFrom(index, 700)
     const next = { ...denoms, [key]: clean }
     setDenoms(next)
     if (!data) return
@@ -164,8 +187,8 @@ export function CloseCashPage() {
             <Banknote size={18} className="text-emerald-600" /> Efectivo en caja
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <DenomGroup title="Billetes" items={bills} denoms={denoms} onChange={setDenom} />
-            <DenomGroup title="Monedas" items={coins} denoms={denoms} onChange={setDenom} />
+            <DenomGroup title="Billetes" items={bills} denoms={denoms} onChange={setDenom} indexOf={(key) => data.denoms.findIndex((item) => item.key === key)} onEnter={(index) => advanceFrom(index, 0)} />
+            <DenomGroup title="Monedas" items={coins} denoms={denoms} onChange={setDenom} indexOf={(key) => data.denoms.findIndex((item) => item.key === key)} onEnter={(index) => advanceFrom(index, 0)} />
           </div>
           <div className="grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-3">
             <div>
@@ -272,6 +295,37 @@ export function CloseCashPage() {
         </section>
       ) : null}
 
+      {shift ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-[var(--pf-navy)]">Productos vendidos en el turno</h2>
+            <span className="text-xs text-slate-500">{shift.products?.length ?? 0} producto(s)</span>
+          </div>
+          {shift.products?.length ? (
+            <table className="mt-2 w-full text-sm">
+              <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="py-1.5 font-semibold">Producto</th>
+                  <th className="py-1.5 text-right font-semibold">Cantidad</th>
+                  <th className="py-1.5 text-right font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {shift.products.map((row) => (
+                  <tr key={row.name}>
+                    <td className="py-1.5 font-medium text-slate-800">{row.name}</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-600">{row.quantityLabel}</td>
+                    <td className="py-1.5 text-right font-semibold tabular-nums">{row.total.label}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">Todavía no hay ventas en este turno.</p>
+          )}
+        </section>
+      ) : null}
+
       <label className="block text-sm font-medium text-slate-700">
         Notas del cierre
         <textarea
@@ -333,11 +387,15 @@ function DenomGroup({
   items,
   denoms,
   onChange,
+  indexOf,
+  onEnter,
 }: {
   title: string
   items: { key: string; label: string; value: number }[]
   denoms: Record<string, string>
   onChange: (key: string, value: string) => void
+  indexOf: (key: string) => number
+  onEnter: (index: number) => void
 }) {
   return (
     <div>
@@ -352,7 +410,14 @@ function DenomGroup({
                 className="h-9 rounded-lg border border-slate-200 px-2 text-right tabular-nums"
                 inputMode="numeric"
                 placeholder="0"
+                data-denom-index={indexOf(item.key)}
                 value={denoms[item.key] ?? ""}
+                onFocus={(event) => event.currentTarget.select()}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return
+                  event.preventDefault()
+                  onEnter(indexOf(item.key))
+                }}
                 onChange={(event) => onChange(item.key, event.target.value)}
               />
               <span className="text-right text-xs tabular-nums text-slate-500">{qty ? (qty * item.value).toFixed(2) : "—"}</span>
