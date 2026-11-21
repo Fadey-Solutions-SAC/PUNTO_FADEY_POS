@@ -54,7 +54,6 @@ export function TaxonomyPage({ brandsOnly = false }: { brandsOnly?: boolean } = 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className={brandsOnly ? "hidden" : ""}>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Categorías y marcas</h1>
         <p className="text-sm text-slate-500">Ordenan el catálogo, los filtros de venta y los informes por categoría.</p>
       </div>
 

@@ -16,7 +16,6 @@ export function PresentationsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Presentaciones</h1>
         <p className="mt-1 text-sm text-slate-500">
           Cada presentación convierte a la unidad base del producto. Toca el círculo para cargar la foto del producto.
         </p>

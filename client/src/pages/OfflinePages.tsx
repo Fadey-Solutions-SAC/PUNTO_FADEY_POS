@@ -107,7 +107,6 @@ export function OfflineTicketPage() {
     <div className="mx-auto max-w-lg space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Venta guardada sin conexión</h1>
           <p className="mt-1 text-sm text-slate-500">Total {sale.currency === "PEN" ? "S/ " : ""}{money(sale.totalCents)}</p>
         </div>
         <div className="flex gap-2 text-sm">
@@ -194,7 +193,6 @@ export function SyncPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Ventas por sincronizar</h1>
           <p className="mt-1 text-sm text-slate-500">
             Guardadas en este equipo mientras no había conexión. Se envían solas cada 30 segundos y al volver internet.
           </p>

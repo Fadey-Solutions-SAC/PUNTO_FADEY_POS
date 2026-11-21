@@ -31,15 +31,13 @@ const NAV: NavGroup[] = [
   {
     title: "Inventario y almacén",
     items: [
+      { href: "/inventario/almacenes", label: "Almacenes" },
       { href: "/inventario/conteo", label: "Toma de inventario", anyOf: ["adjust", "reports"] },
-      { href: "/inventario/entradas", label: "Entradas", permission: "inventoryMove" },
-      { href: "/inventario/transferencias", label: "Transferencias", permission: "transfer" },
       { href: "/inventario/ajustes", label: "Ajustes", permission: "adjust" },
       { href: "/inventario/kardex", label: "Kardex" },
       { href: "/inventario/mermas", label: "Mermas y pérdidas", anyOf: ["inventoryMove", "reports"] },
       { href: "/inventario/alertas", label: "Alertas de stock" },
       { href: "/inventario/informes", label: "Informes de inventario", permission: "reports" },
-      { href: "/inventario/almacenes", label: "Almacenes" },
     ],
   },
   {
@@ -49,7 +47,6 @@ const NAV: NavGroup[] = [
       { href: "/compras/requerimiento", label: "Requerimiento", permission: "purchases" },
       { href: "/compras/recepcion", label: "Recepción", permission: "purchases" },
       { href: "/compras/historial", label: "Historial", permission: "purchases" },
-      { href: "/compras/por-pagar", label: "Por pagar", permission: "purchases" },
     ],
   },
   {

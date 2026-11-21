@@ -174,8 +174,6 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
 
   return (
     <div className="mx-auto max-w-7xl space-y-3">
-      <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">{fixedArea === "inventario" ? "Informes de inventario" : "Informes"}</h1>
-
       {/* Teléfono: selector único con todos los informes. */}
       <label className="block md:hidden">
         <span className="text-xs font-semibold text-slate-500">Informe</span>

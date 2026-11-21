@@ -75,7 +75,6 @@ export function ReceptionPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Recepción</h1>
         <p className="mt-1 text-sm text-slate-500">Sale del requerimiento; anota cantidad comprada y costo.</p>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}

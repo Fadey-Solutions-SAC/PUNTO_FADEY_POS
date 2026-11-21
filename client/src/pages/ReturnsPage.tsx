@@ -60,7 +60,6 @@ export function ReturnsPage() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Devoluciones</h1>
         <p className="mt-1 text-sm text-slate-500">
           Reingresa stock y, si es efectivo, sale de la caja abierta.
         </p>

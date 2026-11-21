@@ -123,7 +123,6 @@ export function LossesPage() {
             <PackageMinus size={22} />
           </span>
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Mermas y pérdidas</h1>
             <p className="text-sm text-slate-500">
               Productos vencidos, dañados, robados o de consumo interno. Descuentan stock del almacén {data?.warehouseName ?? "actual"}, quedan
               en el kardex y se valorizan al costo.

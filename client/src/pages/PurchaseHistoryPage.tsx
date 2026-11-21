@@ -71,7 +71,6 @@ export function PurchaseHistoryPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Historial de compras</h1>
           <p className="mt-1 text-sm text-slate-500">{filtered.length} compra(s). Una pendiente no mueve existencias hasta recibirla.</p>
         </div>
         <FilterBar>

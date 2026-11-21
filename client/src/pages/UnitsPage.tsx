@@ -40,7 +40,6 @@ export function UnitsPage({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <div className="space-y-4">
       <div className={embedded ? "hidden" : ""}>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Unidades</h1>
         <p className="mt-1 text-sm text-slate-500">
           Conversiones de peso, longitud o volumen. Las cajas se definen como presentación.
         </p>

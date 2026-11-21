@@ -43,6 +43,7 @@ export function registerSalesRoutes(app: Express) {
         can(ctx.role, "cash", ctx.grants) ? { href: "/caja", label: "Movimientos" } : null,
         can(ctx.role, "cash", ctx.grants) ? { href: "/caja/historial", label: "Historial caja" } : null,
         can(ctx.role, "cashClose", ctx.grants) ? { href: "/caja/cierre", label: "Cierre" } : null,
+        can(ctx.role, "purchases", ctx.grants) ? { href: "/compras/por-pagar", label: "Por pagar" } : null,
       ].filter((item): item is { href: string; label: string } => item !== null)
 
       res.json({

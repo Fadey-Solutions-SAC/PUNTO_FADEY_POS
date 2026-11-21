@@ -122,7 +122,6 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Configuración</h1>
         <p className="mt-1 text-sm text-slate-500">Elige un módulo para ver y cambiar sus opciones.</p>
       </div>
 

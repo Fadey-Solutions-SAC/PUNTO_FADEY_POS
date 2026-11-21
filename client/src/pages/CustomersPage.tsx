@@ -64,7 +64,6 @@ export function CustomersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Clientes</h1>
         <p className="mt-1 text-sm text-slate-500">Registro de clientes del negocio.</p>
       </div>
 

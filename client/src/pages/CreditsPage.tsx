@@ -56,7 +56,6 @@ export function CreditsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Cuentas por cobrar</h1>
         <p className="mt-1 text-sm text-slate-500">Solo el efectivo entra a la caja abierta.</p>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}

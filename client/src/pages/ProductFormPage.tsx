@@ -161,7 +161,6 @@ export function ProductFormPage() {
             />
           ) : null}
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">{editing ? "Editar producto" : "Nuevo producto"}</h1>
             <p className="mt-1 text-sm text-slate-500">
               {editing ? "Toca la foto para cambiarla." : "Guarda el producto y luego agrega su foto."}
             </p>

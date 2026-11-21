@@ -153,7 +153,6 @@ export function SalesHistoryPage({ voidedOnly = false, initialView }: { voidedOn
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Historial de ventas</h1>
           {/* Selector desplegable: Ventas (por defecto), Devoluciones, Anulaciones. */}
           <div ref={panelRef} className="relative">
             <button

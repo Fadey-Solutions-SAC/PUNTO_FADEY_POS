@@ -70,7 +70,6 @@ export function WarehousesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Almacenes</h1>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       {message ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {message}</p> : null}
 
@@ -142,6 +141,9 @@ export function WarehousesPage() {
         <div className="flex flex-wrap gap-2">
           <Link to="/productos/nuevo" className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-600 px-4 text-sm font-semibold text-white">
             <Plus size={16} /> Nuevo producto
+          </Link>
+          <Link to="/inventario/transferencias" className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white">
+            <ArrowLeftRight size={16} /> Transferencias
           </Link>
           <Link to="/configuracion?m=almacenes" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-[var(--pf-navy)]">
             <Plus size={16} /> Nuevo almacén

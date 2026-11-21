@@ -1220,17 +1220,28 @@ function Chip({
   )
 }
 
+// Color de cada acceso de caja.
+const ACCESS_COLOR: Record<string, string> = {
+  "/ventas/historial": "bg-sky-500 text-white",
+  "/caja": "bg-indigo-500 text-white",
+  "/caja/historial": "bg-violet-500 text-white",
+  "/caja/cierre": "bg-emerald-600 text-white",
+  "/compras/por-pagar": "bg-amber-500 text-white",
+}
+
 function Accesses({ items, onPending }: { items: { href: string; label: string }[]; onPending?: () => void }) {
   if (items.length === 0 && !onPending) return null
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--pf-navy)]">Accesos de caja</h2>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid auto-cols-[minmax(6.5rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1 sm:auto-cols-fr">
         {items.map((item) => (
           <Link
             key={item.href}
             to={item.href}
-            className="rounded-2xl border border-slate-100 bg-slate-50 px-2 py-3 text-center text-xs font-medium text-[var(--pf-navy)] transition hover:border-[var(--pf-accent)]/30 hover:bg-white"
+            className={`flex items-center justify-center rounded-2xl px-2 py-3 leading-tight text-center text-xs font-semibold shadow-sm transition hover:brightness-95 ${
+              ACCESS_COLOR[item.href] ?? "bg-slate-100 text-[var(--pf-navy)]"
+            }`}
           >
             {item.label}
           </Link>
@@ -1239,7 +1250,7 @@ function Accesses({ items, onPending }: { items: { href: string; label: string }
           <button
             type="button"
             onClick={onPending}
-            className="rounded-2xl border border-red-100 bg-red-50 px-2 py-3 text-center text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-white"
+            className="flex items-center justify-center rounded-2xl bg-rose-500 px-2 py-3 leading-tight text-center text-xs font-semibold text-white shadow-sm transition hover:brightness-95"
           >
             Cuentas pendientes
           </button>

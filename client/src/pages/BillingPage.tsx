@@ -121,7 +121,6 @@ export function BillingPage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Facturación electrónica</h1>
           <p className="mt-1 text-sm text-slate-500">
             Un comprobante solo queda <b>aceptado</b> con el CDR de SUNAT que devuelve tu proveedor. Mientras tanto queda en cola.
           </p>

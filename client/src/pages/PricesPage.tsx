@@ -54,7 +54,6 @@ export function PricesPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Listas de precios</h1>
         <p className="mt-1 text-sm text-slate-500">Si la lista no tiene precio, la venta usa el del producto.</p>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}

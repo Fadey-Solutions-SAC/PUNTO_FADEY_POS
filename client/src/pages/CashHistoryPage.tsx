@@ -68,7 +68,6 @@ export function CashHistoryPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Historial de caja</h1>
           <p className="mt-1 text-sm text-slate-500">
             {filtered.length} sesión(es).{" "}
             <Link to="/caja" className="font-medium text-[var(--pf-accent)] hover:underline">

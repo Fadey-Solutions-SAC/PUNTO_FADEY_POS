@@ -58,7 +58,6 @@ export function AdjustmentsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Ajustes</h1>
         <p className="mt-1 text-sm text-slate-500">
           Escribe el stock real en {data?.warehouseName ?? "el almacén"}. La diferencia queda en el kardex.
         </p>

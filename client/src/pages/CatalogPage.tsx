@@ -52,7 +52,6 @@ export function CatalogPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Productos y marcas</h1>
           <p className="mt-1 text-sm text-slate-500">
             {filtered.length} producto{filtered.length === 1 ? "" : "s"}.
           </p>

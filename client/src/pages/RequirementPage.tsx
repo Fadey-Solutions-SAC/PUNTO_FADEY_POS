@@ -172,7 +172,6 @@ export function RequirementPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Requerimiento</h1>
         <p className="mt-1 text-sm text-slate-500">
           Arma lo que vas a pedir para {setup?.warehouseName ?? "el almacén"}. Luego recíbelo en{" "}
           <Link to="/compras/recepcion" className="text-[var(--pf-accent)] hover:underline">

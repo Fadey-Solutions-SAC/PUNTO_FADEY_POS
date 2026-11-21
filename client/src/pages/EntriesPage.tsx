@@ -38,7 +38,6 @@ export function EntriesPage() {
             <PackagePlus size={22} />
           </span>
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Entradas de inventario</h1>
             <p className="text-sm text-slate-500">
               Stock que entra sin compra: saldo inicial, producción, donaciones, devoluciones o sobrantes. Almacén {data?.warehouseName ?? "actual"}.
               Las compras se registran en Compras → Recepción.

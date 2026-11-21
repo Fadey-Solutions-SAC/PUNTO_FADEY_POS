@@ -19,7 +19,6 @@ import { CustomersPage } from "./pages/CustomersPage"
 import { DashboardPage } from "./pages/DashboardPage"
 import { KardexPage } from "./pages/KardexPage"
 import { LossesPage } from "./pages/LossesPage"
-import { EntriesPage } from "./pages/EntriesPage"
 import { LoginPage } from "./pages/LoginPage"
 import { PendingPage } from "./pages/PendingPage"
 import { PresentationsPage } from "./pages/PresentationsPage"
@@ -192,7 +191,7 @@ export function App() {
           <Route path="inventario/almacenes" element={<WarehousesPage />} />
           <Route path="inventario/kardex" element={<KardexPage />} />
           <Route path="inventario/mermas" element={<LossesPage />} />
-          <Route path="inventario/entradas" element={<EntriesPage />} />
+          <Route path="inventario/entradas" element={<Navigate to="/compras/recepcion" replace />} />
           <Route path="inventario/transferencias" element={<TransfersPage />} />
           <Route path="inventario/ajustes" element={<AdjustmentsPage />} />
           <Route path="inventario/conteo" element={<CountsPage />} />

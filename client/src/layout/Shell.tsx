@@ -171,6 +171,18 @@ function screenTitle(pathname: string, navLabel?: string) {
   if (pathname === "/caja/cierre") return "Cierre de caja"
   if (pathname === "/caja/historial") return "Historial de caja"
   if (pathname === "/caja") return "Caja"
+  if (pathname === "/ventas/historial") return "Historial de ventas"
+  if (pathname === "/ventas/devoluciones") return "Devoluciones"
+  if (pathname === "/ventas/anulaciones") return "Anulaciones"
+  if (pathname === "/compras/historial") return "Historial de compras"
+  if (pathname === "/clientes/historial") return "Historial de clientes"
+  if (pathname === "/clientes/creditos") return "Cuentas por cobrar"
+  if (pathname === "/inventario/transferencias") return "Transferencias"
+  if (pathname === "/productos/unidades") return "Unidades"
+  if (pathname === "/productos/categorias") return "Categorías y marcas"
+  if (pathname === "/productos/codigos") return "Códigos de barras"
+  if (pathname === "/productos/precios") return "Listas de precios"
+  if (pathname === "/facturacion") return "Facturación electrónica"
   return navLabel ?? "Punto Fadey"
 }
 

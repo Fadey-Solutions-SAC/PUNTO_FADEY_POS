@@ -259,7 +259,6 @@ export function PayablesPage() {
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Cuentas por pagar</h1>
           <p className="text-sm text-slate-500">Lo que se debe a proveedores y las compras que aún no llegan.</p>
         </div>
         <Link to="/compras/recepcion" className="inline-flex h-10 items-center rounded-xl bg-indigo-500 px-4 text-sm font-semibold text-white shadow-sm">
