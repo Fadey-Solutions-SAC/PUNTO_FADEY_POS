@@ -100,7 +100,7 @@ export function SuppliersPage() {
           to="/compras/por-pagar"
           className="inline-flex h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-amber-600"
         >
-          <BadgeDollarSign size={16} /> Por pagar
+          <BadgeDollarSign size={16} /> Pago pendiente
         </Link>
         <button
           type="button"
@@ -140,7 +140,7 @@ export function SuppliersPage() {
           <Field label="Razón social" wide>
             <input className={input} value={form.legalName} onChange={(e) => set("legalName")(e.target.value)} placeholder="Ej. DISTRIBUIDORA LIMA NORTE S.A.C." />
           </Field>
-          <Field label="Condición de pago" hint="Contado: pagas al recibir. Crédito: queda en Proveedores → Por pagar.">
+          <Field label="Condición de pago" hint="Contado: pagas al recibir. Crédito: queda en Proveedores → Pago pendiente.">
             <select className={input} value={form.paymentTerm} onChange={(e) => set("paymentTerm")(e.target.value)}>
               <option value="CONTADO">Contado</option>
               <option value="CREDITO">Crédito</option>

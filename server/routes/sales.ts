@@ -55,7 +55,8 @@ export function registerSalesRoutes(app: Express) {
         canSell: can(ctx.role, "sell", ctx.grants),
         // Venta a crédito: el negocio debe tenerla activa y el usuario el permiso.
         allowCredit: ctx.allowCredit,
-        canCredit: ctx.allowCredit && can(ctx.role, "credit", ctx.grants),
+        // Poner a cuenta de un cliente registrado: disponible para quien vende.
+        canCredit: can(ctx.role, "sell", ctx.grants) || can(ctx.role, "credit", ctx.grants),
         canCreateCustomer: can(ctx.role, "customers", ctx.grants),
         categories,
         brands,

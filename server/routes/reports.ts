@@ -286,7 +286,7 @@ export function registerReportsRoutes(app: Express) {
             { label: "Compras", value: String(data.count), tone: "sky" },
             { label: "Proveedores", value: String(data.suppliers), tone: "violet" },
             { label: "Pagado", value: money(data.paid), tone: "emerald" },
-            { label: "Por pagar", value: money(data.payable), tone: data.payable > 0 ? "red" : "slate" },
+            { label: "Pago pendiente", value: money(data.payable), tone: data.payable > 0 ? "red" : "slate" },
           ],
           empty: "No hay compras en este período.",
           ...grouped,

@@ -204,15 +204,6 @@ export function SettingsPage() {
                   />
                 </Field>
               ))}
-              <label className="flex items-center gap-2 self-end rounded-xl bg-slate-50 px-3 py-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-4"
-                  checked={business.allowCredit}
-                  onChange={(event) => setBusiness((value) => ({ ...value, allowCredit: event.target.checked }))}
-                />
-                Permitir ventas a crédito
-              </label>
               <SaveButton pending={pending} color={current.color}>
                 Guardar negocio
               </SaveButton>

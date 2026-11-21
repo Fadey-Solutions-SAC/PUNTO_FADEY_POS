@@ -74,7 +74,7 @@ export function PurchaseDetailPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link to="/compras/por-pagar" className="text-sm text-[var(--pf-accent)] hover:underline">
-            ← Cuentas por pagar
+            ← Pago pendiente
           </Link>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--pf-navy)]">
             {data.supplierName} · {data.documentNumber}
@@ -243,7 +243,7 @@ export function PurchaseDetailPage() {
   )
 }
 
-/** Cuentas por pagar: deuda por proveedor, compras con saldo y pendientes de recibir. */
+/** Pago pendiente: deuda por proveedor, compras con saldo y pendientes de recibir. */
 export function PayablesPage() {
   const [data, setData] = useState<Awaited<ReturnType<typeof getPayables>> | null>(null)
   const [error, setError] = useState("")
@@ -262,16 +262,24 @@ export function PayablesPage() {
         <div>
           <p className="text-sm text-slate-500">Lo que se debe a proveedores y las compras que aún no llegan.</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <Link
+          to="/compras/proveedores"
+          className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-[var(--pf-navy)] shadow-sm hover:bg-slate-50"
+        >
+          ← Volver a proveedores
+        </Link>
         <Link to="/compras/recepcion" className="inline-flex h-10 items-center rounded-xl bg-indigo-500 px-4 text-sm font-semibold text-white shadow-sm">
           + Registrar compra
         </Link>
+        </div>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       {data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 p-4 text-white shadow-sm">
-              <p className="text-sm text-white/80">Total por pagar</p>
+              <p className="text-sm text-white/80">Total pago pendiente</p>
               <p className="text-2xl font-bold tabular-nums">{data.totalDebt}</p>
             </div>
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm">
@@ -306,7 +314,7 @@ export function PayablesPage() {
             </div>
           ) : null}
 
-          <PurchaseTable title="Compras con saldo por pagar" rows={data.payables} empty="✓ No debes nada a proveedores." showAge />
+          <PurchaseTable title="Compras con pago pendiente" rows={data.payables} empty="✓ No debes nada a proveedores." showAge />
           <PurchaseTable title="Pendientes de recibir" rows={data.pendingReception} empty="No hay compras esperando mercadería." />
         </>
       ) : !error ? (

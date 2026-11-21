@@ -177,8 +177,8 @@ export async function confirmSale(ctx: TenantContext, input: SaleConfirmInput) {
       const priced = await pricedLines(tx, ctx, input)
       const customerId = await ownedCustomer(tx, ctx, input.customerId)
       if (input.saleType === "CREDIT") {
-        assertCan(ctx, "credit")
-        if (!ctx.allowCredit) throw new AppError("Este negocio no tiene el crédito habilitado")
+        // Poner a cuenta de un cliente registrado: quien vende puede hacerlo (se respeta el límite del cliente).
+        if (!can(ctx.role, "sell", ctx.grants) && !can(ctx.role, "credit", ctx.grants)) assertCan(ctx, "credit")
         if (!customerId) throw new AppError("Selecciona un cliente para vender a crédito")
         const customer = await tx.customer.findFirst({ where: { id: customerId, businessId: ctx.businessId } })
         if (!customer) throw new AppError("Cliente no encontrado")

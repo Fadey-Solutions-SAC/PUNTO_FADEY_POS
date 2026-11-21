@@ -263,7 +263,7 @@ export function ReceptionPage() {
                 ))}
               </div>
               <p className="text-xs text-slate-500">
-                {receiveNow ? "El stock y el costo de los productos se actualizan al registrar." : "No suma stock: la recibes después desde Por pagar o el historial."}
+                {receiveNow ? "El stock y el costo de los productos se actualizan al registrar." : "No suma stock: la recibes después desde Proveedores → Pago pendiente o el historial."}
               </p>
             </div>
             <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -278,7 +278,7 @@ export function ReceptionPage() {
                   [
                     ["full", "Pagado"],
                     ["partial", "Adelanto"],
-                    ["credit", "Por pagar"],
+                    ["credit", "Pago pendiente"],
                   ] as const
                 ).map(([value, text]) => (
                   <button
@@ -311,7 +311,7 @@ export function ReceptionPage() {
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-slate-500">Todo el monto queda en Cuentas por pagar.</p>
+                <p className="text-xs text-slate-500">Todo el monto queda en Proveedores → Pago pendiente.</p>
               )}
             </div>
           </div>
