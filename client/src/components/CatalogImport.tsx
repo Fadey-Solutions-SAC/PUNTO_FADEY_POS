@@ -70,12 +70,16 @@ export function CatalogImport({ onClose, onDone }: { onClose: () => void; onDone
             Descarga la plantilla con <b>Exportar CSV</b> (trae tus productos actuales) o arma una en Excel.
           </li>
           <li>
-            Columnas mínimas: <b>nombre</b> y <b>unidad</b> (símbolo: und, kg, L…). Opcionales: código, marca, costo, precio, mayorista,
-            minorista, código de barras, stock mínimo, presentación, factor.
+            Columna obligatoria: <b>nombre</b>. Opcionales: <b>unidad</b> (und, kg, L…; si falta, und), código, <b>marca</b>, <b>costo</b>,{" "}
+            <b>precio</b>, mayorista, minorista, código de barras, <b>stock</b>, stock mínimo, <b>impuesto</b> (exonerado, gravado o inafecto),
+            presentación, factor.
           </li>
           <li>Guarda como “CSV UTF-8” y súbelo aquí. Un producto con el mismo código se actualiza; si no, se crea.</li>
         </ol>
-        <p className="text-xs text-slate-500">El stock no se importa: entra por Inventario → Entradas o por compras.</p>
+        <p className="text-xs text-slate-500">
+          Nombres y marcas entran en mayúsculas; una marca que ya existe no se duplica. Sin impuesto, el producto nuevo entra como Exonerado.
+          El <b>stock</b> solo se carga en productos nuevos (entra al kardex); a los que ya existen no se les cambia el stock.
+        </p>
 
         <label className={`relative flex cursor-pointer items-center overflow-hidden justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-sm font-semibold ${busy ? "opacity-60" : "border-slate-300 text-[var(--pf-accent)] hover:bg-slate-50"}`}>
           {fileName ? `📄 ${fileName} (cambiar)` : "Elegir archivo .csv"}

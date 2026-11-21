@@ -572,6 +572,7 @@ export async function exportCatalogCsv(ctx: TenantContext) {
     "presentation",
     "factor",
     "presentationPrice",
+    "taxType",
   ]
   const lines = [header.join(",")]
   for (const product of products) {
@@ -591,6 +592,7 @@ export async function exportCatalogCsv(ctx: TenantContext) {
       presentation?.name ?? "",
       presentation ? fromQtyInt(presentation.factorToBase).toFixed(4) : "",
       presentation?.price == null ? "" : fromMoneyInt(presentation.price).toFixed(2),
+      product.taxType,
     ]
     lines.push(values.map((value) => `"${value.replaceAll('"', '""')}"`).join(","))
   }
@@ -613,6 +615,18 @@ const IMPORT_COLUMNS: Record<string, string[]> = {
   presentation: ["presentation", "presentacion", "presentación"],
   factor: ["factor"],
   presentationPrice: ["presentationprice", "precio presentacion", "precio presentación"],
+  taxType: ["taxtype", "impuesto", "igv", "afectacion", "afectación"],
+  stock: ["stock", "cantidad", "cantidad inicial", "stock inicial", "existencia", "existencias"],
+}
+
+/** Impuesto escrito en el archivo → GRAVADO / EXONERADO / INAFECTO ("" si no se reconoce). */
+function readTaxType(value: string) {
+  const text = value.trim().toLowerCase()
+  if (!text) return ""
+  if (text.startsWith("exo")) return "EXONERADO"
+  if (text.startsWith("ina")) return "INAFECTO"
+  if (text.startsWith("gra") || text === "igv" || text === "si" || text === "sí") return "GRAVADO"
+  return "?"
 }
 
 export type CatalogImportResult = { created: number; updated: number; errors: string[] }
@@ -623,7 +637,7 @@ export async function importCatalogCsv(ctx: TenantContext, text: string, options
   if (rows.length < 2) throw new AppError("El archivo no tiene productos")
   const header = rows[0].map((cell) => cell.trim().toLowerCase())
   const column = (key: string) => header.findIndex((cell) => IMPORT_COLUMNS[key].includes(cell))
-  if (column("name") < 0 || column("unit") < 0) throw new AppError("Faltan las columnas de nombre y unidad (name/nombre y unit/unidad)")
+  if (column("name") < 0) throw new AppError("Falta la columna del nombre (name o nombre)")
   if (rows.length - 1 > 2000) throw new AppError("Máximo 2000 productos por archivo")
 
   const units = await prisma.unit.findMany({ where: { businessId: ctx.businessId } })
@@ -640,9 +654,13 @@ export async function importCatalogCsv(ctx: TenantContext, text: string, options
     const line = offset + 2
     const read = (key: string) => (column(key) >= 0 ? row[column(key)]?.trim() ?? "" : "")
     const name = read("name")
-    const unit = unitBy(read("unit"))
+    // Sin unidad en el archivo: «und» (Unidad).
+    const unit = unitBy(read("unit") || "und")
     if (!name) errors.push(`Fila ${line}: falta el nombre`)
     if (!unit) errors.push(`Fila ${line}: unidad "${read("unit")}" no registrada (usa el símbolo, ej. und, kg)`)
+    if (readTaxType(read("taxType")) === "?") errors.push(`Fila ${line}: impuesto "${read("taxType")}" no válido (usa exonerado, gravado o inafecto)`)
+    const stock = read("stock")
+    if (stock && !(Number(stock.replace(",", ".")) >= 0)) errors.push(`Fila ${line}: stock no es un número ("${stock}")`)
     for (const key of ["costPrice", "salePrice", "wholesalePrice", "retailPrice", "presentationPrice"]) {
       const value = read(key)
       if (value && !Number.isFinite(Number(money(value)))) errors.push(`Fila ${line}: ${key} no es un número ("${value}")`)
@@ -682,14 +700,7 @@ export async function importCatalogCsv(ctx: TenantContext, text: string, options
       categoryId = category.id
     }
     let brandId: string | undefined
-    if (read("brand")) {
-      const brand = await prisma.brand.upsert({
-        where: { businessId_name: { businessId: ctx.businessId, name: read("brand") } },
-        create: { businessId: ctx.businessId, name: read("brand") },
-        update: {},
-      })
-      brandId = brand.id
-    }
+    if (read("brand")) brandId = (await brandByName(ctx.businessId, read("brand"))) ?? undefined
     const presentations: PresentationInput[] = [
       {
         name: read("presentation") || item.unit!.name,
@@ -718,6 +729,10 @@ export async function importCatalogCsv(ctx: TenantContext, text: string, options
         wholesalePrice: money(read("wholesalePrice")) || (existing ? fromMoneyInt(existing.wholesalePrice).toFixed(2) : "0"),
         retailPrice: money(read("retailPrice")) || (existing ? fromMoneyInt(existing.retailPrice).toFixed(2) : "0"),
         minStock: read("minStock").replace(",", ".") || (existing ? fromQtyInt(existing.minStock).toFixed(4) : "0"),
+        // Impuesto: el del archivo; si no viene, el producto nuevo entra como Exonerado y el existente conserva el suyo.
+        taxType: readTaxType(read("taxType")) || (existing ? existing.taxType : "EXONERADO"),
+        // Stock inicial: solo para productos nuevos (entra al kardex como entrada). A los existentes no se les cambia.
+        initialQuantity: existing ? undefined : read("stock").replace(",", ".") || undefined,
         // Un producto existente conserva su control de lotes y su estado.
         trackLots: false,
         isActive: existing?.isActive ?? true,
