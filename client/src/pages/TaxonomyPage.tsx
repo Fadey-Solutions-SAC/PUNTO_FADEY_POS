@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { createTaxonomy, deleteTaxonomy, getTaxonomy, renameTaxonomy, type TaxonomyItem } from "../api"
 
 type Kind = "categories" | "brands"
 
 /** Categorías y marcas del catálogo. brandsOnly: solo marcas, dentro de «Productos y marcas». */
-export function TaxonomyPage({ brandsOnly = false }: { brandsOnly?: boolean } = {}) {
+export function TaxonomyPage({ brandsOnly = false, focusAdd = 0 }: { brandsOnly?: boolean; focusAdd?: number } = {}) {
+  const addRef = useRef<HTMLInputElement>(null)
   const [data, setData] = useState<Awaited<ReturnType<typeof getTaxonomy>> | null>(null)
   const [kind, setKind] = useState<Kind>(brandsOnly ? "brands" : "categories")
   const [name, setName] = useState("")
@@ -39,6 +40,10 @@ export function TaxonomyPage({ brandsOnly = false }: { brandsOnly?: boolean } = 
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (focusAdd > 0 && data?.writable) addRef.current?.focus()
+  }, [focusAdd, data?.writable])
 
   function onAdd(event: FormEvent) {
     event.preventDefault()
@@ -84,9 +89,10 @@ export function TaxonomyPage({ brandsOnly = false }: { brandsOnly?: boolean } = 
       {data?.writable ? (
         <form onSubmit={onAdd} className="flex gap-2">
           <input
+            ref={addRef}
             required
             className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm"
-            placeholder={`Nueva ${label}`}
+            placeholder={`Nueva ${label} · Ej. ${kind === "brands" ? "Gloria" : "Abarrotes"}`}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />

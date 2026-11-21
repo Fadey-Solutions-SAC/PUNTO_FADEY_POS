@@ -13,6 +13,8 @@ export function CatalogPage() {
   const [notice, setNotice] = useState("")
   const [brandId, setBrandId] = useState("")
   const [tab, setTab] = useState<"productos" | "marcas">("productos")
+  // «Nueva marca»: abre la pestaña Marcas con el campo listo para escribir.
+  const [brandFocus, setBrandFocus] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -69,6 +71,16 @@ export function CatalogPage() {
               >
                 Importar CSV
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("marcas")
+                  setBrandFocus((value) => value + 1)
+                }}
+                className="inline-flex h-10 items-center rounded-xl border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-700 hover:bg-teal-100"
+              >
+                Nueva marca
+              </button>
               <Link to="/productos/nuevo" className="inline-flex h-10 items-center rounded-xl bg-[var(--pf-accent)] px-4 text-sm font-semibold text-white">
                 Nuevo producto
               </Link>
@@ -97,7 +109,7 @@ export function CatalogPage() {
       {notice ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {notice}</p> : null}
 
       {tab === "marcas" ? (
-        <TaxonomyPage brandsOnly />
+        <TaxonomyPage brandsOnly focusAdd={brandFocus} />
       ) : (
       <>
       {importing ? (
