@@ -26,13 +26,13 @@ const GROUPS: Record<string, { id: string; label: string }[]> = {
   ventas: [
     { id: "dia", label: "Por día" },
     { id: "producto", label: "Por producto" },
-    { id: "categoria", label: "Por categoría" },
+    { id: "marca", label: "Por marca" },
     { id: "pago", label: "Por medio de pago" },
     { id: "usuario", label: "Por usuario" },
   ],
   rentabilidad: [
     { id: "producto", label: "Por producto" },
-    { id: "categoria", label: "Por categoría" },
+    { id: "marca", label: "Por marca" },
     { id: "periodo", label: "Por día" },
   ],
   compras: [

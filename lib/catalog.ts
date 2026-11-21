@@ -7,6 +7,7 @@ import { AppError } from "@/lib/errors"
 import { assertNoCode } from "@/lib/guard"
 import { formatQty, fromMoneyInt, fromQtyInt, toMoneyInt, toQtyInt, toFactorInt } from "@/lib/money"
 import { assertCan } from "@/lib/roles"
+import { stockIn } from "@/lib/inventory"
 import type { CatalogProduct, TenantContext } from "@/lib/types"
 
 export type PresentationInput = {
@@ -34,6 +35,10 @@ export type ProductInput = {
   retailPrice: string
   minStock: string
   maxStock?: string
+  /** GRAVADO, EXONERADO o INAFECTO (IGV). */
+  taxType?: string
+  /** Solo al crear: stock inicial en la unidad base (entra como Entrada en el kardex). */
+  initialQuantity?: string
   trackLots: boolean
   isActive: boolean
   barcodes: string[]
@@ -115,8 +120,11 @@ export async function saveProduct(ctx: TenantContext, input: ProductInput) {
   }
   const internalCode = input.internalCode?.trim() || makeInternalCode(name)
 
+  const initialQty = !input.id && input.initialQuantity?.trim() ? toQtyInt(input.initialQuantity.trim().replace(",", ".")) : 0
+  if (initialQty > 0) assertCan(ctx, "inventoryMove")
+
   try {
-    return await prisma.$transaction(async (tx) => {
+    const saved = await prisma.$transaction(async (tx) => {
       const data = {
         name,
         internalCode,
@@ -124,6 +132,9 @@ export async function saveProduct(ctx: TenantContext, input: ProductInput) {
         brandId,
         baseUnitId: unit.id,
         description: input.description?.trim() || null,
+        ...(input.taxType !== undefined
+          ? { taxType: input.taxType === "EXONERADO" || input.taxType === "INAFECTO" ? input.taxType : "GRAVADO" }
+          : {}),
         trackLots: input.trackLots,
         isActive: input.isActive,
         ...prices,
@@ -207,6 +218,17 @@ export async function saveProduct(ctx: TenantContext, input: ProductInput) {
       }
       return product
     })
+    if (initialQty > 0) {
+      // Cantidad inicial: entra al almacén actual como «Entrada» y queda en el kardex.
+      await stockIn(ctx, {
+        productId: saved.id,
+        quantity: input.initialQuantity!.trim().replace(",", "."),
+        type: "ENTRY",
+        reason: "Cantidad inicial (al crear el producto)",
+        referenceType: "STOCK_ENTRY",
+      })
+    }
+    return saved
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new AppError("El código interno o el código de barras ya existe en este negocio")
@@ -292,6 +314,7 @@ export async function loadCatalog(ctx: TenantContext): Promise<CatalogProduct[]>
     internalCode: product.internalCode,
     categoryId: product.categoryId,
     categoryName: product.category?.name ?? null,
+    brandId: product.brandId,
     brandName: product.brand?.name ?? null,
     baseUnitId: product.baseUnitId,
     baseUnit: product.baseUnit.symbol,
@@ -347,6 +370,7 @@ export async function getProductForm(ctx: TenantContext, id: string) {
       retailPrice: fromMoneyInt(product.retailPrice).toFixed(2),
       minStock: formatQty(product.minStock),
       maxStock: product.maxStock == null ? "" : formatQty(product.maxStock),
+      taxType: product.taxType,
       trackLots: product.trackLots,
       isActive: product.isActive,
       barcodes: product.barcodes.filter((barcode) => !barcode.presentationId).map((barcode) => barcode.code),
@@ -518,7 +542,6 @@ export async function exportCatalogCsv(ctx: TenantContext) {
   const header = [
     "internalCode",
     "name",
-    "category",
     "brand",
     "unit",
     "costPrice",
@@ -538,7 +561,6 @@ export async function exportCatalogCsv(ctx: TenantContext) {
     const values = [
       product.internalCode,
       product.name,
-      product.category?.name ?? "",
       product.brand?.name ?? "",
       product.baseUnit.symbol,
       fromMoneyInt(product.costPrice).toFixed(2),

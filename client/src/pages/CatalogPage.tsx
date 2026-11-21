@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { ProductPhoto } from "../components/ProductPhoto"
 import { getCatalog } from "../api"
 import { CatalogImport } from "../components/CatalogImport"
+import { TaxonomyPage } from "./TaxonomyPage"
 
 export function CatalogPage() {
   const [data, setData] = useState<Awaited<ReturnType<typeof getCatalog>> | null>(null)
@@ -10,7 +11,8 @@ export function CatalogPage() {
   const [query, setQuery] = useState("")
   const [importing, setImporting] = useState(false)
   const [notice, setNotice] = useState("")
-  const [categoryId, setCategoryId] = useState("")
+  const [brandId, setBrandId] = useState("")
+  const [tab, setTab] = useState<"productos" | "marcas">("productos")
 
   useEffect(() => {
     let cancelled = false
@@ -30,7 +32,8 @@ export function CatalogPage() {
     if (!data) return []
     const q = query.trim().toLowerCase()
     return data.products.filter((product) => {
-      if (categoryId && product.categoryId !== categoryId) return false
+      if (brandId === "__none" && product.brandId) return false
+      if (brandId && brandId !== "__none" && product.brandId !== brandId) return false
       if (!q) return true
       return (
         product.name.toLowerCase().includes(q) ||
@@ -38,7 +41,7 @@ export function CatalogPage() {
         (product.brandName ?? "").toLowerCase().includes(q)
       )
     })
-  }, [categoryId, data, query])
+  }, [brandId, data, query])
 
   if (error && !data) {
     return <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
@@ -74,7 +77,30 @@ export function CatalogPage() {
           ) : null}
         </div>
       </div>
+      <div className="grid max-w-md grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+        {(
+          [
+            ["productos", `Productos (${data.products.length})`],
+            ["marcas", `Marcas (${data.brands?.length ?? 0})`],
+          ] as const
+        ).map(([value, text]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTab(value)}
+            className={`h-10 rounded-lg text-sm font-semibold ${tab === value ? "bg-white text-[var(--pf-navy)] shadow-sm" : "text-slate-500"}`}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+
       {notice ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {notice}</p> : null}
+
+      {tab === "marcas" ? (
+        <TaxonomyPage brandsOnly />
+      ) : (
+      <>
       {importing ? (
         <CatalogImport
           onClose={() => setImporting(false)}
@@ -94,16 +120,18 @@ export function CatalogPage() {
           onChange={(event) => setQuery(event.target.value)}
         />
         <select
+          aria-label="Filtrar por marca"
           className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"
-          value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
+          value={brandId}
+          onChange={(event) => setBrandId(event.target.value)}
         >
-          <option value="">Todas las categorías</option>
-          {data.categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
+          <option value="">Todas las marcas</option>
+          {(data.brands ?? []).map((brand) => (
+            <option key={brand.id} value={brand.id}>
+              {brand.name}
             </option>
           ))}
+          <option value="__none">Sin marca</option>
         </select>
       </div>
 
@@ -113,7 +141,7 @@ export function CatalogPage() {
             <tr>
               <th className="px-3 py-2 font-medium">Código</th>
               <th className="px-3 py-2 font-medium">Producto</th>
-              <th className="px-3 py-2 font-medium">Categoría</th>
+              <th className="px-3 py-2 font-medium">Marca</th>
               <th className="px-3 py-2 font-medium">Stock</th>
               <th className="px-3 py-2 font-medium text-right">Precio</th>
               <th className="px-3 py-2 font-medium">Estado</th>
@@ -130,17 +158,14 @@ export function CatalogPage() {
                       name={product.name}
                       imagePath={product.imagePath}
                       productId={product.id}
-                      categoryId={product.categoryId}
+                      categoryId={product.brandId}
                       size={40}
                       editable={data.writable}
                     />
-                    <span>
-                      <span className="font-medium text-[var(--pf-navy)]">{product.name}</span>
-                      {product.brandName ? <span className="block text-xs text-slate-500">{product.brandName}</span> : null}
-                    </span>
+                    <span className="font-medium text-[var(--pf-navy)]">{product.name}</span>
                   </span>
                 </td>
-                <td className="px-3 py-2">{product.categoryName || "—"}</td>
+                <td className="px-3 py-2">{product.brandName || "—"}</td>
                 <td className="px-3 py-2">
                   <span
                     className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-medium ${
@@ -177,6 +202,8 @@ export function CatalogPage() {
         </table>
         {filtered.length === 0 ? <p className="px-3 py-10 text-center text-sm text-slate-500">Sin coincidencias para la búsqueda.</p> : null}
       </div>
+      </>
+      )}
     </div>
   )
 }

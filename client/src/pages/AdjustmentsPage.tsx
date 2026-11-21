@@ -32,8 +32,8 @@ export function AdjustmentsPage() {
       map.set(product.category, rows)
     }
     return [...map.entries()].sort(([a], [b]) => {
-      if (a === "Sin categoría") return 1
-      if (b === "Sin categoría") return -1
+      if (a === "Sin marca") return 1
+      if (b === "Sin marca") return -1
       return a.localeCompare(b, "es")
     })
   }, [data])

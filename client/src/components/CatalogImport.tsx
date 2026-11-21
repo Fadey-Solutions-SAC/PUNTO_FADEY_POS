@@ -70,7 +70,7 @@ export function CatalogImport({ onClose, onDone }: { onClose: () => void; onDone
             Descarga la plantilla con <b>Exportar CSV</b> (trae tus productos actuales) o arma una en Excel.
           </li>
           <li>
-            Columnas mínimas: <b>nombre</b> y <b>unidad</b> (símbolo: und, kg, L…). Opcionales: código, categoría, marca, costo, precio, mayorista,
+            Columnas mínimas: <b>nombre</b> y <b>unidad</b> (símbolo: und, kg, L…). Opcionales: código, marca, costo, precio, mayorista,
             minorista, código de barras, stock mínimo, presentación, factor.
           </li>
           <li>Guarda como “CSV UTF-8” y súbelo aquí. Un producto con el mismo código se actualiza; si no, se crea.</li>

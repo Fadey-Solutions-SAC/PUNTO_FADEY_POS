@@ -62,12 +62,12 @@ export function SalesPage() {
   const [openingLabel, setOpeningLabel] = useState<string | null>(null)
   const [currency, setCurrency] = useState("PEN")
   const [methods, setMethods] = useState<{ code: string; label: string }[]>([])
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
   const [accesses, setAccesses] = useState<{ href: string; label: string }[]>([])
   const [hardwareReader, setHardwareReader] = useState(false)
   const [canSell, setCanSell] = useState(true)
   const [query, setQuery] = useState("")
-  const [categoryId, setCategoryId] = useState("")
+  const [brandId, setBrandId] = useState("")
   const [products, setProducts] = useState<SaleProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [cart, setCart] = useState<CartLine[]>([])
@@ -151,7 +151,7 @@ export function SalesPage() {
         setCanSell(status.canSell)
         setCanCredit(Boolean(status.canCredit))
         setCanCreateCustomer(Boolean(status.canCreateCustomer))
-        setCategories(status.categories)
+        setBrands(status.brands ?? [])
         setAccesses(status.accesses)
         setMethods(status.methods.length ? status.methods : [{ code: "CASH", label: "Efectivo" }])
       })
@@ -162,20 +162,20 @@ export function SalesPage() {
     if (!canSell) return
     setLoadingProducts(true)
     const handle = window.setTimeout(() => {
-      searchSaleProducts(query, categoryId || undefined)
+      searchSaleProducts(query, brandId || undefined)
         .then((data) => {
           if (!isServerReachable()) {
             // Copia del service worker: se prefiere la local, que ya descuenta lo vendido sin conexión.
-            const local = searchCachedProducts(query, categoryId || undefined)
+            const local = searchCachedProducts(query, brandId || undefined)
             if (local) data = local
           }
           setProducts(data.products)
           setCurrency(data.currency)
           // Si la respuesta vino de la copia del service worker, no se reescribe la copia local.
-          if (isServerReachable() && !query.trim() && !categoryId) cacheProducts(data.currency, data.products)
+          if (isServerReachable() && !query.trim() && !brandId) cacheProducts(data.currency, data.products)
         })
         .catch(() => {
-          const local = searchCachedProducts(query, categoryId || undefined)
+          const local = searchCachedProducts(query, brandId || undefined)
           if (local) {
             setProducts(local.products)
             setCurrency(local.currency)
@@ -187,7 +187,7 @@ export function SalesPage() {
         .finally(() => setLoadingProducts(false))
     }, 180)
     return () => window.clearTimeout(handle)
-  }, [query, categoryId, canSell])
+  }, [query, brandId, canSell])
 
   useEffect(() => {
     if (!flash) return
@@ -757,12 +757,12 @@ export function SalesPage() {
           {hardwareReader ? <CodeField onCode={onCode} autoFocus placeholder="Lector USB o Bluetooth" /> : null}
 
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            <Chip active={categoryId === ""} onClick={() => setCategoryId("")}>
-              Todos
+            <Chip active={brandId === ""} onClick={() => setBrandId("")}>
+              Todas las marcas
             </Chip>
-            {categories.map((category) => (
-              <Chip key={category.id} color={categoryColor(category.id)} active={categoryId === category.id} onClick={() => setCategoryId(category.id)}>
-                {category.name}
+            {brands.map((brand) => (
+              <Chip key={brand.id} color={categoryColor(brand.id)} active={brandId === brand.id} onClick={() => setBrandId(brand.id)}>
+                {brand.name}
               </Chip>
             ))}
           </div>
@@ -789,7 +789,7 @@ export function SalesPage() {
                   <span
                     aria-hidden
                     className="absolute inset-x-3 top-0 h-1 rounded-b-full"
-                    style={{ background: categoryColor(product.categoryId) }}
+                    style={{ background: categoryColor(product.brandId) }}
                   />
                   {inCart > 0 ? (
                     <span className="absolute -right-1.5 -top-1.5 grid min-w-6 place-items-center rounded-full bg-[var(--pf-accent)] px-1.5 text-xs font-bold text-white shadow">
@@ -797,14 +797,14 @@ export function SalesPage() {
                     </span>
                   ) : null}
                   <span className="flex items-start gap-2">
-                    <ProductPhoto name={product.name} imagePath={product.imagePath} categoryId={product.categoryId} size={36} />
+                    <ProductPhoto name={product.name} imagePath={product.imagePath} categoryId={product.brandId} size={36} />
                     <span className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--pf-navy)]">{product.name}</span>
                   </span>
                   <span className="mt-0.5 truncate text-[11px] text-slate-400">
                     {product.code} · {product.presentationName}
                   </span>
                   <span className="mt-auto flex items-end justify-between gap-1 pt-2">
-                    <span className="text-lg font-extrabold tabular-nums" style={{ color: categoryColor(product.categoryId) }}>
+                    <span className="text-lg font-extrabold tabular-nums" style={{ color: categoryColor(product.brandId) }}>
                       {product.unitPriceLabel}
                     </span>
                     {typeof stock === "number" ? (

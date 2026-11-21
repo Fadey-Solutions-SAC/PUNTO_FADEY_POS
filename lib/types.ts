@@ -34,6 +34,7 @@ export type CatalogProduct = {
   internalCode: string
   categoryId: string | null
   categoryName: string | null
+  brandId: string | null
   brandName: string | null
   baseUnitId: string
   baseUnit: string

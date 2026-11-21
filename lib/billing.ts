@@ -65,6 +65,36 @@ function splitTax(total: number, igvRate: number) {
   return { taxable, tax: total - taxable }
 }
 
+/** Código SUNAT de afectación del IGV según el tipo de impuesto del producto. */
+export const TAX_TYPES = { GRAVADO: "Gravado (IGV)", EXONERADO: "Exonerado", INAFECTO: "Inafecto" } as const
+export type TaxType = keyof typeof TAX_TYPES
+export function afectacionIgv(taxType: string | null | undefined) {
+  return taxType === "EXONERADO" ? "20" : taxType === "INAFECTO" ? "30" : "10"
+}
+
+/**
+ * Reparte el total cobrado (ya con descuento) entre las líneas y separa el IGV:
+ * solo las líneas gravadas llevan IGV; exoneradas e inafectas no.
+ */
+export function saleTaxSplit(
+  saleTotal: number,
+  lines: { total: number; taxType?: string | null }[],
+  igvRate: number,
+) {
+  const gross = lines.reduce((sum, line) => sum + line.total, 0)
+  let assigned = 0
+  let gravado = 0
+  const shares = lines.map((line, index) => {
+    const share =
+      index === lines.length - 1 ? saleTotal - assigned : gross > 0 ? D(line.total).mul(saleTotal).div(gross).toDecimalPlaces(0).toNumber() : 0
+    assigned += share
+    if (afectacionIgv(line.taxType) === "10") gravado += share
+    return share
+  })
+  const tax = gravado - splitTax(gravado, igvRate).taxable
+  return { shares, tax, taxable: saleTotal - tax }
+}
+
 function buildXml(input: {
   docType: DocType
   series: string
@@ -168,7 +198,7 @@ export async function issueDocument(
   return prisma.$transaction(async (tx) => {
     const sale = await tx.sale.findFirst({
       where: { id: saleId, businessId: ctx.businessId },
-      include: { customer: true, lines: true },
+      include: { customer: true, lines: { include: { product: { select: { taxType: true } } } } },
     })
     if (!sale || sale.status !== "COMPLETED") throw new AppError("La venta no está confirmada")
     if (docType === "FACTURA" || docType === "BOLETA") {
@@ -207,7 +237,11 @@ export async function issueDocument(
     }
     const profile = await tx.billingProfile.findUnique({ where: { businessId: ctx.businessId } })
     const igvRate = profile?.igvRate ?? 1800
-    const amounts = splitTax(sale.total, igvRate)
+    const amounts = saleTaxSplit(
+      sale.total,
+      sale.lines.map((line) => ({ total: line.total, taxType: line.product?.taxType })),
+      igvRate,
+    )
     let seriesRow = await tx.documentSeries.findUnique({
       where: { businessId_docType: { businessId: ctx.businessId, docType } },
     })

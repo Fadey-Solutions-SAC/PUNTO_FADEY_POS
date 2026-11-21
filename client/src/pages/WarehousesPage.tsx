@@ -55,7 +55,7 @@ export function WarehousesPage() {
               <tr>
                 <th className="px-3 py-2 font-medium">Código</th>
                 <th className="px-3 py-2 font-medium">Producto</th>
-                <th className="px-3 py-2 font-medium">Categoría</th>
+                <th className="px-3 py-2 font-medium">Marca</th>
                 <th className="px-3 py-2 font-medium">Stock</th>
                 <th className="px-3 py-2 font-medium">Estado</th>
               </tr>
@@ -66,7 +66,6 @@ export function WarehousesPage() {
                   <td className="px-3 py-2 text-slate-500">{row.code || "—"}</td>
                   <td className="px-3 py-2">
                     {row.name}
-                    <span className="block text-xs text-slate-500">{row.brand}</span>
                   </td>
                   <td className="px-3 py-2">{row.category}</td>
                   <td className="px-3 py-2">{row.stock}</td>

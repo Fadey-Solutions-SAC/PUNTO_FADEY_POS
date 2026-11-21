@@ -170,7 +170,7 @@ export async function listLosses(ctx: TenantContext, range: { from: Date; to: Da
       ...(filter.includeVoided === false ? { status: "ACTIVE" } : {}),
     },
     include: {
-      product: { select: { name: true, internalCode: true, baseUnit: { select: { symbol: true } }, category: { select: { name: true } } } },
+      product: { select: { name: true, internalCode: true, baseUnit: { select: { symbol: true } }, category: { select: { name: true } }, brand: { select: { name: true } } } },
       user: { select: { name: true } },
       warehouse: { select: { name: true } },
     },

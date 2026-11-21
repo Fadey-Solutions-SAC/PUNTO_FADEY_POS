@@ -32,7 +32,7 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
         ...(filter.branchId ? { branchId: filter.branchId } : {}),
         ...(filter.userId ? { userId: filter.userId } : {}),
       },
-      include: { user: true, customer: true, lines: { include: { product: { include: { category: true } } } }, payments: true },
+      include: { user: true, customer: true, lines: { include: { product: { include: { category: true, brand: true } } } }, payments: true },
     }),
     prisma.saleReturn.findMany({
       where: {
@@ -44,7 +44,7 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
       include: {
         user: true,
         sale: { include: { customer: true } },
-        lines: { include: { saleLine: { include: { product: { include: { category: true } } } } } },
+        lines: { include: { saleLine: { include: { product: { include: { category: true, brand: true } } } } } },
       },
     }),
   ])
@@ -104,7 +104,8 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
       byProduct.set(id.key, row)
       cost += priced
       addDay(day, 0, priced)
-      const category = line.product.category?.name ?? "Sin categoría"
+      // El sistema trabaja por marca: «byCategory» agrupa por marca.
+      const category = line.product.brand?.name ?? "Sin marca"
       const cat = byCategory.get(category) ?? { total: 0, cost: 0 }
       cat.total += lineNet
       cat.cost += priced
@@ -132,7 +133,7 @@ export async function salesReport(ctx: TenantContext, range: ReportRange, filter
       byProduct.set(id.key, row)
       cost -= returnedCost
       addDay(day, 0, -returnedCost)
-      const category = line.saleLine.product.category?.name ?? "Sin categoría"
+      const category = line.saleLine.product.brand?.name ?? "Sin marca"
       const cat = byCategory.get(category) ?? { total: 0, cost: 0 }
       cat.total -= line.total
       cat.cost -= returnedCost

@@ -24,7 +24,7 @@ async function openCountOf(ctx: TenantContext, countId: string) {
   return count
 }
 
-export async function createCount(ctx: TenantContext, input: { categoryId?: string; note?: string }) {
+export async function createCount(ctx: TenantContext, input: { categoryId?: string; brandId?: string; note?: string }) {
   assertCan(ctx, "adjust")
   const open = await prisma.stockCount.findFirst({ where: { businessId: ctx.businessId, warehouseId: ctx.warehouseId, status: "OPEN" } })
   if (open) throw new AppError(`Ya hay un conteo abierto (N.º ${open.number}) en este almacén. Continúalo o anúlalo`)
@@ -34,8 +34,18 @@ export async function createCount(ctx: TenantContext, input: { categoryId?: stri
     if (!category) throw new AppError("Categoría no encontrada")
     scope = `Categoría ${category.name}`
   }
+  if (input.brandId) {
+    const brand = await prisma.brand.findFirst({ where: { id: input.brandId, businessId: ctx.businessId } })
+    if (!brand) throw new AppError("Marca no encontrada")
+    scope = `Marca ${brand.name}`
+  }
   const products = await prisma.product.findMany({
-    where: { businessId: ctx.businessId, isActive: true, ...(input.categoryId ? { categoryId: input.categoryId } : {}) },
+    where: {
+      businessId: ctx.businessId,
+      isActive: true,
+      ...(input.categoryId ? { categoryId: input.categoryId } : {}),
+      ...(input.brandId ? { brandId: input.brandId } : {}),
+    },
     select: { id: true },
   })
   if (products.length === 0) throw new AppError("No hay productos activos para contar")
@@ -95,6 +105,7 @@ export async function getCount(ctx: TenantContext, countId: string) {
             include: {
               baseUnit: { select: { symbol: true } },
               category: { select: { name: true } },
+              brand: { select: { name: true } },
               barcodes: { select: { code: true } },
               presentations: { where: { isActive: true }, select: { id: true, name: true, factorToBase: true, isActive: true } },
             },

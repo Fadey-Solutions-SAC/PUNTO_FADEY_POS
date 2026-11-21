@@ -46,7 +46,7 @@ export function registerLossesRoutes(app: Express) {
           cause: row.cause,
           productName: row.product.name,
           productCode: row.product.internalCode,
-          category: row.product.category?.name ?? "",
+          category: row.product.brand?.name ?? "",
           quantityLabel: `${row.presentationQty ?? formatQty(row.quantity)} ${row.presentationName ?? row.product.baseUnit.symbol}`,
           baseQuantityLabel: `${formatQty(row.quantity)} ${row.product.baseUnit.symbol}`,
           unitCost: money(row.unitCost),
@@ -86,6 +86,7 @@ export function registerLossesRoutes(app: Express) {
           barcodes: product.barcodes.map((item) => item.code),
           imagePath: product.imagePath ?? null,
           categoryId: product.categoryId,
+          brandId: product.brandId,
           presentations: product.measures,
           lots: product.lots.map((lot) => ({
             code: lot.code,

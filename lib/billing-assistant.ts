@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
+import { afectacionIgv } from "@/lib/billing"
 import { D } from "@/lib/money"
 import { assertCan, assertCanAny } from "@/lib/roles"
 import { decryptSecret, encryptSecret } from "@/lib/secret"
@@ -203,7 +204,10 @@ export async function prepareAssistantEmit(ctx: TenantContext, documentId: strin
     prisma.business.findFirst({ where: { id: ctx.businessId } }),
     prisma.billingProfile.findUnique({ where: { businessId: ctx.businessId } }),
     readRow(ctx.businessId),
-    prisma.sale.findFirst({ where: { id: document.saleId, businessId: ctx.businessId }, include: { lines: true, customer: true } }),
+    prisma.sale.findFirst({
+      where: { id: document.saleId, businessId: ctx.businessId },
+      include: { lines: { include: { product: { select: { taxType: true } } } }, customer: true },
+    }),
     prisma.$queryRaw<{ address: string | null }[]>`SELECT address FROM DocumentBuyer WHERE documentId = ${document.id} AND businessId = ${ctx.businessId}`,
   ])
   if (!business?.taxId) throw new AppError("Configura el RUC del negocio")
@@ -224,12 +228,14 @@ export async function prepareAssistantEmit(ctx: TenantContext, documentId: strin
       : gross > 0 ? D(line.total).mul(sale.total).div(gross).toDecimalPlaces(0).toNumber() : 0
     assigned += share
     const quantity = D(line.quantity).div(10000)
-    const unit = quantity.gt(0) ? D(share).div(100).div(divisor).div(quantity) : D(0)
+    // Gravado: el precio lleva IGV y se quita; exonerado (20) e inafecto (30) no llevan IGV.
+    const afectacion = afectacionIgv(line.product?.taxType)
+    const unit = quantity.gt(0) ? D(share).div(100).div(afectacion === "10" ? divisor : 1).div(quantity) : D(0)
     return {
       descripcion: line.description.slice(0, 250),
       cantidad: quantity.toFixed(4),
       precio_unitario_sin_igv: unit.toFixed(6),
-      codigo_afectacion_igv: "10",
+      codigo_afectacion_igv: afectacion,
     }
   })
 

@@ -17,15 +17,17 @@ export function registerCountRoutes(app: Express) {
         res.status(403).json({ error: "Sin permiso de inventario" })
         return
       }
-      const [counts, categories] = await Promise.all([
+      const [counts, categories, brands] = await Promise.all([
         listCounts(ctx),
         prisma.category.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+        prisma.brand.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
       ])
       const money = (cents: number) => formatMoney(cents, ctx.currency)
       res.json({
         warehouseName: ctx.warehouseName,
         canManage: can(ctx.role, "adjust", ctx.grants),
         categories,
+        brands,
         openId: counts.find((row) => row.status === "OPEN" && row.warehouseId === ctx.warehouseId)?.id ?? null,
         counts: counts.map((row) => ({
           id: row.id,
@@ -55,6 +57,7 @@ export function registerCountRoutes(app: Express) {
     try {
       const count = await createCount(req.tenant!, {
         categoryId: req.body?.categoryId ? String(req.body.categoryId) : undefined,
+        brandId: req.body?.brandId ? String(req.body.brandId) : undefined,
         note: req.body?.note ? String(req.body.note) : undefined,
       })
       res.json({ ok: true, id: count.id })
@@ -100,7 +103,7 @@ export function registerCountRoutes(app: Express) {
           productId: line.productId,
           name: line.product.name,
           code: line.product.internalCode,
-          category: line.product.category?.name ?? "Sin categoría",
+          category: line.product.brand?.name ?? "Sin marca",
           unit: line.product.baseUnit.symbol,
           barcodes: line.product.barcodes.map((item) => item.code),
           trackLots: line.product.trackLots,
@@ -164,14 +167,14 @@ export function registerCountRoutes(app: Express) {
         const text = String(value)
         return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
       }
-      const rows = [["Código", "Producto", "Categoría", "Unidad", "Sistema", "Contado", "Diferencia", "Costo unit.", "Valor diferencia"]]
+      const rows = [["Código", "Producto", "Marca", "Unidad", "Sistema", "Contado", "Diferencia", "Costo unit.", "Valor diferencia"]]
       for (const line of count.lines) {
         const counted = line.countedQty
         const diff = count.status === "CLOSED" ? line.diffQty : counted === null ? 0 : counted - line.systemQty
         rows.push([
           line.product.internalCode,
           line.product.name,
-          line.product.category?.name ?? "",
+          line.product.brand?.name ?? "",
           line.product.baseUnit.symbol,
           formatQty(line.systemQty),
           counted === null ? "" : formatQty(counted),

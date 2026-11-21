@@ -194,14 +194,14 @@ export function cachedProducts(): CachedProducts | null {
   return read<CachedProducts | null>(PRODUCTS_KEY, null)
 }
 
-export function searchCachedProducts(q: string, categoryId?: string) {
+export function searchCachedProducts(q: string, brandId?: string) {
   const cache = cachedProducts()
   if (!cache) return null
   const text = q.trim().toLowerCase()
   return {
     currency: cache.currency,
     products: cache.products.filter((product) => {
-      if (categoryId && product.categoryId !== categoryId) return false
+      if (brandId && product.brandId !== brandId) return false
       if (!text) return true
       return (
         product.name.toLowerCase().includes(text) ||

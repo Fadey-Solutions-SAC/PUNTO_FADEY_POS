@@ -160,9 +160,9 @@ export function registerReportsRoutes(app: Express) {
             chartKind: "rank",
             chartMoney: true,
           }
-        } else if (group === "categoria") {
+        } else if (group === "categoria" || group === "marca") {
           grouped = {
-            columns: ["Categoría", "Venta", "Costo", "Utilidad", profitView ? "Margen" : "Participación"],
+            columns: ["Marca", "Venta", "Costo", "Utilidad", profitView ? "Margen" : "Participación"],
             numeric: [1, 2, 3, 4],
             rows: categoryRows.map(([name, row]) => [
               name,
@@ -210,7 +210,7 @@ export function registerReportsRoutes(app: Express) {
           ? {
               description:
                 "Utilidad bruta = venta − costo de lo vendido (netas de devoluciones). Utilidad tras mermas = bruta − costo de mermas y pérdidas. No incluye gastos de caja.",
-              chartTitle: group === "periodo" ? "Utilidad por día" : group === "categoria" ? "Utilidad por categoría" : "Utilidad por producto",
+              chartTitle: group === "periodo" ? "Utilidad por día" : group === "categoria" || group === "marca" ? "Utilidad por marca" : "Utilidad por producto",
               kpis: [
                 { label: "Ventas", value: money(data.total), tone: "teal" },
                 { label: "Costo", value: money(data.cost), tone: "amber" },
@@ -235,8 +235,8 @@ export function registerReportsRoutes(app: Express) {
                     ? "Ventas por medio de pago"
                     : group === "producto"
                       ? "Productos más vendidos"
-                      : group === "categoria"
-                        ? "Ventas por categoría"
+                      : group === "categoria" || group === "marca"
+                        ? "Ventas por marca"
                         : "Ventas por día",
               kpis: [
                 { label: "Ventas", value: money(data.total), tone: "teal" },

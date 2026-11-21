@@ -3,10 +3,10 @@ import { createTaxonomy, deleteTaxonomy, getTaxonomy, renameTaxonomy, type Taxon
 
 type Kind = "categories" | "brands"
 
-/** Categorías y marcas del catálogo. */
-export function TaxonomyPage() {
+/** Categorías y marcas del catálogo. brandsOnly: solo marcas, dentro de «Productos y marcas». */
+export function TaxonomyPage({ brandsOnly = false }: { brandsOnly?: boolean } = {}) {
   const [data, setData] = useState<Awaited<ReturnType<typeof getTaxonomy>> | null>(null)
-  const [kind, setKind] = useState<Kind>("categories")
+  const [kind, setKind] = useState<Kind>(brandsOnly ? "brands" : "categories")
   const [name, setName] = useState("")
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
   const [error, setError] = useState("")
@@ -53,12 +53,12 @@ export function TaxonomyPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <div>
+      <div className={brandsOnly ? "hidden" : ""}>
         <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Categorías y marcas</h1>
         <p className="text-sm text-slate-500">Ordenan el catálogo, los filtros de venta y los informes por categoría.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+      <div className={brandsOnly ? "hidden" : "grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1"}>
         {(
           [
             ["categories", `Categorías (${data?.categories.length ?? 0})`],

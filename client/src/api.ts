@@ -265,6 +265,8 @@ export type SaleProduct = {
   unitPriceCents: number
   unitPriceLabel: string
   categoryId?: string | null
+  brandId?: string | null
+  brandName?: string | null
   unit?: string
   stock?: number
   stockLabel?: string
@@ -285,15 +287,17 @@ export function getSaleStatus() {
     canCredit?: boolean
     canCreateCustomer?: boolean
     categories: { id: string; name: string }[]
+    brands?: { id: string; name: string }[]
     accesses: { href: string; label: string }[]
     methods: { code: string; label: string }[]
   }>("/api/sales/status")
 }
 
-export function searchSaleProducts(q: string, categoryId?: string) {
+/** brandId: el sistema filtra por marca (ya no por categoría). */
+export function searchSaleProducts(q: string, brandId?: string) {
   const params = new URLSearchParams()
   if (q) params.set("q", q)
-  if (categoryId) params.set("categoryId", categoryId)
+  if (brandId) params.set("brandId", brandId)
   const query = params.toString()
   return request<{ currency: string; products: SaleProduct[] }>(
     `/api/sales/products${query ? `?${query}` : ""}`,
@@ -424,12 +428,14 @@ export function getCatalog() {
     currency: string
     writable: boolean
     categories: { id: string; name: string }[]
+    brands?: { id: string; name: string }[]
     products: {
       id: string
       code: string | null
       name: string
       categoryId: string | null
       categoryName: string | null
+      brandId?: string | null
       brandName: string | null
       price: string
       stock: string
@@ -443,6 +449,7 @@ export function getCatalogForm() {
   return request<{
     categories: { id: string; name: string }[]
     units: { id: string; name: string; symbol: string }[]
+    brands?: { id: string; name: string }[]
   }>("/api/catalog/form")
 }
 
@@ -463,12 +470,14 @@ export function getCatalogProduct(id: string) {
       retailPrice: string
       minStock: string
       maxStock: string
+      taxType?: string
       trackLots: boolean
       isActive: boolean
       barcodes: string[]
     }
     imagePath?: string | null
     categories: { id: string; name: string }[]
+    brands?: { id: string; name: string }[]
     units: { id: string; name: string; symbol: string }[]
   }>(`/api/catalog/products/${id}`)
 }
@@ -506,6 +515,9 @@ export function saveCatalogProduct(input: {
   wholesalePrice: string
   retailPrice: string
   minStock: string
+  maxStock?: string
+  taxType?: string
+  initialQuantity?: string
   trackLots: boolean
   isActive: boolean
   barcodes?: string[]
@@ -1117,6 +1129,7 @@ export type LossProduct = {
   barcodes: string[]
   imagePath: string | null
   categoryId: string | null
+  brandId?: string | null
   presentations: { id: string; name: string; factor: number }[]
   lots: { code: string; quantityLabel: string; expiresAtLabel: string }[]
 }
@@ -1470,12 +1483,13 @@ export function getCounts() {
     warehouseName: string
     canManage: boolean
     categories: { id: string; name: string }[]
+    brands?: { id: string; name: string }[]
     openId: string | null
     counts: CountSummaryRow[]
   }>("/api/inventory/counts")
 }
 
-export function createCount(input: { categoryId?: string; note?: string }) {
+export function createCount(input: { categoryId?: string; brandId?: string; note?: string }) {
   return request<{ ok: true; id: string }>("/api/inventory/counts", { method: "POST", body: JSON.stringify(input) })
 }
 

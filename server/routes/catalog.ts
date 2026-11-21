@@ -10,21 +10,24 @@ export function registerCatalogRoutes(app: Express) {
   app.get("/api/catalog", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
-      const [products, categories] = await Promise.all([
+      const [products, categories, brands] = await Promise.all([
         loadCatalog(ctx),
         prisma.category.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
+        prisma.brand.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
       ])
       const parents = products.filter((product) => !product.parentId)
       res.json({
         currency: ctx.currency,
         writable: can(ctx.role, "catalogWrite", ctx.grants),
         categories: categories.map((category) => ({ id: category.id, name: category.name })),
+        brands: brands.map((brand) => ({ id: brand.id, name: brand.name })),
         products: parents.map((product) => ({
           id: product.id,
           code: product.internalCode,
           name: product.name,
           categoryId: product.categoryId,
           categoryName: product.categoryName,
+          brandId: product.brandId,
           brandName: product.brandName,
           price: formatMoney(toMoneyInt(product.salePrice), ctx.currency),
           stock: `${product.stock} ${product.baseUnit}`,
@@ -48,9 +51,11 @@ export function registerCatalogRoutes(app: Express) {
         prisma.category.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
         prisma.unit.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
       ])
+      const brands = await prisma.brand.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" }, select: { id: true, name: true } })
       res.json({
         categories: categories.map((category) => ({ id: category.id, name: category.name })),
         units: units.map((unit) => ({ id: unit.id, name: unit.name, symbol: unit.symbol })),
+        brands,
       })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
@@ -65,12 +70,14 @@ export function registerCatalogRoutes(app: Express) {
         prisma.category.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
         prisma.unit.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" } }),
       ])
+      const brands = await prisma.brand.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" }, select: { id: true, name: true } })
       res.json({
         writable: can(ctx.role, "catalogWrite", ctx.grants),
         values: form.values,
         imagePath: form.product.imagePath ?? null,
         categories: categories.map((category) => ({ id: category.id, name: category.name })),
         units: units.map((unit) => ({ id: unit.id, name: unit.name, symbol: unit.symbol })),
+        brands,
       })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
@@ -120,6 +127,8 @@ export function registerCatalogRoutes(app: Express) {
         retailPrice: String(req.body?.retailPrice ?? "0"),
         minStock: String(req.body?.minStock ?? "0"),
         maxStock: req.body?.maxStock ? String(req.body.maxStock) : undefined,
+        taxType: req.body?.taxType ? String(req.body.taxType) : undefined,
+        initialQuantity: req.body?.initialQuantity ? String(req.body.initialQuantity) : undefined,
         trackLots: Boolean(req.body?.trackLots),
         isActive: req.body?.isActive !== false,
         barcodes: Array.isArray(req.body?.barcodes)

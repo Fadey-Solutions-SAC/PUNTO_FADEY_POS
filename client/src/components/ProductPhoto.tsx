@@ -15,7 +15,7 @@ function initials(name: string) {
 }
 
 /**
- * Foto del producto en círculo. Con `editable`, tocarla abre la cámara/galería y la sube.
+ * Foto del producto, cuadrada (esquinas suaves) y un poco más grande que el tamaño pedido. Con `editable`, tocarla abre la cámara/galería y la sube.
  * Sin foto muestra las iniciales con el color de la categoría.
  */
 export function ProductPhoto({
@@ -41,7 +41,9 @@ export function ProductPhoto({
   const [broken, setBroken] = useState(false)
   const src = preview || (broken ? "" : imagePath || "")
   const color = categoryColor(categoryId)
-  const box = { width: size, height: size }
+  // Cuadrada y ~25 % más grande que el tamaño de referencia de cada pantalla.
+  const side = Math.round(size * 1.25)
+  const box = { width: side, height: side }
 
   const circle = src ? (
     <img
@@ -49,13 +51,13 @@ export function ProductPhoto({
       alt=""
       loading="lazy"
       onError={() => setBroken(true)}
-      className="shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm"
+      className="shrink-0 rounded-lg object-cover ring-1 ring-slate-200 shadow-sm"
       style={box}
     />
   ) : (
     <span
-      className="grid shrink-0 place-items-center rounded-full font-bold text-white shadow-sm ring-2 ring-white"
-      style={{ ...box, background: color, fontSize: Math.max(10, size * 0.36) }}
+      className="grid shrink-0 place-items-center rounded-lg font-bold text-white shadow-sm ring-1 ring-slate-200"
+      style={{ ...box, background: color, fontSize: Math.max(10, side * 0.34) }}
       aria-hidden
     >
       {initials(name)}

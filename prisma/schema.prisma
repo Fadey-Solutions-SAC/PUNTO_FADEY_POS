@@ -190,6 +190,8 @@ model Product {
   retailPrice      Int                       @default(0)
   minStock         Int                       @default(0)
   maxStock         Int?
+  /// Afectación del IGV: GRAVADO (10), EXONERADO (20) o INAFECTO (30).
+  taxType          String                    @default("GRAVADO")
   trackLots        Boolean                   @default(false)
   isActive         Boolean                   @default(true)
   parentId         String?

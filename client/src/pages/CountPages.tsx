@@ -36,7 +36,7 @@ export function CountsPage() {
   const navigate = useNavigate()
   const [data, setData] = useState<Awaited<ReturnType<typeof getCounts>> | null>(null)
   const [error, setError] = useState("")
-  const [categoryId, setCategoryId] = useState("")
+  const [brandId, setBrandId] = useState("")
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
 
@@ -51,7 +51,7 @@ export function CountsPage() {
     setBusy(true)
     setError("")
     try {
-      const created = await createCount({ categoryId: categoryId || undefined, note: note.trim() || undefined })
+      const created = await createCount({ brandId: brandId || undefined, note: note.trim() || undefined })
       navigate(`/inventario/conteo/${created.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar")
@@ -88,11 +88,11 @@ export function CountsPage() {
         <form onSubmit={onStart} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <label className="block text-sm font-medium text-slate-700">
             ¿Qué vas a contar?
-            <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
               <option value="">Todos los productos</option>
-              {data.categories.map((item) => (
+              {(data.brands ?? []).map((item) => (
                 <option key={item.id} value={item.id}>
-                  Categoría {item.name}
+                  Marca {item.name}
                 </option>
               ))}
             </select>
@@ -493,7 +493,7 @@ export function CountSheetPage() {
             className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:max-w-xs"
           />
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-2 text-sm">
-            <option value="">Todas las categorías</option>
+            <option value="">Todas las marcas</option>
             {categories.map((item) => (
               <option key={item} value={item}>
                 {item}

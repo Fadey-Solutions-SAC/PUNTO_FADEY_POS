@@ -22,12 +22,18 @@ export function registerSalesRoutes(app: Express) {
         res.status(403).json({ error: "Sin permiso de venta" })
         return
       }
-      const [session, methods, pos, categories] = await Promise.all([
+      const [session, methods, pos, categories, brands] = await Promise.all([
         currentSession(ctx),
         listPaymentMethods(ctx),
         readPosSettings(ctx.businessId),
         prisma.category.findMany({
           where: { businessId: ctx.businessId },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        }),
+        // El sistema trabaja por marca: solo las marcas con productos activos.
+        prisma.brand.findMany({
+          where: { businessId: ctx.businessId, products: { some: { isActive: true } } },
           orderBy: { name: "asc" },
           select: { id: true, name: true },
         }),
@@ -53,6 +59,7 @@ export function registerSalesRoutes(app: Express) {
         canCredit: ctx.allowCredit && can(ctx.role, "credit", ctx.grants),
         canCreateCustomer: can(ctx.role, "customers", ctx.grants),
         categories,
+        brands,
         accesses,
         methods: methods
           .filter((item) => item.code !== "CREDIT")
@@ -126,12 +133,14 @@ export function registerSalesRoutes(app: Express) {
       }
       const q = String(req.query.q ?? "").trim().toLowerCase()
       const categoryId = String(req.query.categoryId ?? "").trim()
+      const brandId = String(req.query.brandId ?? "").trim()
       const products = await prisma.product.findMany({
         where: {
           businessId: ctx.businessId,
           isActive: true,
           parentId: null,
           ...(categoryId ? { categoryId } : {}),
+          ...(brandId ? { brandId } : {}),
           ...(q
             ? {
                 OR: [
@@ -155,6 +164,7 @@ export function registerSalesRoutes(app: Express) {
             orderBy: { name: "asc" },
           },
           baseUnit: { select: { symbol: true } },
+          brand: { select: { name: true } },
         },
         orderBy: { name: "asc" },
         take: q ? 40 : 40,
@@ -182,6 +192,8 @@ export function registerSalesRoutes(app: Express) {
                   unitPriceCents: unitPrice,
                   unitPriceLabel: formatMoney(unitPrice, ctx.currency),
                   categoryId: product.categoryId,
+                  brandId: product.brandId,
+                  brandName: product.brand?.name ?? null,
                   unit: product.baseUnit.symbol,
                   imagePath: variant.imagePath ?? product.imagePath ?? null,
                   // Para escanear sin conexión con la copia local del catálogo.
@@ -207,6 +219,8 @@ export function registerSalesRoutes(app: Express) {
               unitPriceCents: unitPrice,
               unitPriceLabel: formatMoney(unitPrice, ctx.currency),
               categoryId: product.categoryId,
+              brandId: product.brandId,
+              brandName: product.brand?.name ?? null,
               unit: product.baseUnit.symbol,
               imagePath: product.imagePath ?? null,
               barcodes: product.barcodes.map((item) => item.code),

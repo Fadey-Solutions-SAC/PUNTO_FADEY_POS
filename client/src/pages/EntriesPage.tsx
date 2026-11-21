@@ -228,7 +228,7 @@ function EntryForm({ causes, onClose, onSaved }: { causes: string[]; onClose: ()
 
         {product ? (
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-            <ProductPhoto name={product.name} imagePath={product.imagePath} categoryId={product.categoryId} size={44} />
+            <ProductPhoto name={product.name} imagePath={product.imagePath} categoryId={product.brandId} size={44} />
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold text-[var(--pf-navy)]">{product.name}</p>
               <p className="text-xs text-slate-500">
@@ -250,7 +250,7 @@ function EntryForm({ causes, onClose, onSaved }: { causes: string[]; onClose: ()
               {filtered.map((item) => (
                 <li key={item.id}>
                   <button type="button" onClick={() => pick(item)} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50">
-                    <ProductPhoto name={item.name} imagePath={item.imagePath} categoryId={item.categoryId} size={32} />
+                    <ProductPhoto name={item.name} imagePath={item.imagePath} categoryId={item.brandId} size={32} />
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--pf-navy)]">{item.name}</span>
                     <span className="text-xs tabular-nums text-slate-500">
                       {item.stockLabel} {item.unit}
