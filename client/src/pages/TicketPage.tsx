@@ -12,6 +12,7 @@ export function TicketPage() {
     documentId?: string
     documentOk?: boolean
     documentError?: string
+    debtNote?: string
   } | null
   const change = state?.change ? (state as { received: string; change: string; currency: string }) : null
   const [printing, setPrinting] = useState(false)
@@ -120,6 +121,11 @@ export function TicketPage() {
       </div>
       {printMessage ? (
         <p className={`rounded-xl px-3 py-2 text-sm ${printMessage.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{printMessage.text}</p>
+      ) : null}
+      {state?.debtNote ? (
+        <p className={`rounded-xl px-3 py-2 text-sm font-medium ${state.debtNote.startsWith("Deuda cobrada") ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}>
+          {state.debtNote}
+        </p>
       ) : null}
       {state?.documentOk ? (
         <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">✓ SUNAT aceptó el comprobante. Quedó en Facturación con su CDR y PDF.</p>

@@ -57,7 +57,6 @@ const NAV: NavGroup[] = [
     items: [
       { href: "/clientes", label: "Clientes", permission: "customers" },
       { href: "/clientes/historial", label: "Historial", permission: "customers" },
-      { href: "/clientes/creditos", label: "Créditos", permission: "customers" },
     ],
   },
   { title: "Facturación electrónica", items: [{ href: "/facturacion", label: "Comprobantes", permission: "billing" }] },

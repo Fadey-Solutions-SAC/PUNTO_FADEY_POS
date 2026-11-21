@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
   getSaleStatus,
+  postCustomerAbono,
   issueBillingDocument,
   isOfflineError,
   isServerReachable,
@@ -12,6 +13,7 @@ import {
   type SaleProduct,
 } from "../api"
 import { CustomerPicker } from "../components/CustomerPicker"
+import { PendingAccountsDialog } from "../components/PendingAccountsDialog"
 import { CheckoutDocument, checkoutProblem, type CheckoutBuyer, type CheckoutKind } from "../components/CheckoutDocument"
 import { emitDocument, printDocumentTicket, printSafe, printSaleTicket } from "../assistant"
 import { readPrefs } from "../lib/local-assistant"
@@ -88,6 +90,10 @@ export function SalesPage() {
   const [docKind, setDocKind] = useState<CheckoutKind>("NOTA")
   const [buyer, setBuyer] = useState<CheckoutBuyer>({ document: "", name: "", address: "" })
   const [chargeStatus, setChargeStatus] = useState("")
+  // Cuentas pendientes (botón en caja) y cobro de la deuda del cliente al cobrar.
+  const [pendingOpen, setPendingOpen] = useState(false)
+  const [collectDebt, setCollectDebt] = useState(false)
+  const [debtAmount, setDebtAmount] = useState("")
   const [canCredit, setCanCredit] = useState(false)
   const [canCreateCustomer, setCanCreateCustomer] = useState(false)
 
@@ -326,6 +332,8 @@ export function SalesPage() {
     setDocKind("NOTA")
     setBuyer({ document: customer?.document ?? "", name: customer?.name ?? "", address: "" })
     setChargeStatus("")
+    setCollectDebt(false)
+    setDebtAmount(customer && customer.balanceCents > 0 ? (customer.balanceCents / 100).toFixed(2) : "")
     setSheetOpen(false)
     setPaying(true)
   }, [cart.length, cashOpen, methods, totalAmount, customer])
@@ -349,6 +357,12 @@ export function SalesPage() {
       setError("El vuelto solo puede salir del efectivo")
       return
     }
+    const debtCents = collectDebt && customer && !isCredit ? toCents(debtAmount) : 0
+    if (collectDebt && customer && !isCredit && (debtCents <= 0 || debtCents > customer.balanceCents)) {
+      setError(`El cobro de deuda debe ser mayor que 0 y hasta ${money(customer.balanceCents)} ${currency}`)
+      return
+    }
+    const debtCustomerId = customer?.id ?? ""
     const docProblem = checkoutProblem(docKind, buyer, totalCents)
     if (docProblem) {
       setError(docProblem)
@@ -400,6 +414,16 @@ export function SalesPage() {
         return
       }
       const saleId = result.saleId!
+      let debtNote = ""
+      if (debtCents > 0 && debtCustomerId) {
+        try {
+          setChargeStatus("Cobrando deuda del cliente…")
+          await postCustomerAbono({ customerId: debtCustomerId, saleId: "", amount: money(debtCents), method: rows[0]?.method ?? "CASH" })
+          debtNote = `Deuda cobrada: ${money(debtCents)} ${currency}`
+        } catch (debtError) {
+          debtNote = `La venta se cobró, pero no se pudo cobrar la deuda: ${debtError instanceof Error ? debtError.message : "error"}`
+        }
+      }
       // Nota de venta: ticket a la ticketera por el asistente (si está activado imprimir al cobrar).
       if (docKind === "NOTA") {
         if (readPrefs().autoPrint) {
@@ -407,7 +431,7 @@ export function SalesPage() {
           await printSafe(printSaleTicket(saleId))
         }
         setPaying(false)
-        navigate(`/ventas/${saleId}/ticket`, { state: changeState })
+        navigate(`/ventas/${saleId}/ticket`, { state: { ...changeState, debtNote } })
         return
       }
       // Boleta o factura: crear, emitir con el asistente local y luego imprimir.
@@ -426,13 +450,14 @@ export function SalesPage() {
         setChargeStatus("Imprimiendo comprobante…")
         await printSafe(printDocumentTicket(documentId))
         setPaying(false)
-        navigate(`/ventas/${saleId}/ticket`, { state: { ...changeState, documentId, documentOk: true } })
+        navigate(`/ventas/${saleId}/ticket`, { state: { ...changeState, documentId, documentOk: true, debtNote } })
       } catch (docError) {
         setPaying(false)
         navigate(`/ventas/${saleId}/ticket`, {
           state: {
             ...changeState,
             documentId,
+            debtNote,
             documentError: `Venta cobrada. ${docError instanceof Error ? docError.message : "No se pudo emitir el comprobante"}`,
           },
         })
@@ -475,7 +500,7 @@ export function SalesPage() {
             Ir a caja
           </Link>
         </div>
-        <Accesses items={accesses} />
+        <Accesses items={accesses} onPending={canCreateCustomer ? () => setPendingOpen(true) : undefined} />
       </div>
     )
   }
@@ -484,7 +509,7 @@ export function SalesPage() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-slate-500">No tienes permiso de venta.</p>
-        <Accesses items={accesses} />
+        <Accesses items={accesses} onPending={canCreateCustomer ? () => setPendingOpen(true) : undefined} />
       </div>
     )
   }
@@ -830,7 +855,7 @@ export function SalesPage() {
               : null}
           </div>
 
-          <Accesses items={accesses} />
+          <Accesses items={accesses} onPending={canCreateCustomer ? () => setPendingOpen(true) : undefined} />
         </div>
 
         <aside className="hidden lg:block">
@@ -885,6 +910,8 @@ export function SalesPage() {
           </div>
         </div>
       ) : null}
+
+      {pendingOpen ? <PendingAccountsDialog onClose={() => setPendingOpen(false)} /> : null}
 
       {pickerOpen ? (
         <CustomerPicker
@@ -1119,6 +1146,30 @@ export function SalesPage() {
               )}
             </div>
 
+            {customer && customer.balanceCents > 0 && !isCredit && canCreateCustomer ? (
+              <div className="space-y-2 rounded-2xl border border-red-200 bg-red-50/60 p-3">
+                <label className="flex items-center gap-2 text-sm font-semibold text-red-800">
+                  <input type="checkbox" className="size-4" checked={collectDebt} onChange={(event) => setCollectDebt(event.target.checked)} />
+                  Cobrar también su deuda ({customer.balance})
+                </label>
+                {collectDebt ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-slate-600">Monto de la deuda a cobrar</span>
+                    <input
+                      inputMode="decimal"
+                      className="h-10 w-28 rounded-xl border border-red-200 bg-white px-3 text-right font-semibold"
+                      value={debtAmount}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onChange={(event) => setDebtAmount(event.target.value)}
+                    />
+                    <span className="text-xs text-slate-500">
+                      Total a recibir: <b className="text-[var(--pf-navy)]">{money(totalCents + toCents(debtAmount))} {currency}</b> (venta + deuda, con el medio del primer pago)
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
             {chargeStatus ? <p className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">{chargeStatus}</p> : null}
             <button
@@ -1169,8 +1220,8 @@ function Chip({
   )
 }
 
-function Accesses({ items }: { items: { href: string; label: string }[] }) {
-  if (items.length === 0) return null
+function Accesses({ items, onPending }: { items: { href: string; label: string }[]; onPending?: () => void }) {
+  if (items.length === 0 && !onPending) return null
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-3 text-sm font-semibold tracking-wide text-[var(--pf-navy)]">Accesos de caja</h2>
@@ -1184,6 +1235,15 @@ function Accesses({ items }: { items: { href: string; label: string }[] }) {
             {item.label}
           </Link>
         ))}
+        {onPending ? (
+          <button
+            type="button"
+            onClick={onPending}
+            className="rounded-2xl border border-red-100 bg-red-50 px-2 py-3 text-center text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-white"
+          >
+            Cuentas pendientes
+          </button>
+        ) : null}
       </div>
     </section>
   )
