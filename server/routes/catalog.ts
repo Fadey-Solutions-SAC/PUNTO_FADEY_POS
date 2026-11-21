@@ -30,7 +30,10 @@ export function registerCatalogRoutes(app: Express) {
           brandId: product.brandId,
           brandName: product.brandName,
           price: formatMoney(toMoneyInt(product.salePrice), ctx.currency),
+          cost: Number(product.costPrice) > 0 ? formatMoney(toMoneyInt(product.costPrice), ctx.currency) : "",
           stock: `${product.stock} ${product.baseUnit}`,
+          stockValue: Number(String(product.stock).replace(/,/g, "")) || 0,
+          minStock: Number(String(product.minStock).replace(/,/g, "")) || 0,
           active: product.isActive,
           imagePath: (product as { imagePath?: string | null }).imagePath ?? null,
         })),
@@ -109,6 +112,37 @@ export function registerCatalogRoutes(app: Express) {
       }
     },
   )
+
+  // Eliminar (anular) o restaurar un producto: se desactiva, no se borra, para conservar su historial.
+  app.post("/api/catalog/products/:id/active", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "catalogWrite", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso para modificar productos" })
+        return
+      }
+      const active = req.body?.active === true
+      const product = await prisma.product.findFirst({ where: { id: String(req.params.id), businessId: ctx.businessId } })
+      if (!product) {
+        res.status(404).json({ error: "Producto no encontrado" })
+        return
+      }
+      await prisma.product.update({ where: { id: product.id }, data: { isActive: active } })
+      await prisma.auditLog.create({
+        data: {
+          businessId: ctx.businessId,
+          userId: ctx.userId,
+          action: active ? "PRODUCT_RESTORE" : "PRODUCT_VOID",
+          entity: "Product",
+          entityId: product.id,
+          detail: `${product.name}: ${active ? "restaurado" : "anulado"}`,
+        },
+      })
+      res.json({ ok: true })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
 
   app.post("/api/catalog/products", requireApiTenant, async (req: AuthedRequest, res) => {
     try {

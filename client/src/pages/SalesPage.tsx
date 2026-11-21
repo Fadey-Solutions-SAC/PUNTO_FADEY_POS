@@ -1114,7 +1114,7 @@ export function SalesPage() {
 
             <div className={`space-y-2 ${isCredit || parkMode ? "hidden" : ""}`}>
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-700">Pagos</p>
+                <p className="text-sm font-medium text-slate-700">Método de pago</p>
                 <button
                   type="button"
                   className="text-xs font-medium text-[var(--pf-accent)]"

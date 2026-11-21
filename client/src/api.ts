@@ -486,11 +486,19 @@ export function getCatalog() {
       brandId?: string | null
       brandName: string | null
       price: string
+      cost?: string
       stock: string
+      stockValue?: number
+      minStock?: number
       active: boolean
       imagePath?: string | null
     }[]
   }>("/api/catalog")
+}
+
+/** Anular (active=false) o restaurar un producto. No se borra: conserva su historial. */
+export function setCatalogProductActive(id: string, active: boolean) {
+  return request<{ ok: true }>(`/api/catalog/products/${id}/active`, { method: "POST", body: JSON.stringify({ active }) })
 }
 
 export function getCatalogForm() {
