@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto"
 import { AppError, errorMessage } from "../../lib/errors"
 import { PURCHASE_LABEL } from "../../lib/labels"
 import { formatDate, limaDay, formatMoney, formatQty } from "../../lib/money"
+import { prisma } from "../../lib/db"
+import { parseRange } from "../../lib/reports"
 import {
   createPurchase,
   getPurchase,
@@ -11,12 +13,17 @@ import {
   payPurchase,
   receivePurchase,
   saveSupplier,
+  updateSalePricesFromReception,
 } from "../../lib/purchases"
 import { PAYMENT_LABEL } from "../../lib/labels"
 import {
+  cancelRequirement,
   closeOpenRequirement,
   lowStockRequirement,
+  openRequirement,
   receptionList,
+  requirementCatalog,
+  requirementSuggestions,
   saveRequirement,
 } from "../../lib/requirements"
 import { can } from "../../lib/roles"
@@ -38,6 +45,11 @@ export function registerPurchasesRoutes(app: Express) {
           taxId: supplier.taxId ?? "",
           phone: supplier.phone ?? "",
           email: supplier.email ?? "",
+          legalName: supplier.legalName ?? "",
+          contact: supplier.contact ?? "",
+          address: supplier.address ?? "",
+          paymentTerm: supplier.paymentTerm,
+          creditDays: supplier.creditDays ?? null,
           isActive: supplier.isActive,
         })),
       })
@@ -57,6 +69,8 @@ export function registerPurchasesRoutes(app: Express) {
         phone: req.body?.phone != null ? String(req.body.phone) : undefined,
         email: req.body?.email != null ? String(req.body.email) : undefined,
         address: req.body?.address != null ? String(req.body.address) : undefined,
+        paymentTerm: req.body?.paymentTerm ? String(req.body.paymentTerm) : undefined,
+        creditDays: req.body?.creditDays != null ? String(req.body.creditDays) : undefined,
         isActive: req.body?.isActive !== false,
       })
       res.json({ ok: true, id })
@@ -107,6 +121,56 @@ export function registerPurchasesRoutes(app: Express) {
     }
   })
 
+  // Requerimiento: opciones (qué pedir y marcas), catálogo para agregar a mano y el requerimiento generado.
+  app.get("/api/purchases/requirement/setup", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      if (!can(ctx.role, "purchases", ctx.grants)) {
+        res.status(403).json({ error: "Sin permiso de compras" })
+        return
+      }
+      const [brands, catalog, current] = await Promise.all([
+        prisma.brand.findMany({ where: { businessId: ctx.businessId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+        requirementCatalog(ctx),
+        openRequirement(ctx),
+      ])
+      res.json({
+        warehouseName: ctx.warehouseName,
+        brands,
+        catalog,
+        current: current ? { ...current, createdAtLabel: formatDate(current.createdAt) } : null,
+      })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.get("/api/purchases/requirement/suggestions", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const range = parseRange(req.query.desde ? String(req.query.desde) : undefined, req.query.hasta ? String(req.query.hasta) : undefined)
+      const list = (value: unknown) => String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean)
+      const products = await requirementSuggestions(ctx, {
+        sources: list(req.query.origen).length ? list(req.query.origen) : ["stock"],
+        brandIds: list(req.query.marcas),
+        from: range.from,
+        to: range.to,
+      })
+      res.json({ products })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/purchases/requirement/cancel", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      await cancelRequirement(req.tenant!)
+      res.json({ ok: true })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
   app.post("/api/purchases/requirement", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
@@ -136,7 +200,7 @@ export function registerPurchasesRoutes(app: Express) {
         lines,
         suppliers: suppliers
           .filter((supplier) => supplier.isActive)
-          .map((supplier) => ({ id: supplier.id, tradeName: supplier.tradeName })),
+          .map((supplier) => ({ id: supplier.id, tradeName: supplier.tradeName, paymentTerm: supplier.paymentTerm, creditDays: supplier.creditDays ?? null })),
       })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
@@ -171,7 +235,18 @@ export function registerPurchasesRoutes(app: Express) {
         ),
       })
       await closeOpenRequirement(ctx)
-      res.json({ ok: true, id: purchase.id })
+      // Precio de venta modificado en la recepción.
+      const priced = await updateSalePricesFromReception(
+        ctx,
+        lines
+          .filter((line: { salePrice?: unknown }) => line.salePrice != null && String(line.salePrice).trim() !== "")
+          .map((line: { productId?: string; presentationId?: string; salePrice?: string }) => ({
+            productId: String(line.productId ?? ""),
+            presentationId: line.presentationId ? String(line.presentationId) : undefined,
+            salePrice: String(line.salePrice),
+          })),
+      )
+      res.json({ ok: true, id: purchase.id, pricesUpdated: priced })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
     }

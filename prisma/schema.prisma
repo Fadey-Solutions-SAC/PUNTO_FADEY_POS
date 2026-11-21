@@ -568,6 +568,9 @@ model Supplier {
   phone      String?
   email      String?
   contact    String?
+  /// Condición de pago habitual: CONTADO o CREDITO (con días de crédito).
+  paymentTerm String    @default("CONTADO")
+  creditDays  Int?
   isActive   Boolean    @default(true)
   createdAt  DateTime   @default(now())
   business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)

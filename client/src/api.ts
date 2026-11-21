@@ -839,6 +839,11 @@ export function getSuppliers() {
       taxId: string
       phone: string
       email: string
+      legalName?: string
+      contact?: string
+      address?: string
+      paymentTerm?: string
+      creditDays?: number | null
       isActive: boolean
     }[]
   }>("/api/purchases/suppliers")
@@ -852,6 +857,8 @@ export function saveSupplier(input: {
   phone?: string
   email?: string
   address?: string
+  paymentTerm?: string
+  creditDays?: string
 }) {
   return request<{ ok: true; id: string }>("/api/purchases/suppliers", {
     method: "POST",
@@ -900,7 +907,7 @@ export function savePurchaseRequirement(lines: { productId: string; quantity: st
 
 export function getPurchaseReception() {
   return request<{
-    suppliers: { id: string; tradeName: string }[]
+    suppliers: { id: string; tradeName: string; paymentTerm?: string; creditDays?: number | null }[]
     lines: {
       productId: string
       name: string
@@ -909,7 +916,8 @@ export function getPurchaseReception() {
       unitCost: string
       presentationId: string
       trackLots?: boolean
-      presentations: { id: string; name: string; unitCost: string }[]
+      salePrice?: string
+      presentations: { id: string; name: string; unitCost: string; salePrice?: string }[]
     }[]
   }>("/api/purchases/reception")
 }
@@ -922,7 +930,7 @@ export function postPurchaseReception(input: {
   receiveNow?: boolean
   payNow?: string
   payMethod?: "CASH" | "TRANSFER" | "OTHER"
-  lines: { productId: string; presentationId?: string; quantity: string; unitCost: string; lotCode?: string; expiresAt?: string }[]
+  lines: { productId: string; presentationId?: string; quantity: string; unitCost: string; salePrice?: string; lotCode?: string; expiresAt?: string }[]
 }) {
   return request<{ ok: true; id: string }>("/api/purchases/reception", {
     method: "POST",
@@ -1596,4 +1604,29 @@ export function releaseAssistantEmit(id: string, reason: string) {
 
 export function wipeAllData(password: string) {
   return request<{ ok: true }>("/api/settings/wipe", { method: "POST", body: JSON.stringify({ password, confirm: true }) })
+}
+
+// ---- Requerimiento con opciones (qué pedir, marcas y búsqueda manual) ----
+export type RequirementItem = { productId: string; name: string; brand: string; unit: string; stock: string; quantity: string; reason?: string }
+
+export function getRequirementSetup() {
+  return request<{
+    warehouseName: string
+    brands: { id: string; name: string }[]
+    catalog: { productId: string; name: string; code: string; barcodes: string[]; brand: string; unit: string; stock: string }[]
+    current: { id: string; createdAtLabel: string; userName: string; lines: RequirementItem[] } | null
+  }>("/api/purchases/requirement/setup")
+}
+
+export function getRequirementSuggestions(input: { origen: string[]; marcas: string[]; desde?: string; hasta?: string }) {
+  const params = new URLSearchParams()
+  params.set("origen", input.origen.join(","))
+  if (input.marcas.length) params.set("marcas", input.marcas.join(","))
+  if (input.desde) params.set("desde", input.desde)
+  if (input.hasta) params.set("hasta", input.hasta)
+  return request<{ products: RequirementItem[] }>(`/api/purchases/requirement/suggestions?${params.toString()}`)
+}
+
+export function cancelPurchaseRequirement() {
+  return request<{ ok: true }>("/api/purchases/requirement/cancel", { method: "POST" })
 }

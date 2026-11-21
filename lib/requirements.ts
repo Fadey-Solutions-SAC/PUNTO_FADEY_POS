@@ -23,7 +23,9 @@ export type ReceptionLine = {
   quantity: string
   unitCost: string
   presentationId: string
-  presentations: { id: string; name: string; unitCost: string }[]
+  trackLots?: boolean
+  salePrice?: string
+  presentations: { id: string; name: string; unitCost: string; salePrice?: string }[]
 }
 
 function isLow(stock: number, minStock: number) {
@@ -114,6 +116,12 @@ export async function saveRequirement(ctx: TenantContext, lines: { productId: st
   })
 }
 
+/** Precio de venta de una presentación: el suyo, o el del producto por su factor. */
+function salePriceOf(product: { salePrice: number }, presentation: { price: number | null; factorToBase: number }) {
+  if (presentation.price != null) return fromMoneyInt(presentation.price).toFixed(2)
+  return fromMoneyInt(product.salePrice).mul(fromQtyInt(presentation.factorToBase)).toFixed(2)
+}
+
 export async function receptionList(ctx: TenantContext): Promise<ReceptionLine[]> {
   assertCan(ctx, "purchases")
   const id = await openRequirementId(ctx)
@@ -143,10 +151,12 @@ export async function receptionList(ctx: TenantContext): Promise<ReceptionLine[]
       unitCost: unitCost.toFixed(2),
       presentationId: presentation.id,
       trackLots: product.trackLots,
+      salePrice: salePriceOf(product, presentation),
       presentations: product.presentations.map((item) => ({
         id: item.id,
         name: item.name,
         unitCost: fromMoneyInt(product.costPrice).mul(fromQtyInt(item.factorToBase)).toFixed(2),
+        salePrice: salePriceOf(product, item),
       })),
     }]
   })
@@ -156,4 +166,136 @@ export async function closeOpenRequirement(ctx: TenantContext) {
   const id = await openRequirementId(ctx)
   if (!id) return
   await prisma.$executeRaw`UPDATE PurchaseRequirement SET status = 'USED' WHERE id = ${id} AND businessId = ${ctx.businessId}`
+}
+
+/**
+ * Sugerencias para el requerimiento según lo que se quiere pedir:
+ * - «stock»: productos con stock bajo (hasta el máximo si está definido).
+ * - «mermas»: lo que se perdió por vencimiento o deterioro en el período (Mermas y pérdidas).
+ * Se pueden limitar a una o varias marcas.
+ */
+export async function requirementSuggestions(
+  ctx: TenantContext,
+  input: { sources: string[]; brandIds: string[]; from: Date; to: Date },
+) {
+  assertCan(ctx, "purchases")
+  const brandFilter = input.brandIds.length ? { brandId: { in: input.brandIds } } : {}
+  const result = new Map<string, { productId: string; name: string; brand: string; unit: string; stock: string; reason: string; quantity: number }>()
+  if (input.sources.includes("stock")) {
+    const products = await prisma.product.findMany({
+      where: { businessId: ctx.businessId, isActive: true, variants: { none: { isActive: true } }, ...brandFilter },
+      include: { brand: true, baseUnit: true, balances: { where: { warehouseId: ctx.warehouseId } } },
+      orderBy: { name: "asc" },
+    })
+    for (const product of products) {
+      const stock = product.balances[0]?.quantity ?? 0
+      if (!isLow(stock, product.minStock)) continue
+      const target = product.maxStock != null && product.maxStock > stock ? product.maxStock - stock : product.minStock > stock ? product.minStock - stock : QTY_SCALE
+      result.set(product.id, {
+        productId: product.id,
+        name: product.name,
+        brand: product.brand?.name ?? "Sin marca",
+        unit: product.baseUnit.symbol,
+        stock: formatQty(stock),
+        reason: "Stock bajo",
+        quantity: target,
+      })
+    }
+  }
+  if (input.sources.includes("mermas")) {
+    const losses = await prisma.stockLoss.findMany({
+      where: {
+        businessId: ctx.businessId,
+        warehouseId: ctx.warehouseId,
+        status: "ACTIVE",
+        cause: { in: ["Vencido", "Deteriorado", "Roto o dañado"] },
+        createdAt: { gte: input.from, lte: input.to },
+        product: { isActive: true, ...brandFilter },
+      },
+      include: { product: { include: { brand: true, baseUnit: true, balances: { where: { warehouseId: ctx.warehouseId } } } } },
+    })
+    for (const loss of losses) {
+      const current = result.get(loss.productId)
+      const label = loss.cause === "Vencido" ? "Vencimiento" : "Deterioro"
+      if (current) {
+        current.quantity += loss.quantity
+        if (!current.reason.includes(label)) current.reason += ` · ${label}`
+        continue
+      }
+      result.set(loss.productId, {
+        productId: loss.productId,
+        name: loss.product.name,
+        brand: loss.product.brand?.name ?? "Sin marca",
+        unit: loss.product.baseUnit.symbol,
+        stock: formatQty(loss.product.balances[0]?.quantity ?? 0),
+        reason: label,
+        quantity: loss.quantity,
+      })
+    }
+  }
+  return [...result.values()]
+    .sort((a, b) => a.name.localeCompare(b.name, "es"))
+    .map((item) => ({ ...item, quantity: formatQty(item.quantity) }))
+}
+
+/** Requerimiento generado (abierto) con sus líneas, para verlo, modificarlo o cancelarlo. */
+export async function openRequirement(ctx: TenantContext) {
+  assertCan(ctx, "purchases")
+  const id = await openRequirementId(ctx)
+  if (!id) return null
+  const [head] = await prisma.$queryRaw<{ id: string; createdAt: Date | string; userId: string }[]>`
+    SELECT id, createdAt, userId FROM PurchaseRequirement WHERE id = ${id}
+  `
+  const lines = await prisma.$queryRaw<{ productId: string; quantity: number }[]>`
+    SELECT productId, quantity FROM PurchaseRequirementLine WHERE requirementId = ${id}
+  `
+  const products = await prisma.product.findMany({
+    where: { businessId: ctx.businessId, id: { in: lines.map((line) => line.productId) } },
+    include: { brand: true, baseUnit: true, balances: { where: { warehouseId: ctx.warehouseId } } },
+  })
+  const user = head ? await prisma.user.findUnique({ where: { id: head.userId }, select: { name: true } }) : null
+  const byId = new Map(products.map((product) => [product.id, product]))
+  return {
+    id,
+    createdAt: head ? new Date(head.createdAt) : new Date(),
+    userName: user?.name ?? "",
+    lines: lines.flatMap((line) => {
+      const product = byId.get(line.productId)
+      if (!product) return []
+      return [{
+        productId: product.id,
+        name: product.name,
+        brand: product.brand?.name ?? "Sin marca",
+        unit: product.baseUnit.symbol,
+        stock: formatQty(product.balances[0]?.quantity ?? 0),
+        quantity: formatQty(line.quantity),
+      }]
+    }).sort((a, b) => a.name.localeCompare(b.name, "es")),
+  }
+}
+
+export async function cancelRequirement(ctx: TenantContext) {
+  assertCan(ctx, "purchases")
+  const id = await openRequirementId(ctx)
+  if (!id) throw new AppError("No hay un requerimiento generado")
+  await prisma.$executeRaw`UPDATE PurchaseRequirement SET status = 'CANCELLED' WHERE id = ${id} AND businessId = ${ctx.businessId}`
+}
+
+/** Productos activos para agregar a mano al requerimiento (buscador). */
+export async function requirementCatalog(ctx: TenantContext) {
+  assertCan(ctx, "purchases")
+  const products = await prisma.product.findMany({
+    where: { businessId: ctx.businessId, isActive: true, variants: { none: { isActive: true } } },
+    include: { brand: true, baseUnit: true, balances: { where: { warehouseId: ctx.warehouseId } }, barcodes: { select: { code: true } } },
+    orderBy: { name: "asc" },
+  })
+  return products.map((product) => ({
+    productId: product.id,
+    name: product.name,
+    code: product.internalCode,
+    barcodes: product.barcodes.map((item) => item.code),
+    brand: product.brand?.name ?? "Sin marca",
+    unit: product.baseUnit.symbol,
+    stock: formatQty(product.balances[0]?.quantity ?? 0),
+  }))
 }

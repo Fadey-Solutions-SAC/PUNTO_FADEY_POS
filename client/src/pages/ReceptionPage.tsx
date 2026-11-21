@@ -4,7 +4,7 @@ import { getPurchaseReception, postPurchaseReception } from "../api"
 
 export function ReceptionPage() {
   const navigate = useNavigate()
-  const [suppliers, setSuppliers] = useState<{ id: string; tradeName: string }[]>([])
+  const [suppliers, setSuppliers] = useState<{ id: string; tradeName: string; paymentTerm?: string; creditDays?: number | null }[]>([])
   const [rows, setRows] = useState<Awaited<ReturnType<typeof getPurchaseReception>>["lines"]>([])
   const [supplierId, setSupplierId] = useState("")
   const [documentNumber, setDocumentNumber] = useState("")
@@ -24,6 +24,7 @@ export function ReceptionPage() {
         setSuppliers(data.suppliers)
         setRows(data.lines)
         setSupplierId(data.suppliers[0]?.id ?? "")
+        if (data.suppliers[0]?.paymentTerm === "CREDITO") setPayMode("credit")
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Error"))
   }, [])
@@ -53,6 +54,8 @@ export function ReceptionPage() {
             presentationId: row.presentationId,
             quantity: row.quantity,
             unitCost: row.unitCost || "0",
+            // Precio de venta: se actualiza en el producto solo si cambió.
+            salePrice: row.salePrice,
             lotCode: receiveNow ? lots[row.productId]?.lotCode : undefined,
             expiresAt: receiveNow ? lots[row.productId]?.expiresAt : undefined,
           })),
@@ -100,7 +103,11 @@ export function ReceptionPage() {
               <select
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 value={supplierId}
-                onChange={(event) => setSupplierId(event.target.value)}
+                onChange={(event) => {
+                  setSupplierId(event.target.value)
+                  const supplier = suppliers.find((item) => item.id === event.target.value)
+                  setPayMode(supplier?.paymentTerm === "CREDITO" ? "credit" : "full")
+                }}
               >
                 {suppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
@@ -127,6 +134,7 @@ export function ReceptionPage() {
                   <th className="px-3 py-2 font-medium">Presentación</th>
                   <th className="px-3 py-2 font-medium">Cantidad</th>
                   <th className="px-3 py-2 font-medium">Costo</th>
+                  <th className="px-3 py-2 font-medium">Precio venta</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,6 +157,7 @@ export function ReceptionPage() {
                                     ...item,
                                     presentationId: event.target.value,
                                     unitCost: next?.unitCost ?? item.unitCost,
+                                    salePrice: next?.salePrice ?? item.salePrice,
                                   }
                                 : item,
                             ),
@@ -183,6 +192,21 @@ export function ReceptionPage() {
                           setRows((current) =>
                             current.map((item) =>
                               item.productId === row.productId ? { ...item, unitCost: event.target.value } : item,
+                            ),
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        inputMode="decimal"
+                        aria-label={`Precio de venta de ${row.name}`}
+                        className="w-28 rounded-xl border border-teal-300 bg-teal-50/40 px-3 py-2 font-semibold text-teal-800"
+                        value={row.salePrice ?? ""}
+                        onChange={(event) =>
+                          setRows((current) =>
+                            current.map((item) =>
+                              item.productId === row.productId ? { ...item, salePrice: event.target.value } : item,
                             ),
                           )
                         }

@@ -60,6 +60,8 @@ export async function saveSupplier(
     phone?: string
     email?: string
     contact?: string
+    paymentTerm?: string
+    creditDays?: string
     isActive?: boolean
   },
 ) {
@@ -74,6 +76,8 @@ export async function saveSupplier(
     phone: input.phone?.trim() || null,
     email: input.email?.trim() || null,
     contact: input.contact?.trim() || null,
+    paymentTerm: input.paymentTerm === "CREDITO" ? "CREDITO" : "CONTADO",
+    creditDays: input.paymentTerm === "CREDITO" && input.creditDays?.trim() ? Math.max(0, Math.min(365, Math.round(Number(input.creditDays)) || 0)) : null,
     isActive: input.isActive ?? true,
   }
   if (input.id) {
@@ -330,4 +334,52 @@ export async function getPurchase(ctx: TenantContext, id: string) {
   })
   if (!purchase) throw new AppError("Compra no encontrada")
   return purchase
+}
+
+/**
+ * Precio de venta cambiado en la recepción: si es la presentación base (factor 1) cambia el precio
+ * del producto; si es otra (caja, saco…), el de esa presentación. Requiere permiso de precios.
+ */
+export async function updateSalePricesFromReception(
+  ctx: TenantContext,
+  items: { productId: string; presentationId?: string; salePrice: string }[],
+) {
+  const changes = items.filter((item) => item.salePrice.trim() !== "")
+  if (changes.length === 0) return 0
+  let changed = 0
+  for (const item of changes) {
+    const price = toMoneyInt(item.salePrice.trim().replace(",", "."))
+    const product = await prisma.product.findFirst({
+      where: { id: item.productId, businessId: ctx.businessId },
+      include: { presentations: { where: { isActive: true } } },
+    })
+    if (!product) continue
+    const presentation =
+      product.presentations.find((row) => row.id === item.presentationId) ??
+      product.presentations.find((row) => row.factorToBase === QTY_SCALE) ??
+      product.presentations[0]
+    if (!presentation) continue
+    if (presentation.factorToBase === QTY_SCALE) {
+      if (product.salePrice === price) continue
+      assertCan(ctx, "priceWrite")
+      await prisma.product.update({ where: { id: product.id }, data: { salePrice: price } })
+    } else {
+      const current = presentation.price ?? Math.round((product.salePrice * presentation.factorToBase) / QTY_SCALE)
+      if (current === price) continue
+      assertCan(ctx, "priceWrite")
+      await prisma.presentation.update({ where: { id: presentation.id }, data: { price } })
+    }
+    changed += 1
+    await prisma.auditLog.create({
+      data: {
+        businessId: ctx.businessId,
+        userId: ctx.userId,
+        action: "PRICE_UPDATE",
+        entity: "Product",
+        entityId: product.id,
+        detail: `${product.name} · ${presentation.name}: precio de venta ${item.salePrice} (en recepción)`,
+      },
+    })
+  }
+  return changed
 }
