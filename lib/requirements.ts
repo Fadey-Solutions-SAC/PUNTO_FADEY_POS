@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
 import { fromMoneyInt, fromQtyInt, formatQty, QTY_SCALE, toQtyInt } from "@/lib/money"
+import { measureOptions, unitConversionsTo, UNIT_OPTION } from "@/lib/inventory"
 import { assertCan } from "@/lib/roles"
 import type { TenantContext } from "@/lib/types"
 import { randomUUID } from "node:crypto"
@@ -134,30 +135,33 @@ export async function receptionList(ctx: TenantContext): Promise<ReceptionLine[]
     where: { businessId: ctx.businessId, id: { in: lines.map((line) => line.productId) } },
     include: { baseUnit: true, presentations: { where: { isActive: true }, orderBy: { name: "asc" } } },
   })
+  const conversions = await unitConversionsTo(ctx.businessId)
   const byId = new Map(products.map((product) => [product.id, product]))
   return lines.flatMap((line) => {
     const product = byId.get(line.productId)
-    if (!product || product.presentations.length === 0) return []
-    const presentation = product.presentations.find((item) => item.factorToBase === QTY_SCALE)
-      ?? product.presentations.find((item) => item.isDefault)
-      ?? product.presentations[0]
-    const presentationQty = fromQtyInt(line.quantity).mul(QTY_SCALE).div(presentation.factorToBase)
-    const unitCost = fromMoneyInt(product.costPrice).mul(fromQtyInt(presentation.factorToBase))
+    if (!product) return []
+    // Opciones: la unidad del producto (por defecto), unidades convertibles (g → kg) y presentaciones (caja, saco…).
+    const options = measureOptions(product, conversions).map((option) => {
+      const presentation = product.presentations.find((item) => item.id === option.id)
+      const factor = Math.round(option.factor * QTY_SCALE)
+      return {
+        id: option.id,
+        name: option.name,
+        unitCost: fromMoneyInt(product.costPrice).mul(fromQtyInt(factor)).toFixed(2),
+        salePrice: presentation ? salePriceOf(product, presentation) : fromMoneyInt(product.salePrice).mul(fromQtyInt(factor)).toFixed(2),
+      }
+    })
+    const base = options[0]
     return [{
       productId: product.id,
       name: product.name,
       unit: product.baseUnit.symbol,
-      quantity: presentationQty.toFixed(4).replace(/\.?0+$/, ""),
-      unitCost: unitCost.toFixed(2),
-      presentationId: presentation.id,
+      quantity: fromQtyInt(line.quantity).toFixed(4).replace(/\.?0+$/, ""),
+      unitCost: base.unitCost,
+      presentationId: UNIT_OPTION + product.baseUnitId,
       trackLots: product.trackLots,
-      salePrice: salePriceOf(product, presentation),
-      presentations: product.presentations.map((item) => ({
-        id: item.id,
-        name: item.name,
-        unitCost: fromMoneyInt(product.costPrice).mul(fromQtyInt(item.factorToBase)).toFixed(2),
-        salePrice: salePriceOf(product, item),
-      })),
+      salePrice: base.salePrice,
+      presentations: options,
     }]
   })
 }

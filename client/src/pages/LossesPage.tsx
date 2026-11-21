@@ -582,6 +582,7 @@ function LossForm({
             <label className="block text-sm font-medium text-slate-700">
               Cantidad
               <input
+                placeholder="Ej. 2"
                 inputMode="decimal"
                 className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-right tabular-nums"
                 value={quantity}

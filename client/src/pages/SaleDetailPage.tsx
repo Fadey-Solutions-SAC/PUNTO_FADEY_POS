@@ -130,6 +130,7 @@ export function SaleDetailPage() {
             <label className="mt-3 block text-sm">
               Motivo
               <textarea
+                placeholder="Ej. Error de cobro"
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 rows={3}
                 value={reason}

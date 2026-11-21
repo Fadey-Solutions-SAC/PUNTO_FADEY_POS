@@ -1156,6 +1156,7 @@ export function SalesPage() {
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="text-slate-600">Monto de la deuda a cobrar</span>
                     <input
+                      placeholder="Ej. 20.00"
                       inputMode="decimal"
                       className="h-10 w-28 rounded-xl border border-red-200 bg-white px-3 text-right font-semibold"
                       value={debtAmount}

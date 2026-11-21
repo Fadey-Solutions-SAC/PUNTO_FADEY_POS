@@ -111,7 +111,7 @@ export function TaxonomyPage({ brandsOnly = false }: { brandsOnly?: boolean } = 
                   }, "Nombre actualizado")
                 }}
               >
-                <input autoFocus className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" value={editing.name} onChange={(e) => setEditing({ id: item.id, name: e.target.value })} />
+                <input autoFocus className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" value={editing.name} onChange={(e) => setEditing({ id: item.id, name: e.target.value })} placeholder="Ej. Gloria" />
                 <button type="submit" disabled={busy} className="rounded-lg bg-[var(--pf-accent)] px-3 text-xs font-semibold text-white">
                   Guardar
                 </button>

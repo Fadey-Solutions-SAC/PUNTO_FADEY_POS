@@ -142,9 +142,6 @@ export function WarehousesPage() {
           <Link to="/productos/nuevo" className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-600 px-4 text-sm font-semibold text-white">
             <Plus size={16} /> Nuevo producto
           </Link>
-          <Link to="/inventario/transferencias" className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white">
-            <ArrowLeftRight size={16} /> Transferencias
-          </Link>
           <Link to="/configuracion?m=almacenes" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-[var(--pf-navy)]">
             <Plus size={16} /> Nuevo almacén
           </Link>

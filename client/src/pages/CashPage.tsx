@@ -132,6 +132,7 @@ export function CashPage() {
           <label className="block text-sm font-medium text-slate-700">
             Efectivo inicial
             <input
+              placeholder="Ej. 100.00"
               inputMode="decimal"
               className="mt-1 h-12 w-full rounded-xl border border-slate-200 px-3 text-right text-lg tabular-nums"
               value={openingAmount}

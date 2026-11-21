@@ -69,6 +69,7 @@ export function CreditsPage() {
             <label className="block text-sm">
               Monto
               <input
+                placeholder="Ej. 20.00"
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}

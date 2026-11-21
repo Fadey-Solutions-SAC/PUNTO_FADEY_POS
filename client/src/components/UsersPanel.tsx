@@ -242,7 +242,7 @@ function UserForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
             Nombre completo
-            <input required className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            <input required className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ej. María López" />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Usuario (para iniciar sesión)

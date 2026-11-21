@@ -99,6 +99,7 @@ export function PendingAccountsDialog({ onClose }: { onClose: () => void }) {
                 <label className="block text-sm font-medium text-slate-700">
                   Monto
                   <input
+                    placeholder="Ej. 20.00"
                     inputMode="decimal"
                     autoFocus
                     className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-right font-semibold"

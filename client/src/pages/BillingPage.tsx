@@ -342,6 +342,7 @@ function IssueForm({
             {docType === "FACTURA" ? "RUC del cliente (obligatorio)" : "DNI o RUC del cliente (opcional)"}
             <span className="flex gap-2">
               <input
+                placeholder="Ej. 45678912 o 20601234567"
                 inputMode="numeric"
                 required={docType === "FACTURA"}
                 className="mt-1 h-11 w-full min-w-0 rounded-xl border border-slate-200 px-3"
@@ -448,7 +449,7 @@ function ConfigPanel({ config, busy, run }: { config: BillingConfig; busy: boole
           </label>
           <label className="block text-sm font-medium text-slate-700">
             IGV (%)
-            <input inputMode="decimal" className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-right" value={igvRate} onChange={(e) => setIgvRate(e.target.value)} />
+            <input inputMode="decimal" className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-right" value={igvRate} onChange={(e) => setIgvRate(e.target.value)} placeholder="Ej. 18" />
           </label>
         </div>
         <button type="submit" disabled={busy} className="h-11 rounded-xl bg-[var(--pf-accent)] px-5 text-sm font-semibold text-white disabled:opacity-60">
@@ -471,6 +472,7 @@ function ConfigPanel({ config, busy, run }: { config: BillingConfig; busy: boole
           >
             <span className="w-28 shrink-0 text-sm font-medium text-slate-700">{item.label}</span>
             <input
+              placeholder="Ej. B001"
               disabled={item.locked}
               maxLength={4}
               className="h-10 w-24 rounded-xl border border-slate-200 px-3 text-center font-mono uppercase disabled:bg-slate-50"

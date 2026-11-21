@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
-import { applyStock } from "@/lib/inventory"
+import { applyStock, UNIT_OPTION } from "@/lib/inventory"
 import { D, QTY_SCALE, mulScale, toMoneyInt, toQtyInt } from "@/lib/money"
 import { assertCan } from "@/lib/roles"
 import type { TenantContext } from "@/lib/types"
@@ -24,9 +24,38 @@ function baseCost(unitCost: number, factor: number) {
 async function lineFromInput(tx: Tx, ctx: TenantContext, input: PurchaseLineInput) {
   const product = await tx.product.findFirst({
     where: { id: input.productId, businessId: ctx.businessId, isActive: true },
-    include: { presentations: true },
+    include: { presentations: true, baseUnit: { select: { symbol: true } } },
   })
   if (!product) throw new AppError("Producto no encontrado")
+  // Compra en una unidad (kg, g, und…): «unit:<unitId>», convertida a la unidad base del producto.
+  if (input.presentationId?.startsWith(UNIT_OPTION)) {
+    const unitId = input.presentationId.slice(UNIT_OPTION.length)
+    let factor = QTY_SCALE
+    let unitName = product.baseUnit.symbol
+    if (unitId !== product.baseUnitId) {
+      const conversion = await tx.unitConversion.findFirst({
+        where: { businessId: ctx.businessId, fromUnitId: unitId, toUnitId: product.baseUnitId },
+        include: { fromUnit: { select: { symbol: true } } },
+      })
+      if (!conversion) throw new AppError(`Esa unidad no se convierte a ${product.baseUnit.symbol}`)
+      factor = conversion.factor
+      unitName = conversion.fromUnit.symbol
+    }
+    const quantity = toQtyInt(input.quantity)
+    if (quantity <= 0) throw new AppError("La cantidad debe ser mayor que cero")
+    const unitCost = toMoneyInt(input.unitCost)
+    return {
+      productId: product.id,
+      presentationId: null,
+      description: `${product.name} · ${unitName}`,
+      quantity,
+      factorToBase: factor,
+      baseQuantity: mulScale(quantity, factor),
+      unitCost,
+      total: mulScale(unitCost, quantity),
+      baseUnitCost: baseCost(unitCost, factor),
+    }
+  }
   const presentation = input.presentationId
     ? product.presentations.find((item) => item.id === input.presentationId && item.isActive)
     : product.presentations.find((item) => item.isDefault && item.isActive) ?? product.presentations[0]
@@ -354,6 +383,14 @@ export async function updateSalePricesFromReception(
       include: { presentations: { where: { isActive: true } } },
     })
     if (!product) continue
+    // Unidad: solo la unidad base cambia el precio del producto (g, etc. no tienen precio propio).
+    if (item.presentationId?.startsWith(UNIT_OPTION)) {
+      if (item.presentationId.slice(UNIT_OPTION.length) !== product.baseUnitId || product.salePrice === price) continue
+      assertCan(ctx, "priceWrite")
+      await prisma.product.update({ where: { id: product.id }, data: { salePrice: price } })
+      changed += 1
+      continue
+    }
     const presentation =
       product.presentations.find((row) => row.id === item.presentationId) ??
       product.presentations.find((row) => row.factorToBase === QTY_SCALE) ??

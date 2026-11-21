@@ -152,6 +152,16 @@ export function CustomersPage() {
                       inputMode={key === "document" ? "numeric" : undefined}
                       className="mt-1 w-full min-w-0 rounded-xl border border-slate-200 px-3 py-2"
                       value={form[key]}
+                      placeholder={
+                        {
+                          name: "Ej. Juan Pérez",
+                          document: "Ej. 45678912 (DNI) o 20601234567 (RUC)",
+                          phone: "Ej. 987 654 321",
+                          email: "Ej. cliente@correo.com",
+                          address: "Ej. Av. Perú 123, San Martín de Porres",
+                          creditLimit: "Ej. 200.00",
+                        }[key]
+                      }
                       onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
                     />
                     {key === "document" ? (

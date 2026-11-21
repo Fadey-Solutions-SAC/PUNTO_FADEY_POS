@@ -227,7 +227,7 @@ function PrintingPanel() {
               <input className={input} value={ip} onChange={(e) => setIp(e.target.value)} placeholder="192.168.1.50" />
             </Field>
             <Field label="Puerto">
-              <input className={input} value={puerto} onChange={(e) => setPuerto(e.target.value)} inputMode="numeric" />
+              <input className={input} value={puerto} onChange={(e) => setPuerto(e.target.value)} inputMode="numeric" placeholder="Ej. 9100" />
             </Field>
           </>
         )}
@@ -338,25 +338,25 @@ function SunatPanel() {
           <input className={input} value={form.ubigeo ?? ""} onChange={set("ubigeo")} placeholder="150101" inputMode="numeric" maxLength={6} />
         </Field>
         <Field label="Dirección fiscal" wide>
-          <input className={input} value={form.address ?? ""} onChange={set("address")} />
+          <input className={input} value={form.address ?? ""} onChange={set("address")} placeholder="Ej. Av. Los Olivos 245" />
         </Field>
         <Field label="Departamento">
-          <input className={input} value={form.department ?? ""} onChange={set("department")} />
+          <input className={input} value={form.department ?? ""} onChange={set("department")} placeholder="Ej. LIMA" />
         </Field>
         <Field label="Provincia">
-          <input className={input} value={form.province ?? ""} onChange={set("province")} />
+          <input className={input} value={form.province ?? ""} onChange={set("province")} placeholder="Ej. LIMA" />
         </Field>
         <Field label="Distrito">
-          <input className={input} value={form.district ?? ""} onChange={set("district")} />
+          <input className={input} value={form.district ?? ""} onChange={set("district")} placeholder="Ej. SAN MARTIN DE PORRES" />
         </Field>
         <Field label="Teléfono">
-          <input className={input} value={form.phone ?? ""} onChange={set("phone")} />
+          <input className={input} value={form.phone ?? ""} onChange={set("phone")} placeholder="Ej. 987 654 321" />
         </Field>
         <Field label="Correo" wide>
-          <input type="email" className={input} value={form.email ?? ""} onChange={set("email")} />
+          <input type="email" className={input} value={form.email ?? ""} onChange={set("email")} placeholder="Ej. ventas@minegocio.com" />
         </Field>
         <Field label="Usuario SOL">
-          <input className={input} value={form.solUser ?? ""} onChange={set("solUser")} autoComplete="off" />
+          <input className={input} value={form.solUser ?? ""} onChange={set("solUser")} autoComplete="off" placeholder="Ej. MODDATOS" />
         </Field>
         <Field label="Clave SOL">
           <input

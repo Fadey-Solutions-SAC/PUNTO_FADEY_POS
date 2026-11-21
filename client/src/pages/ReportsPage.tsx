@@ -170,61 +170,54 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
   const color = areaInfo.color
   const activePreset = ranges.find((item) => item.desde === desde && item.hasta === hasta)?.id
   const Icon = areaInfo.icon
-  const groupLabel = groups.find((item) => item.id === grupo)?.label ?? ""
 
   return (
     <div className="mx-auto max-w-7xl space-y-3">
-      {/* Teléfono: selector único con todos los informes. */}
-      <label className="block md:hidden">
-        <span className="text-xs font-semibold text-slate-500">Informe</span>
-        <select
-          className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-2 text-sm font-semibold text-[var(--pf-navy)]"
-          value={`${area}|${grupo}`}
-          onChange={(event) => {
-            const [nextArea, nextGroup] = event.target.value.split("|")
-            update({ area: nextArea, grupo: nextGroup })
-          }}
-        >
-          {visibleAreas.map((item) => (
-            <optgroup key={item.id} label={item.title}>
-              {(GROUPS[item.id] ?? []).map((group) => (
-                <option key={group.id} value={`${item.id}|${group.id}`}>
-                  {item.title} · {group.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
+      {/* Teléfono: selector del tipo de informe. */}
+      {visibleAreas.length > 1 ? (
+        <label className="block md:hidden">
+          <span className="text-xs font-semibold text-slate-500">Tipo de informe</span>
+          <select
+            className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-2 text-sm font-semibold text-[var(--pf-navy)]"
+            value={area}
+            onChange={(event) => update({ area: event.target.value, grupo: "" })}
+          >
+            {visibleAreas.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
-      <div className="grid gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
-        {/* PC y tablet: panel lateral con cada informe, seleccionable por separado. */}
-        <aside className="hidden self-start rounded-2xl border border-slate-200 bg-white p-2 shadow-sm md:sticky md:top-20 md:block">
-          {visibleAreas.map((item) => {
-            const AreaIcon = item.icon
-            return (
-              <div key={item.id} className="mb-1">
-                <p className="flex items-center gap-2 px-2 pb-1 pt-2 text-xs font-bold uppercase tracking-wide" style={{ color: item.color }}>
-                  <AreaIcon size={14} /> {item.title}
-                </p>
-                {(GROUPS[item.id] ?? []).map((group) => {
-                  const active = item.id === area && group.id === grupo
-                  return (
-                    <button
-                      key={group.id}
-                      type="button"
-                      onClick={() => update({ area: item.id, grupo: group.id })}
-                      className="block w-full rounded-lg px-3 py-1.5 text-left text-sm transition"
-                      style={active ? { background: tint(item.color, 0.15), color: item.color, fontWeight: 700 } : { color: "#475569" }}
-                    >
-                      {group.label}
-                    </button>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </aside>
+      <div className={`grid gap-4 ${visibleAreas.length > 1 ? "md:grid-cols-[210px_minmax(0,1fr)]" : ""}`}>
+        {/* PC y tablet: panel lateral solo con el botón de cada tipo de informe. */}
+        {visibleAreas.length > 1 ? (
+          <aside className="hidden self-start rounded-2xl border border-slate-200 bg-white p-2 shadow-sm md:sticky md:top-4 md:block">
+            {visibleAreas.map((item) => {
+              const AreaIcon = item.icon
+              const active = item.id === area
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => update({ area: item.id, grupo: "" })}
+                  className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-slate-50"
+                  style={active ? { background: tint(item.color, 0.15), color: item.color } : { color: "#475569" }}
+                >
+                  <span
+                    className="grid size-8 shrink-0 place-items-center rounded-lg"
+                    style={active ? { background: item.color, color: "#fff" } : { background: tint(item.color, 0.12), color: item.color }}
+                  >
+                    <AreaIcon size={16} />
+                  </span>
+                  {item.title}
+                </button>
+              )
+            })}
+          </aside>
+        ) : null}
 
         <div className="min-w-0 space-y-4">
           {/* Informe elegido con sus filtros a la derecha; la información va abajo. */}
@@ -235,7 +228,7 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
               </span>
               <div className="min-w-0">
                 <p className="text-lg font-semibold text-[var(--pf-navy)]">
-                  {areaInfo.title} · {groupLabel}
+                  {areaInfo.title}
                 </p>
                 <p className="text-xs text-slate-500">
                   Del <b className="text-slate-700">{fmtDate(desde)}</b> al <b className="text-slate-700">{fmtDate(hasta)}</b>
@@ -244,6 +237,23 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
               </div>
             </div>
             <div className="flex flex-wrap items-end gap-2">
+              {groups.length > 1 ? (
+                <label className="text-xs font-medium text-slate-500">
+                  Ver
+                  <select
+                    className="mt-1 block h-9 rounded-lg border px-2 text-sm font-semibold"
+                    style={{ borderColor: tint(color, 0.5), color }}
+                    value={grupo}
+                    onChange={(event) => update({ grupo: event.target.value })}
+                  >
+                    {groups.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <div className="flex flex-wrap gap-1">
                 {ranges.map((item) => (
                   <button

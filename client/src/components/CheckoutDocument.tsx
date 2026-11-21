@@ -63,6 +63,7 @@ export function CheckoutDocument({
             {kind === "FACTURA" ? "RUC" : "DNI o RUC (opcional)"}
             <span className="flex gap-2">
               <input
+                placeholder="Ej. 45678912 o 20601234567"
                 value={buyer.document}
                 disabled={disabled}
                 inputMode="numeric"
@@ -78,11 +79,11 @@ export function CheckoutDocument({
           </label>
           <label className="block text-sm text-slate-700">
             {kind === "FACTURA" ? "Razón social" : "Nombre"}
-            <input value={buyer.name} disabled={disabled} maxLength={200} onChange={(event) => onBuyer({ ...buyer, name: event.target.value })} className={field} />
+            <input value={buyer.name} disabled={disabled} maxLength={200} onChange={(event) => onBuyer({ ...buyer, name: event.target.value })} className={field} placeholder="Ej. Juan Pérez / Comercial SAC" />
           </label>
           <label className="block text-sm text-slate-700">
             Dirección <span className="text-slate-400">(opcional)</span>
-            <input value={buyer.address} disabled={disabled} maxLength={300} onChange={(event) => onBuyer({ ...buyer, address: event.target.value })} className={field} />
+            <input value={buyer.address} disabled={disabled} maxLength={300} onChange={(event) => onBuyer({ ...buyer, address: event.target.value })} className={field} placeholder="Ej. Av. Perú 123, SMP" />
           </label>
           <p className="text-xs text-slate-500">Al cobrar, el asistente de esta PC la firma, la envía a SUNAT y la imprime.</p>
         </div>

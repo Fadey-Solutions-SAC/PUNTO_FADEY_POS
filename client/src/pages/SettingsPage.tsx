@@ -190,6 +190,15 @@ export function SettingsPage() {
                   <input
                     className="h-11 w-full rounded-xl border border-slate-200 px-3"
                     value={business[key]}
+                    placeholder={
+                      {
+                        name: "Ej. Bodega Don Lucho",
+                        legalName: "Ej. INVERSIONES LUCHO S.A.C.",
+                        taxId: "Ej. 20601234567",
+                        currency: "Ej. PEN",
+                        discountLimitPct: "Ej. 10",
+                      }[key]
+                    }
                     onChange={(event) => setBusiness((value) => ({ ...value, [key]: event.target.value }))}
                     required={key === "name" || key === "currency"}
                   />
