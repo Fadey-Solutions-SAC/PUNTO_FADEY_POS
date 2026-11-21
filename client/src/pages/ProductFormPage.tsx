@@ -35,7 +35,7 @@ export function ProductFormPage() {
     categoryId: "",
     brandName: "",
     baseUnitId: "",
-    taxType: "GRAVADO",
+    taxType: "EXONERADO",
     costPrice: "0",
     salePrice: "0",
     wholesalePrice: "0",
