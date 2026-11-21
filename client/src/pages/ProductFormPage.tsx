@@ -178,12 +178,7 @@ export function ProductFormPage() {
           <input required className={`${input} uppercase`} value={form.name} onChange={(e) => set("name")(e.target.value)} placeholder="Ej. ARROZ COSTEÑO 750 G" />
         </Field>
         <Field label="Marca" hint="Elige una existente o escribe una nueva.">
-          <input list="pf-brands" className={input} value={form.brandName} onChange={(e) => set("brandName")(e.target.value)} placeholder="Ej. Costeño" />
-          <datalist id="pf-brands">
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.name} />
-            ))}
-          </datalist>
+          <BrandPicker brands={brands} value={form.brandName} onChange={set("brandName")} className={input} />
         </Field>
         <Field label="Código de barras" hint="Escanea con la cámara o el lector, o escríbelo.">
           <span className="flex gap-2">
@@ -263,6 +258,100 @@ export function ProductFormPage() {
           {pending ? "Guardando…" : "Guardar producto"}
         </button>
       </form>
+    </div>
+  )
+}
+
+/** Marca: escribe para filtrar; la lista se despliega siempre hacia abajo, debajo del campo. */
+function BrandPicker({
+  brands,
+  value,
+  onChange,
+  className,
+}: {
+  brands: { id: string; name: string }[]
+  value: string
+  onChange: (value: string) => void
+  className: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const term = value.trim().toLowerCase()
+  const matches = brands.filter((brand) => !term || brand.name.toLowerCase().includes(term))
+  const exact = brands.some((brand) => brand.name.toLowerCase() === term)
+
+  function pick(name: string) {
+    onChange(name)
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <input
+        className={`${className} pr-9`}
+        value={value}
+        placeholder="Ej. Costeño"
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={open}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        onChange={(event) => {
+          onChange(event.target.value)
+          setActive(0)
+          setOpen(true)
+        }}
+        onKeyDown={(event) => {
+          if (!open || matches.length === 0) return
+          if (event.key === "ArrowDown") {
+            event.preventDefault()
+            setActive((index) => Math.min(index + 1, matches.length - 1))
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault()
+            setActive((index) => Math.max(index - 1, 0))
+          } else if (event.key === "Enter") {
+            event.preventDefault()
+            pick(matches[active]?.name ?? value)
+          } else if (event.key === "Escape") {
+            setOpen(false)
+          }
+        }}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Ver marcas"
+        onMouseDown={(event) => {
+          event.preventDefault()
+          setOpen((current) => !current)
+        }}
+        className="absolute right-2 top-1/2 mt-0.5 -translate-y-1/2 px-1 text-xs text-slate-500"
+      >
+        ▼
+      </button>
+      {open && (matches.length > 0 || (term && !exact)) ? (
+        <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          {matches.map((brand, index) => (
+            <li key={brand.id}>
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  pick(brand.name)
+                }}
+                className={`block w-full px-3 py-2 text-left text-sm ${index === active ? "bg-teal-50 text-teal-800" : "text-slate-700 hover:bg-slate-50"}`}
+              >
+                {brand.name}
+              </button>
+            </li>
+          ))}
+          {term && !exact ? (
+            <li className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+              Se creará la marca nueva «{value.trim()}» al guardar.
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
     </div>
   )
 }
