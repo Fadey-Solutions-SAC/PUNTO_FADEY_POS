@@ -70,7 +70,7 @@ export function PurchaseDetailPage() {
   if (!data) return error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : <p className="text-sm text-slate-500">Cargando compra…</p>
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link to="/compras/por-pagar" className="text-sm text-[var(--pf-accent)] hover:underline">
@@ -257,7 +257,7 @@ export function PayablesPage() {
   const maxDebt = Math.max(...(data?.suppliers.map((row) => row.debtCents) ?? [1]), 1)
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-slate-500">Lo que se debe a proveedores y las compras que aún no llegan.</p>

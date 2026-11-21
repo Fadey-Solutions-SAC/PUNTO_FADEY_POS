@@ -172,7 +172,7 @@ export function ReportsPage({ fixedArea }: { fixedArea?: string } = {}) {
   const Icon = areaInfo.icon
 
   return (
-    <div className="mx-auto max-w-7xl space-y-3">
+    <div className="space-y-3">
       {/* Teléfono: selector del tipo de informe. */}
       {visibleAreas.length > 1 ? (
         <label className="block md:hidden">

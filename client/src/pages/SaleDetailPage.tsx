@@ -49,7 +49,7 @@ export function SaleDetailPage() {
   if (!sale) return null
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--pf-navy)]">Venta {sale.code}</h1>

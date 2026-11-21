@@ -176,7 +176,7 @@ export function CountsPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="mt-1 text-sm text-slate-500">
@@ -491,7 +491,7 @@ export function CountSheetPage() {
   }
 
   if (!count) {
-    return <div className="mx-auto max-w-6xl p-4 text-sm text-slate-500">{error || "Cargando conteo…"}</div>
+    return <div className="p-4 text-sm text-slate-500">{error || "Cargando conteo…"}</div>
   }
 
   const currency = count.currency
@@ -512,7 +512,7 @@ export function CountSheetPage() {
       ]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link to="/inventario/conteo" className="text-xs font-semibold text-[var(--pf-accent)]">

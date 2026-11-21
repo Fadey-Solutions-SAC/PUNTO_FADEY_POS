@@ -116,7 +116,7 @@ export function LossesPage() {
   const maxProduct = Math.max(...(data?.summary.byProduct.map((item) => item.costCents) ?? [1]), 1)
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4">
       <p className="text-sm text-slate-500">
         Productos vencidos, dañados, robados o de consumo interno. Descuentan stock del almacén {data?.warehouseName ?? "actual"}, quedan en el
         kardex y se valorizan al costo.

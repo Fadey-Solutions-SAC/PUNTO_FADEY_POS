@@ -190,7 +190,7 @@ export function SyncPage() {
   const pendingTotal = items.reduce((sum, item) => sum + item.totalCents, 0)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="mt-1 text-sm text-slate-500">

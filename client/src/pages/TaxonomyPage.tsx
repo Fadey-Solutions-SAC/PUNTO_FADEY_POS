@@ -57,7 +57,7 @@ export function TaxonomyPage({ brandsOnly = false, focusAdd = 0 }: { brandsOnly?
   const label = kind === "categories" ? "categoría" : "marca"
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="space-y-4">
       <div className={brandsOnly ? "hidden" : ""}>
         <p className="text-sm text-slate-500">Ordenan el catálogo, los filtros de venta y los informes por categoría.</p>
       </div>

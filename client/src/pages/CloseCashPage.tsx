@@ -126,7 +126,7 @@ export function CloseCashPage() {
   const shift = data.shift
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto max-w-5xl space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       {queued > 0 ? (
         <Link to="/ventas/sincronizar" className="block rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100">
           <b>{queued} venta(s) sin sincronizar.</b> El efectivo esperado todavía no las incluye. Sincroniza antes de cerrar →

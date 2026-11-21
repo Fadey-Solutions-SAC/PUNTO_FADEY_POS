@@ -691,7 +691,7 @@ export function SalesPage() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-7xl pb-24 lg:pb-4">
+    <div className="w-full pb-24 lg:pb-4">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
           <span className="size-1.5 rounded-full bg-emerald-500" />

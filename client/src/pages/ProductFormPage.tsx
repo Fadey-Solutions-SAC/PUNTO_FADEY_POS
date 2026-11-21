@@ -147,7 +147,7 @@ export function ProductFormPage() {
   const unitSymbol = units.find((unit) => unit.id === form.baseUnitId)?.symbol ?? ""
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div className="flex items-center gap-4">
           {editing && productId ? (
@@ -173,7 +173,7 @@ export function ProductFormPage() {
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       {notice ? <p className="rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-800">{notice}</p> : null}
 
-      <form onSubmit={onSubmit} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2">
+      <form onSubmit={onSubmit} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 xl:grid-cols-4">
         <Field label="Nombre" wide>
           <input required className={`${input} uppercase`} value={form.name} onChange={(e) => set("name")(e.target.value)} placeholder="Ej. ARROZ COSTEÑO 750 G" />
         </Field>
@@ -219,7 +219,7 @@ export function ProductFormPage() {
           </select>
         </Field>
 
-        <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2">Precios</p>
+        <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2 xl:col-span-4">Precios</p>
         <Field label="Costo" hint="Lo que te cuesta cada unidad.">
           <input inputMode="decimal" className={input} value={form.costPrice} onChange={(e) => set("costPrice")(e.target.value)} placeholder="Ej. 3.20" />
         </Field>
@@ -233,7 +233,7 @@ export function ProductFormPage() {
           <input inputMode="decimal" className={input} value={form.retailPrice} onChange={(e) => set("retailPrice")(e.target.value)} placeholder="Ej. 4.30" />
         </Field>
 
-        <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2">Stock</p>
+        <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2 xl:col-span-4">Stock</p>
         {!editing ? (
           <Field label={`Cantidad inicial${unitSymbol ? ` (${unitSymbol})` : ""}`} hint="Lo que hay ahora en el almacén. Entra al kardex como entrada.">
             <input inputMode="decimal" className={input} value={form.initialQuantity} onChange={(e) => set("initialQuantity")(e.target.value)} placeholder="Ej. 24" />
@@ -246,14 +246,14 @@ export function ProductFormPage() {
           <input inputMode="decimal" className={input} value={form.maxStock} onChange={(e) => set("maxStock")(e.target.value)} placeholder="Ej. 50" />
         </Field>
 
-        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <label className="flex items-center gap-2 text-sm sm:col-span-2 xl:col-span-4">
           <input type="checkbox" className="size-4" checked={form.isActive} onChange={(e) => setForm((current) => ({ ...current, isActive: e.target.checked }))} />
           Activo (se puede vender)
         </label>
         <button
           type="submit"
           disabled={pending || !form.baseUnitId}
-          className="h-11 rounded-xl bg-[var(--pf-accent)] px-5 text-sm font-semibold text-white disabled:opacity-60 sm:col-span-2 sm:w-fit"
+          className="h-11 rounded-xl bg-[var(--pf-accent)] px-5 text-sm font-semibold text-white disabled:opacity-60 sm:col-span-2 sm:w-fit xl:col-span-4"
         >
           {pending ? "Guardando…" : "Guardar producto"}
         </button>
