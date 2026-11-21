@@ -397,13 +397,28 @@ export async function saveNamed(ctx: TenantContext, kind: "category" | "brand", 
   if (clean.length < 2) throw new AppError("Indica un nombre")
   try {
     if (kind === "category") {
-      return id
+      return await (id
         ? prisma.category.updateMany({ where: { id, businessId: ctx.businessId }, data: { name: clean } })
-        : prisma.category.create({ data: { businessId: ctx.businessId, name: clean } })
+        : prisma.category.create({ data: { businessId: ctx.businessId, name: clean } }))
     }
-    return id
-      ? prisma.brand.updateMany({ where: { id, businessId: ctx.businessId }, data: { name: clean } })
-      : prisma.brand.create({ data: { businessId: ctx.businessId, name: clean } })
+    // Marca con el mismo nombre (sin importar mayúsculas): al renombrar se unen; al crear se avisa.
+    const brands = await prisma.brand.findMany({ where: { businessId: ctx.businessId }, select: { id: true, name: true } })
+    const same = brands.find((brand) => brand.id !== id && upperName(brand.name) === clean)
+    if (!id) {
+      if (same) throw new AppError(`La marca ${same.name} ya existe`)
+      return await prisma.brand.create({ data: { businessId: ctx.businessId, name: clean } })
+    }
+    const current = brands.find((brand) => brand.id === id)
+    if (!current) throw new AppError("Marca no encontrada")
+    if (same) {
+      await prisma.$transaction([
+        prisma.product.updateMany({ where: { businessId: ctx.businessId, brandId: id }, data: { brandId: same.id } }),
+        prisma.brand.update({ where: { id: same.id }, data: { name: clean } }),
+        prisma.brand.delete({ where: { id } }),
+      ])
+      return { merged: true }
+    }
+    return await prisma.brand.update({ where: { id }, data: { name: clean } })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new AppError("Ese nombre ya existe")
