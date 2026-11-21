@@ -737,12 +737,32 @@ export function getInventoryAlerts() {
 export function getInventoryWarehouses() {
   return request<{
     currentWarehouseId: string
+    currentBranchId?: string
+    canManage?: boolean
+    products?: {
+      id: string
+      name: string
+      brand: string
+      unit: string
+      salePrice: string
+      costPrice: string
+      byWarehouse: Record<string, number>
+      total: number
+      totalLabel: string
+      valueCents: number
+      value: string
+      state: string
+    }[]
+    totals?: { items: number; value: string; cost: string; units: number; low: number }
     warehouses: {
       id: string
       name: string
       branch: string
       isDefault: boolean
       inUse: boolean
+      branchId?: string
+      isActive?: boolean
+      withStock?: number
       rows: {
         id: string
         code: string

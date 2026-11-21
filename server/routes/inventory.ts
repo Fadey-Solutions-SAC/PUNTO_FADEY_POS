@@ -9,7 +9,7 @@ import {
   setStock,
 } from "../../lib/inventory"
 import { MOVE_LABEL, TRANSFER_LABEL } from "../../lib/labels"
-import { formatDate, limaDay, formatQty } from "../../lib/money"
+import { formatDate, limaDay, formatMoney, formatQty } from "../../lib/money"
 import { prisma } from "../../lib/db"
 import { can } from "../../lib/roles"
 import { requireApiTenant, type AuthedRequest } from "../tenant"
@@ -94,8 +94,46 @@ export function registerInventoryRoutes(app: Express) {
         },
         orderBy: [{ isDefault: "desc" }, { name: "asc" }],
       })
+      // Productos con su stock por almacén, precios y valor (pantalla Almacenes: cuadros + lista).
+      const products = await prisma.product.findMany({
+        where: { businessId: ctx.businessId, isActive: true, variants: { none: { isActive: true } } },
+        include: { brand: true, baseUnit: true, balances: { select: { warehouseId: true, quantity: true } } },
+        orderBy: { name: "asc" },
+      })
+      const money = (cents: number) => formatMoney(cents, ctx.currency)
+      const productRows = products.map((product) => {
+        const total = product.balances.reduce((sum, item) => sum + item.quantity, 0)
+        const value = Math.round((product.salePrice * total) / 10_000)
+        const cost = Math.round((product.costPrice * total) / 10_000)
+        const state = total <= 0 ? "Agotado" : product.minStock > 0 && total <= product.minStock ? "Bajo" : "Normal"
+        return {
+          id: product.id,
+          name: product.name,
+          brand: product.brand?.name ?? "Sin marca",
+          unit: product.baseUnit.symbol,
+          salePrice: money(product.salePrice),
+          costPrice: money(product.costPrice),
+          byWarehouse: Object.fromEntries(product.balances.map((item) => [item.warehouseId, Number(formatQty(item.quantity))])),
+          total: Number(formatQty(total)),
+          totalLabel: `${formatQty(total)} ${product.baseUnit.symbol}`,
+          valueCents: value,
+          value: money(value),
+          costCents: cost,
+          state,
+        }
+      })
       res.json({
         currentWarehouseId: ctx.warehouseId,
+        currentBranchId: ctx.branchId,
+        canManage: can(ctx.role, "settings", ctx.grants),
+        products: productRows,
+        totals: {
+          items: productRows.length,
+          value: money(productRows.reduce((sum, row) => sum + row.valueCents, 0)),
+          cost: money(productRows.reduce((sum, row) => sum + row.costCents, 0)),
+          units: Number(formatQty(products.reduce((sum, product) => sum + product.balances.reduce((acc, item) => acc + item.quantity, 0), 0))),
+          low: productRows.filter((row) => row.state !== "Normal").length,
+        },
         warehouses: warehouses.map((warehouse) => {
           const rows = [...warehouse.balances]
             .sort((a, b) => a.product.name.localeCompare(b.product.name, "es"))
@@ -118,6 +156,9 @@ export function registerInventoryRoutes(app: Express) {
             branch: warehouse.branch.name,
             isDefault: warehouse.isDefault,
             inUse: warehouse.id === ctx.warehouseId,
+            branchId: warehouse.branchId,
+            isActive: warehouse.isActive,
+            withStock: warehouse.balances.filter((item) => item.quantity > 0).length,
             rows,
           }
         }),
