@@ -85,6 +85,26 @@ export function SalesPage() {
   // Cliente y venta a crédito
   const [customer, setCustomer] = useState<SaleCustomer | null>(null)
   const [parked, setParked] = useState<ParkedSale[]>(() => listParked())
+  // La ✕ de la franja solo oculta el aviso; la cuenta sigue en Cuentas pendientes hasta cobrarla.
+  const [hiddenAlerts, setHiddenAlerts] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(HIDDEN_ALERTS_KEY) ?? "[]") as string[]
+    } catch {
+      return []
+    }
+  })
+  const alertParked = parked.filter((item) => !hiddenAlerts.includes(item.id))
+  function hideAlert(id: string) {
+    setHiddenAlerts((current) => {
+      const next = [...current.filter((value) => parked.some((item) => item.id === value)), id]
+      try {
+        localStorage.setItem(HIDDEN_ALERTS_KEY, JSON.stringify(next))
+      } catch {
+        /* sin almacenamiento */
+      }
+      return next
+    })
+  }
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saleType, setSaleType] = useState<"CASH" | "CREDIT">("CASH")
   // Poner a cuenta: por nombre (se guarda como cuenta pendiente) o a un cliente registrado (venta a crédito).
@@ -706,13 +726,13 @@ export function SalesPage() {
         </Link>
       </div>
 
-      {parked.length > 0 ? (
+      {alertParked.length > 0 ? (
         <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-2">
           <p className="mb-1.5 px-1 text-xs font-semibold text-indigo-900">
-            📒 {parked.length} cuenta{parked.length === 1 ? "" : "s"} pendiente{parked.length === 1 ? "" : "s"} · toca para cobrar
+            📒 {alertParked.length} cuenta{alertParked.length === 1 ? "" : "s"} pendiente{alertParked.length === 1 ? "" : "s"} · toca para cobrar
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {parked.map((item) => (
+            {alertParked.map((item) => (
               <div key={item.id} className="flex shrink-0 items-center overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-indigo-200">
                 <button type="button" onClick={() => onResume(item.id)} className="px-3 py-1.5 text-left hover:bg-indigo-50">
                   <span className="block max-w-[11rem] truncate text-xs font-semibold text-[var(--pf-navy)]">{item.label}</span>
@@ -722,10 +742,9 @@ export function SalesPage() {
                 </button>
                 <button
                   type="button"
-                  aria-label={`Descartar ${item.label}`}
-                  onClick={() => {
-                    if (window.confirm(`¿Descartar la cuenta "${item.label}"?`)) dropParked(item.id)
-                  }}
+                  aria-label={`Ocultar el aviso de ${item.label}`}
+                  title="Ocultar aviso (la cuenta sigue en Cuentas pendientes)"
+                  onClick={() => hideAlert(item.id)}
                   className="self-stretch border-l border-indigo-100 px-2 text-xs text-slate-400 hover:bg-red-50 hover:text-red-700"
                 >
                   ✕
@@ -818,7 +837,8 @@ export function SalesPage() {
                       : "border-slate-200 hover:border-orange-300 hover:shadow-md"
                   } ${out ? "opacity-60" : ""}`}
                 >
-                  <span aria-hidden className="absolute inset-x-4 top-0 h-1.5 rounded-b-full bg-gradient-to-r from-orange-400 to-orange-600" />
+                  {/* Franja con el color de su marca (cada marca tiene el suyo, el mismo de sus botones). */}
+                  <span aria-hidden className="absolute inset-x-4 top-0 h-1.5 rounded-b-full" style={{ background: categoryColor(product.brandId) }} />
                   {inCart > 0 ? (
                     <span className="absolute right-1.5 top-1.5 z-10 grid min-w-6 place-items-center rounded-full bg-[var(--pf-accent)] px-1.5 text-xs font-bold text-white shadow">
                       {inCart}
@@ -1277,6 +1297,8 @@ function CardImage({ name, imagePath, color }: { name: string; imagePath?: strin
     </span>
   )
 }
+
+const HIDDEN_ALERTS_KEY = "pf-parked-hidden-alerts"
 
 function Chip({
   active,
