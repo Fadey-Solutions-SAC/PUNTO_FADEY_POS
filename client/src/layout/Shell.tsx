@@ -32,6 +32,8 @@ import {
   Wallet,
   Warehouse,
   X,
+  CircleMinus,
+  CirclePlus,
 } from "lucide-react"
 import type { PanelBootstrap } from "../api"
 import { isServerReachable, logout, SERVER_EVENT } from "../api"
@@ -60,6 +62,8 @@ const VITE_HREF: Record<string, string> = {
   "/ventas/anulaciones": "/ventas/anulaciones",
   "/caja": "/caja",
   "/caja/historial": "/caja/historial",
+  "/caja/ingreso": "/caja/ingreso",
+  "/caja/egreso": "/caja/egreso",
   "/caja/movimientos": "/caja",
   "/caja/ingresos": "/caja",
   "/caja/cierre": "/caja/cierre",
@@ -101,6 +105,8 @@ const ICONS: Record<string, LucideIcon> = {
   "/caja": Wallet,
   "/caja/movimientos": ArrowLeftRight,
   "/caja/ingresos": BadgeDollarSign,
+  "/caja/ingreso": CirclePlus,
+  "/caja/egreso": CircleMinus,
   "/caja/cierre": Lock,
   "/caja/historial": History,
   "/productos": Package,

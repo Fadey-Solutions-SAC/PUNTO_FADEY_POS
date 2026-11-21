@@ -18,6 +18,8 @@ const NAV: NavGroup[] = [
     title: "Ventas",
     items: [
       { href: "/ventas", label: "Caja", anyOf: ["sell", "cash"] },
+      { href: "/caja/ingreso", label: "Ingreso de caja", permission: "cash" },
+      { href: "/caja/egreso", label: "Egreso de caja", permission: "cash" },
       { href: "/ventas/historial", label: "Historial", permission: "sell" },
     ],
   },
@@ -33,7 +35,6 @@ const NAV: NavGroup[] = [
     items: [
       { href: "/inventario/almacenes", label: "Almacenes" },
       { href: "/inventario/conteo", label: "Toma de inventario", anyOf: ["adjust", "reports"] },
-      { href: "/inventario/ajustes", label: "Ajustes", permission: "adjust" },
       { href: "/inventario/kardex", label: "Kardex" },
       { href: "/inventario/mermas", label: "Mermas y pérdidas", anyOf: ["inventoryMove", "reports"] },
       { href: "/inventario/alertas", label: "Alertas de stock" },
@@ -47,6 +48,7 @@ const NAV: NavGroup[] = [
       { href: "/compras/requerimiento", label: "Requerimiento", permission: "purchases" },
       { href: "/compras/recepcion", label: "Recepción", permission: "purchases" },
       { href: "/compras/historial", label: "Historial", permission: "purchases" },
+      { href: "/compras/por-pagar", label: "Por pagar", permission: "purchases" },
     ],
   },
   {

@@ -744,6 +744,7 @@ export function getInventoryWarehouses() {
       name: string
       brand: string
       unit: string
+      baseUnitId?: string
       salePrice: string
       costPrice: string
       byWarehouse: Record<string, number>
@@ -816,7 +817,9 @@ export function sendInventoryTransfer(input: {
   fromWarehouseId: string
   toWarehouseId: string
   notes?: string
-  lines: { productId: string; quantity: string }[]
+  lines: { productId: string; quantity: string; presentationId?: string }[]
+  /** true: se envía y se recibe en un solo paso (mover desde Almacenes). */
+  receiveNow?: boolean
 }) {
   return request<{ ok: true; id: string }>("/api/inventory/transfers", {
     method: "POST",
@@ -853,6 +856,7 @@ export function getInventoryAdjustments() {
 
 export function postInventoryAdjustment(input: {
   productId: string
+  warehouseId?: string
   presentationId?: string
   quantity: string
   reason: string

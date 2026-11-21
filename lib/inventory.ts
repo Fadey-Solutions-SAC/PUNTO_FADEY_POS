@@ -355,7 +355,7 @@ export async function setStock(
 ) {
   assertCan(ctx, "adjust")
   if (!input.reason.trim()) throw new AppError("El ajuste necesita un motivo")
-  const { product, factor } = await presentationFactor(ctx, input.productId, input.presentationId)
+  const { product, factor } = await measureFactor(ctx, input.productId, input.presentationId)
   const counted = toQtyInt(input.quantity)
   if (counted < 0) throw new AppError("La cantidad no puede ser negativa")
   const target = mulScale(counted, factor)
@@ -396,7 +396,7 @@ export async function adjustStock(
 ) {
   assertCan(ctx, "adjust")
   if (!input.reason.trim()) throw new AppError("El ajuste necesita un motivo")
-  const { product, factor } = await presentationFactor(ctx, input.productId, input.presentationId)
+  const { product, factor } = await measureFactor(ctx, input.productId, input.presentationId)
   const quantity = baseQuantity(input.quantity, factor)
   const lotCode = product.trackLots ? await adjustmentLot(ctx, product.id, input.direction, input.lotCode) : input.lotCode?.trim()
   return prisma.$transaction((tx) =>
@@ -434,7 +434,7 @@ export async function sendTransfer(
   return prisma.$transaction(async (tx) => {
     const prepared = []
     for (const line of input.lines) {
-      const loaded = await presentationFactor(ctx, line.productId, line.presentationId, tx)
+      const loaded = await measureFactor(ctx, line.productId, line.presentationId, tx)
       prepared.push({ productId: loaded.product.id, quantity: baseQuantity(line.quantity, loaded.factor) })
     }
     const transfer = await tx.stockTransfer.create({

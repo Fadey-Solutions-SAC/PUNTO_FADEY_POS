@@ -111,6 +111,7 @@ export function registerInventoryRoutes(app: Express) {
           name: product.name,
           brand: product.brand?.name ?? "Sin marca",
           unit: product.baseUnit.symbol,
+          baseUnitId: product.baseUnitId,
           salePrice: money(product.salePrice),
           costPrice: money(product.costPrice),
           byWarehouse: Object.fromEntries(product.balances.map((item) => [item.warehouseId, Number(formatQty(item.quantity))])),
@@ -251,11 +252,13 @@ export function registerInventoryRoutes(app: Express) {
         fromWarehouseId: req.body?.fromWarehouseId ? String(req.body.fromWarehouseId) : undefined,
         toWarehouseId: String(req.body?.toWarehouseId ?? ""),
         notes: req.body?.notes ? String(req.body.notes) : undefined,
-        lines: lines.map((line: { productId?: string; quantity?: string }) => ({
+        lines: lines.map((line: { productId?: string; quantity?: string; presentationId?: string }) => ({
           productId: String(line.productId ?? ""),
+          presentationId: line.presentationId ? String(line.presentationId) : undefined,
           quantity: String(line.quantity ?? "0"),
         })),
       })
+      if (req.body?.receiveNow === true) await receiveTransfer(ctx, transfer.id)
       res.json({ ok: true, id: transfer.id })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })
@@ -330,7 +333,14 @@ export function registerInventoryRoutes(app: Express) {
 
   app.post("/api/inventory/adjustments", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
-      const ctx = req.tenant!
+      const base = req.tenant!
+      const warehouseId = req.body?.warehouseId ? String(req.body.warehouseId) : ""
+      let ctx = base
+      if (warehouseId && warehouseId !== base.warehouseId) {
+        const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, businessId: base.businessId, isActive: true } })
+        if (!warehouse) throw new Error("Almacén no encontrado")
+        ctx = { ...base, warehouseId: warehouse.id, warehouseName: warehouse.name }
+      }
       await setStock(ctx, {
         productId: String(req.body?.productId ?? ""),
         presentationId: req.body?.presentationId ? String(req.body.presentationId) : undefined,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { AlertTriangle, ArrowLeftRight, Boxes, ChevronRight, DollarSign, Package, Pencil, Plus, Search, SlidersHorizontal, Store, Warehouse } from "lucide-react"
-import { deleteWarehouseApi, getInventoryWarehouses } from "../api"
+import { deleteWarehouseApi, getInventoryWarehouses, postInventoryAdjustment, sendInventoryTransfer } from "../api"
 
 type Data = Awaited<ReturnType<typeof getInventoryWarehouses>>
 
@@ -25,6 +25,8 @@ export function WarehousesPage() {
   const [selectedId, setSelectedId] = useState("") // "" = Todos
   const [query, setQuery] = useState("")
   const [onlyLow, setOnlyLow] = useState(false)
+  // Ventanas emergentes: mover a otro almacén o ajustar el stock, sin salir de esta pantalla.
+  const [dialog, setDialog] = useState<{ kind: "move" | "adjust"; productId: string } | null>(null)
 
   const load = useCallback(
     () =>
@@ -205,12 +207,20 @@ export function WarehousesPage() {
                     </td>
                     <td className="px-2 py-2">
                       <span className="flex justify-end gap-1 whitespace-nowrap">
-                        <Link to="/inventario/transferencias" className="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100">
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: "move", productId: row.id })}
+                          className="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+                        >
                           <ArrowLeftRight size={13} /> Mover a almacén
-                        </Link>
-                        <Link to="/inventario/ajustes" className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: "adjust", productId: row.id })}
+                          className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                        >
                           <SlidersHorizontal size={13} /> Ajustar
-                        </Link>
+                        </button>
                         <Link to={`/productos/${row.id}`} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                           <Pencil size={13} /> Editar
                         </Link>
@@ -225,6 +235,200 @@ export function WarehousesPage() {
           {!data ? <p className="py-8 text-center text-sm text-slate-500">Cargando…</p> : null}
         </div>
       </section>
+
+      {dialog && data ? (
+        <StockDialog
+          kind={dialog.kind}
+          product={(data.products ?? []).find((item) => item.id === dialog.productId)!}
+          warehouses={warehouses}
+          preferredId={selectedId || data.currentWarehouseId}
+          onClose={() => setDialog(null)}
+          onDone={async (text) => {
+            setDialog(null)
+            setError("")
+            setMessage(text)
+            await load()
+          }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+type Product = NonNullable<Data["products"]>[number]
+
+/** Mover a almacén (se envía y se recibe al instante) o ajustar el stock real de un almacén. */
+function StockDialog({
+  kind,
+  product,
+  warehouses,
+  preferredId,
+  onClose,
+  onDone,
+}: {
+  kind: "move" | "adjust"
+  product: Product
+  warehouses: Data["warehouses"]
+  preferredId: string
+  onClose: () => void
+  onDone: (message: string) => Promise<void>
+}) {
+  const stockIn = (id: string) => product.byWarehouse[id] ?? 0
+  const withStock = warehouses.filter((item) => stockIn(item.id) > 0)
+  const firstFrom = kind === "move" ? (stockIn(preferredId) > 0 ? preferredId : withStock[0]?.id ?? preferredId) : preferredId
+  const [fromId, setFromId] = useState(firstFrom)
+  const [toId, setToId] = useState(() => warehouses.find((item) => item.id !== firstFrom)?.id ?? "")
+  const [quantity, setQuantity] = useState(() => (kind === "adjust" ? qty(stockIn(firstFrom)).replace(/,/g, "") : ""))
+  const [reason, setReason] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const unitOption = product.baseUnitId ? `unit:${product.baseUnitId}` : undefined
+  const fromName = warehouses.find((item) => item.id === fromId)?.name ?? ""
+  const toName = warehouses.find((item) => item.id === toId)?.name ?? ""
+  const amount = Number(quantity.replace(",", "."))
+
+  async function onSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError("")
+    if (!(amount >= 0) || quantity.trim() === "" || (kind === "move" && amount <= 0)) {
+      setError("Escribe una cantidad válida")
+      return
+    }
+    if (kind === "move") {
+      if (!toId || toId === fromId) {
+        setError("Elige un almacén de destino distinto")
+        return
+      }
+      if (amount > stockIn(fromId)) {
+        setError(`En ${fromName} solo hay ${qty(stockIn(fromId))} ${product.unit}`)
+        return
+      }
+    }
+    setBusy(true)
+    try {
+      if (kind === "move") {
+        await sendInventoryTransfer({
+          fromWarehouseId: fromId,
+          toWarehouseId: toId,
+          notes: reason.trim() || "Movido desde Almacenes",
+          lines: [{ productId: product.id, quantity: String(amount), presentationId: unitOption }],
+          receiveNow: true,
+        })
+        await onDone(`${product.name}: ${qty(amount)} ${product.unit} movidos de ${fromName} a ${toName}`)
+      } else {
+        await postInventoryAdjustment({
+          productId: product.id,
+          warehouseId: fromId,
+          presentationId: unitOption,
+          quantity: String(amount),
+          reason: reason.trim() || "Ajuste desde Almacenes",
+        })
+        await onDone(`${product.name}: stock en ${fromName} ajustado a ${qty(amount)} ${product.unit}`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar")
+      setBusy(false)
+    }
+  }
+
+  const field = "mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+  return (
+    <div
+      className="fixed inset-0 z-[60] grid place-items-center bg-[var(--pf-navy)]/50 p-3"
+      role="dialog"
+      aria-modal="true"
+      aria-label={kind === "move" ? "Mover a almacén" : "Ajustar stock"}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose()
+      }}
+    >
+      <form onSubmit={onSubmit} className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--pf-navy)]">{kind === "move" ? "Mover a almacén" : "Ajustar stock"}</h2>
+            <p className="text-sm text-slate-500">
+              {product.name} · total {product.totalLabel}
+            </p>
+          </div>
+          <button type="button" className="text-sm text-slate-500 hover:text-slate-800" onClick={onClose} disabled={busy}>
+            Cerrar
+          </button>
+        </div>
+
+        <label className="block text-sm font-medium text-slate-700">
+          {kind === "move" ? "Desde" : "Almacén"}
+          <select
+            className={field}
+            value={fromId}
+            onChange={(event) => {
+              const next = event.target.value
+              setFromId(next)
+              if (kind === "adjust") setQuantity(qty(stockIn(next)).replace(/,/g, ""))
+              if (next === toId) setToId(warehouses.find((item) => item.id !== next)?.id ?? "")
+            }}
+          >
+            {(kind === "move" && withStock.length ? withStock : warehouses).map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} · {qty(stockIn(item.id))} {product.unit}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {kind === "move" ? (
+          <label className="block text-sm font-medium text-slate-700">
+            Hacia
+            <select className={field} value={toId} onChange={(event) => setToId(event.target.value)}>
+              {warehouses
+                .filter((item) => item.id !== fromId)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} · {qty(stockIn(item.id))} {product.unit}
+                  </option>
+                ))}
+            </select>
+            {warehouses.length < 2 ? <span className="mt-1 block text-xs text-red-600">Crea otro almacén en Configuración → Almacenes.</span> : null}
+          </label>
+        ) : null}
+
+        <label className="block text-sm font-medium text-slate-700">
+          {kind === "move" ? `Cantidad a mover (${product.unit})` : `Stock real en ${fromName} (${product.unit})`}
+          <input
+            autoFocus
+            inputMode="decimal"
+            className={`${field} text-right text-lg font-semibold tabular-nums`}
+            placeholder={kind === "move" ? "Ej. 5" : "Ej. 18"}
+            value={quantity}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => setQuantity(event.target.value)}
+          />
+          {kind === "adjust" && quantity.trim() !== "" && amount >= 0 ? (
+            <span className={`mt-1 block text-xs ${amount - stockIn(fromId) < 0 ? "text-red-600" : "text-emerald-700"}`}>
+              Ahora: {qty(stockIn(fromId))} {product.unit} · diferencia {amount - stockIn(fromId) > 0 ? "+" : ""}
+              {qty(amount - stockIn(fromId))} {product.unit}
+            </span>
+          ) : null}
+        </label>
+
+        <label className="block text-sm font-medium text-slate-700">
+          {kind === "move" ? "Nota (opcional)" : "Motivo"}
+          <input
+            className={field}
+            placeholder={kind === "move" ? "Ej. reposición de tienda" : "Ej. conteo físico, producto roto"}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </label>
+
+        {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+        <button
+          type="submit"
+          disabled={busy || (kind === "move" && warehouses.length < 2)}
+          className={`h-12 w-full rounded-xl text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${kind === "move" ? "bg-violet-600" : "bg-[var(--pf-accent)]"}`}
+        >
+          {busy ? "Guardando…" : kind === "move" ? "Mover ahora" : "Guardar ajuste"}
+        </button>
+      </form>
     </div>
   )
 }

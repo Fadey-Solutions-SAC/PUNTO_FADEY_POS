@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { addCashMovement, getCashStatus, openCash, type CashStatus } from "../api"
 
-export function CashPage() {
+/** mode: Ingreso de caja o Egreso de caja (módulos del menú); sin mode, la caja con ambos. */
+export function CashPage({ mode }: { mode?: "INCOME" | "EXPENSE" } = {}) {
   const [data, setData] = useState<CashStatus | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
   const [registerId, setRegisterId] = useState("")
   const [openingAmount, setOpeningAmount] = useState("0")
-  const [type, setType] = useState("INCOME")
+  const [type, setType] = useState<string>(mode ?? "INCOME")
   const [amount, setAmount] = useState("")
   const [reason, setReason] = useState("")
 
@@ -79,12 +80,19 @@ export function CashPage() {
 
   const session = data?.session ?? null
   const isOut = (code: string) => code === "EXPENSE" || code === "WITHDRAWAL"
+  const movements = (session?.movements ?? []).filter((row) => !mode || isOut(row.type) === (mode === "EXPENSE"))
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="mt-1 text-sm text-slate-500">Apertura, esperado y movimientos de la sesión abierta.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {mode === "INCOME"
+              ? "Dinero que entra a la caja sin ser venta (sencillo, aporte…)."
+              : mode === "EXPENSE"
+                ? "Dinero que sale de la caja (gastos, pagos, retiros)."
+                : "Apertura, esperado y movimientos de la sesión abierta."}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
           <Link to="/caja/historial" className="inline-flex h-10 items-center rounded-xl bg-indigo-500 px-3 font-semibold text-white shadow-sm hover:bg-indigo-600">
@@ -173,8 +181,8 @@ export function CashPage() {
 
           <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
             <form onSubmit={onMovement} className="h-fit space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="font-semibold text-[var(--pf-navy)]">Nuevo movimiento</h2>
-              <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Tipo de movimiento">
+              <h2 className="font-semibold text-[var(--pf-navy)]">{mode === "INCOME" ? "Nuevo ingreso" : mode === "EXPENSE" ? "Nuevo egreso" : "Nuevo movimiento"}</h2>
+              <div className={`grid grid-cols-2 gap-1.5 ${mode ? "hidden" : ""}`} role="radiogroup" aria-label="Tipo de movimiento">
                 {MOVE_TYPES.map((item) => (
                   <button
                     key={item.code}
@@ -229,8 +237,10 @@ export function CashPage() {
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                <h2 className="font-semibold text-[var(--pf-navy)]">Movimientos de la sesión</h2>
-                <span className="text-xs text-slate-500">{session.movements.length}</span>
+                <h2 className="font-semibold text-[var(--pf-navy)]">
+                  {mode === "INCOME" ? "Ingresos de la sesión" : mode === "EXPENSE" ? "Egresos de la sesión" : "Movimientos de la sesión"}
+                </h2>
+                <span className="text-xs text-slate-500">{movements.length}</span>
               </div>
               <div>
                 <table className="w-full text-left text-sm">
@@ -243,14 +253,14 @@ export function CashPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {session.movements.length === 0 ? (
+                    {movements.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-3 py-8 text-center text-slate-500">
                           Sin movimientos aún.
                         </td>
                       </tr>
                     ) : (
-                      session.movements.map((row) => (
+                      movements.map((row) => (
                         <tr key={row.id}>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-500">{row.createdAtLabel}</td>
                           <td className="px-3 py-2">
@@ -281,9 +291,8 @@ export function CashPage() {
   )
 }
 
+// Solo ingreso y egreso (los movimientos antiguos de depósito/retiro se siguen mostrando).
 const MOVE_TYPES = [
   { code: "INCOME", label: "Ingreso" },
-  { code: "DEPOSIT", label: "Depósito" },
   { code: "EXPENSE", label: "Egreso" },
-  { code: "WITHDRAWAL", label: "Retiro" },
 ]

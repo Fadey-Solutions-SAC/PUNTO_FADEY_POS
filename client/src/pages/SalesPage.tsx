@@ -87,6 +87,10 @@ export function SalesPage() {
   const [parked, setParked] = useState<ParkedSale[]>(() => listParked())
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saleType, setSaleType] = useState<"CASH" | "CREDIT">("CASH")
+  // Poner a cuenta: por nombre (se guarda como cuenta pendiente) o a un cliente registrado (venta a crédito).
+  const [accountMode, setAccountMode] = useState(false)
+  const [accountKind, setAccountKind] = useState<"name" | "customer">("name")
+  const [accountName, setAccountName] = useState("")
   const [docKind, setDocKind] = useState<CheckoutKind>("NOTA")
   const [buyer, setBuyer] = useState<CheckoutBuyer>({ document: "", name: "", address: "" })
   const [chargeStatus, setChargeStatus] = useState("")
@@ -231,6 +235,7 @@ export function SalesPage() {
   const creditAfterCents = (customer?.balanceCents ?? 0) + totalCents
   const creditOverLimit = Boolean(customer && customer.limitCents > 0 && creditAfterCents > customer.limitCents)
   const creditBlocked = isCredit && (!customer || creditOverLimit)
+  const parkMode = accountMode && accountKind === "name"
 
   function addProduct(product: SaleProduct) {
     const key = `${product.id}:${product.presentationId}`
@@ -292,16 +297,20 @@ export function SalesPage() {
     )
   }
 
-  function onPark() {
+  function onPark(name: string) {
     if (cart.length === 0) return
-    const name = window.prompt("Nombre para reconocer esta venta (opcional):", customer?.name ?? "")
-    if (name === null) return
-    parkSale({ label: name, lines: cart, customer, discount, discountMode, totalCents })
+    const label = name.trim()
+    if (!label) {
+      setError("Escribe el nombre para la cuenta")
+      return
+    }
+    parkSale({ label, lines: cart, customer, discount, discountMode, totalCents })
     setCart([])
     setCustomer(null)
     setDiscount("")
     setSheetOpen(false)
-    setFlash({ text: "Venta en espera. Ya puedes atender a otro cliente.", tone: "ok" })
+    setPaying(false)
+    setFlash({ text: `Puesto a cuenta de ${label}. Está en Cuentas pendientes.`, tone: "ok" })
   }
 
   function onResume(id: string) {
@@ -328,6 +337,9 @@ export function SalesPage() {
     setError("")
     setPayKey(crypto.randomUUID())
     setSaleType("CASH")
+    setAccountMode(false)
+    setAccountKind("name")
+    setAccountName(customer?.name ?? "")
     setPayments([{ method: methods[0]?.code ?? "CASH", amount: totalAmount }])
     setDocKind("NOTA")
     setBuyer({ document: customer?.document ?? "", name: customer?.name ?? "", address: "" })
@@ -340,6 +352,10 @@ export function SalesPage() {
 
   async function onCharge() {
     if (!cart.length || pending) return
+    if (parkMode) {
+      onPark(accountName)
+      return
+    }
     if (isCredit) {
       if (!customer) {
         setError("Elige el cliente para vender a crédito")
@@ -500,7 +516,7 @@ export function SalesPage() {
             Ir a caja
           </Link>
         </div>
-        <Accesses items={accesses} onPending={canCreateCustomer ? () => setPendingOpen(true) : undefined} />
+        <Accesses items={accesses} onPending={() => setPendingOpen(true)} />
       </div>
     )
   }
@@ -509,7 +525,7 @@ export function SalesPage() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-slate-500">No tienes permiso de venta.</p>
-        <Accesses items={accesses} onPending={canCreateCustomer ? () => setPendingOpen(true) : undefined} />
+        <Accesses items={accesses} onPending={() => setPendingOpen(true)} />
       </div>
     )
   }
@@ -525,14 +541,6 @@ export function SalesPage() {
         </div>
         {cart.length > 0 ? (
           <div className="flex gap-1">
-            <button
-              type="button"
-              className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
-              onClick={onPark}
-              title="Guardar este carrito y atender a otro cliente"
-            >
-              ⏸ En espera
-            </button>
             <button
               type="button"
               className="rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
@@ -701,7 +709,7 @@ export function SalesPage() {
       {parked.length > 0 ? (
         <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-2">
           <p className="mb-1.5 px-1 text-xs font-semibold text-indigo-900">
-            ⏸ {parked.length} venta{parked.length === 1 ? "" : "s"} en espera · toca para retomar
+            📒 {parked.length} cuenta{parked.length === 1 ? "" : "s"} pendiente{parked.length === 1 ? "" : "s"} · toca para cobrar
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {parked.map((item) => (
@@ -716,7 +724,7 @@ export function SalesPage() {
                   type="button"
                   aria-label={`Descartar ${item.label}`}
                   onClick={() => {
-                    if (window.confirm(`¿Descartar la venta en espera "${item.label}"?`)) dropParked(item.id)
+                    if (window.confirm(`¿Descartar la cuenta "${item.label}"?`)) dropParked(item.id)
                   }}
                   className="self-stretch border-l border-indigo-100 px-2 text-xs text-slate-400 hover:bg-red-50 hover:text-red-700"
                 >
@@ -855,7 +863,7 @@ export function SalesPage() {
               : null}
           </div>
 
-          <Accesses items={accesses} onPending={canCreateCustomer ? () => setPendingOpen(true) : undefined} />
+          <Accesses items={accesses} onPending={() => setPendingOpen(true)} />
         </div>
 
         <aside className="hidden lg:block">
@@ -911,7 +919,18 @@ export function SalesPage() {
         </div>
       ) : null}
 
-      {pendingOpen ? <PendingAccountsDialog onClose={() => setPendingOpen(false)} /> : null}
+      {pendingOpen ? (
+        <PendingAccountsDialog
+          onClose={() => setPendingOpen(false)}
+          parked={parked}
+          showCustomers={canCreateCustomer}
+          onResume={(id) => {
+            setPendingOpen(false)
+            onResume(id)
+          }}
+          onDrop={(id) => dropParked(id)}
+        />
+      ) : null}
 
       {pickerOpen ? (
         <CustomerPicker
@@ -968,45 +987,87 @@ export function SalesPage() {
               </p>
             </div>
 
-            <CheckoutDocument
-              kind={docKind}
-              onKind={(kind) => {
-                setDocKind(kind)
-                setError("")
-              }}
-              buyer={buyer}
-              onBuyer={setBuyer}
-              disabled={pending}
-            />
+            {parkMode ? null : (
+              <CheckoutDocument
+                kind={docKind}
+                onKind={(kind) => {
+                  setDocKind(kind)
+                  setError("")
+                }}
+                buyer={buyer}
+                onBuyer={setBuyer}
+                disabled={pending}
+              />
+            )}
 
-            {canCredit ? (
-              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Tipo de venta">
-                {(
-                  [
-                    ["CASH", "Contado"],
-                    ["CREDIT", "A crédito"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={saleType === value}
-                    onClick={() => {
-                      setSaleType(value)
-                      setError("")
-                    }}
-                    className={`h-10 rounded-lg text-sm font-semibold transition ${
-                      saleType === value
-                        ? value === "CREDIT"
-                          ? "bg-amber-500 text-white shadow-sm"
-                          : "bg-white text-[var(--pf-navy)] shadow-sm"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Tipo de cobro">
+              {(
+                [
+                  [false, "Cobrar ahora"],
+                  [true, "Poner a cuenta"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="radio"
+                  aria-checked={accountMode === value}
+                  onClick={() => {
+                    setAccountMode(value)
+                    setSaleType(value && accountKind === "customer" && canCredit ? "CREDIT" : "CASH")
+                    setError("")
+                  }}
+                  className={`h-10 rounded-lg text-sm font-semibold transition ${
+                    accountMode === value ? (value ? "bg-amber-500 text-white shadow-sm" : "bg-white text-[var(--pf-navy)] shadow-sm") : "text-slate-500"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {accountMode ? (
+              <div className="space-y-2">
+                {canCredit ? (
+                  <div className="flex gap-2 text-sm">
+                    {(
+                      [
+                        ["name", "Escribir nombre"],
+                        ["customer", "Cliente registrado"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setAccountKind(value)
+                          setSaleType(value === "customer" ? "CREDIT" : "CASH")
+                          setError("")
+                        }}
+                        className={`h-9 flex-1 rounded-lg font-semibold ring-1 ${
+                          accountKind === value ? "bg-amber-50 text-amber-800 ring-amber-400" : "bg-white text-slate-600 ring-slate-200"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {parkMode ? (
+                  <label className="block space-y-1 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-950">
+                    Nombre de la cuenta
+                    <input
+                      autoFocus
+                      className="h-11 w-full rounded-xl border border-amber-200 bg-white px-3 font-normal"
+                      placeholder="Ej. Sra. Rosa (vecina del 2.º piso)"
+                      value={accountName}
+                      onChange={(event) => setAccountName(event.target.value)}
+                    />
+                    <span className="block text-xs font-normal text-amber-900">
+                      Se guarda en Cuentas pendientes con sus productos. Al cobrarla se registra la venta.
+                    </span>
+                  </label>
+                ) : null}
               </div>
             ) : null}
 
@@ -1037,7 +1098,7 @@ export function SalesPage() {
                     {creditOverLimit ? (
                       <p className="text-xs font-semibold text-red-700">Supera el límite de crédito del cliente. Cobra al contado o sube su límite en Clientes.</p>
                     ) : (
-                      <p className="text-xs text-amber-900">No entra dinero a caja. El saldo se cobra después en Clientes → Créditos.</p>
+                      <p className="text-xs text-amber-900">No entra dinero a caja. Queda en Cuentas pendientes para cobrarlo después.</p>
                     )}
                   </div>
                 ) : (
@@ -1046,13 +1107,13 @@ export function SalesPage() {
                     onClick={() => setPickerOpen(true)}
                     className="w-full rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-3 py-4 text-sm font-semibold text-amber-800"
                   >
-                    Elegir cliente para la venta a crédito
+                    Elegir el cliente registrado
                   </button>
                 )}
               </div>
             ) : null}
 
-            <div className={`space-y-2 ${isCredit ? "hidden" : ""}`}>
+            <div className={`space-y-2 ${isCredit || parkMode ? "hidden" : ""}`}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-700">Pagos</p>
                 <button
@@ -1104,7 +1165,7 @@ export function SalesPage() {
               ))}
             </div>
 
-            {!isCredit && payments.length === 1 && payments[0].method === "CASH" ? (
+            {!isCredit && !parkMode && payments.length === 1 && payments[0].method === "CASH" ? (
               <div>
                 <p className="mb-1.5 text-xs text-slate-500">Efectivo recibido</p>
                 <div className="flex flex-wrap gap-2">
@@ -1126,7 +1187,7 @@ export function SalesPage() {
               </div>
             ) : null}
 
-            <div className={`grid grid-cols-2 gap-2 text-sm [&>*]:min-w-0 ${isCredit ? "hidden" : ""}`}>
+            <div className={`grid grid-cols-2 gap-2 text-sm [&>*]:min-w-0 ${isCredit || parkMode ? "hidden" : ""}`}>
               <div className="rounded-xl bg-slate-50 px-3 py-2">
                 <p className="text-xs text-slate-500">Recibido</p>
                 <p className="text-lg font-semibold tabular-nums text-[var(--pf-navy)]">{money(paidCents)}</p>
@@ -1146,7 +1207,7 @@ export function SalesPage() {
               )}
             </div>
 
-            {customer && customer.balanceCents > 0 && !isCredit && canCreateCustomer ? (
+            {customer && customer.balanceCents > 0 && !isCredit && !parkMode && canCreateCustomer ? (
               <div className="space-y-2 rounded-2xl border border-red-200 bg-red-50/60 p-3">
                 <label className="flex items-center gap-2 text-sm font-semibold text-red-800">
                   <input type="checkbox" className="size-4" checked={collectDebt} onChange={(event) => setCollectDebt(event.target.checked)} />
@@ -1175,14 +1236,16 @@ export function SalesPage() {
             {chargeStatus ? <p className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">{chargeStatus}</p> : null}
             <button
               type="submit"
-              disabled={pending || (isCredit ? creditBlocked : missingCents > 0 || changeInvalid)}
+              disabled={pending || (parkMode ? !accountName.trim() : isCredit ? creditBlocked : missingCents > 0 || changeInvalid)}
               className={`h-12 w-full rounded-xl text-base font-semibold transition hover:brightness-95 disabled:opacity-50 ${
-                isCredit ? "bg-amber-500 text-white" : "bg-[#f5c518] text-[#1a1403]"
+                isCredit || parkMode ? "bg-amber-500 text-white" : "bg-[#f5c518] text-[#1a1403]"
               }`}
             >
               {pending
                 ? chargeStatus || "Registrando…"
-                : `${isCredit ? "Registrar venta a crédito" : "Confirmar cobro"}${docKind === "BOLETA" ? " y emitir boleta" : docKind === "FACTURA" ? " y emitir factura" : ""}`}
+                : parkMode
+                  ? "Guardar a cuenta"
+                  : `${isCredit ? "Registrar a cuenta del cliente" : "Confirmar cobro"}${docKind === "BOLETA" ? " y emitir boleta" : docKind === "FACTURA" ? " y emitir factura" : ""}`}
               {!pending ? <kbd className="ml-2 hidden rounded bg-black/10 px-1.5 text-[10px] font-medium sm:inline">Enter</kbd> : null}
             </button>
           </form>

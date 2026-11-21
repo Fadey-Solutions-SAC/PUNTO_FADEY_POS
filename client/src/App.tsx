@@ -5,7 +5,6 @@ import { startOfflineSync } from "./offline"
 import { OfflineTicketPage, SyncPage } from "./pages/OfflinePages"
 import { Shell } from "./layout/Shell"
 import { CountSheetPage, CountsPage } from "./pages/CountPages"
-import { AdjustmentsPage } from "./pages/AdjustmentsPage"
 import { AlertsPage } from "./pages/AlertsPage"
 import { BarcodesPage } from "./pages/BarcodesPage"
 import { BillingPage } from "./pages/BillingPage"
@@ -176,6 +175,8 @@ export function App() {
           <Route path="caja" element={<CashPage />} />
           <Route path="caja/cierre" element={<CloseCashPage />} />
           <Route path="caja/historial" element={<CashHistoryPage />} />
+          <Route path="caja/ingreso" element={<CashPage key="ingreso" mode="INCOME" />} />
+          <Route path="caja/egreso" element={<CashPage key="egreso" mode="EXPENSE" />} />
           <Route path="productos" element={<CatalogPage />} />
           <Route path="productos/nuevo" element={<ProductFormPage />} />
           <Route path="productos/unidades" element={<UnitsPage />} />
@@ -193,7 +194,7 @@ export function App() {
           <Route path="inventario/mermas" element={<LossesPage />} />
           <Route path="inventario/entradas" element={<Navigate to="/compras/recepcion" replace />} />
           <Route path="inventario/transferencias" element={<TransfersPage />} />
-          <Route path="inventario/ajustes" element={<AdjustmentsPage />} />
+          <Route path="inventario/ajustes" element={<Navigate to="/inventario/conteo" replace />} />
           <Route path="inventario/conteo" element={<CountsPage />} />
           <Route path="inventario/informes" element={<ReportsPage fixedArea="inventario" />} />
           <Route path="inventario/conteo/:id" element={<CountSheetPage />} />
