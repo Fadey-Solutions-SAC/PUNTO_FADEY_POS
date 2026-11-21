@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
-import { ClipboardCheck, Download, Equal, EyeOff, FileSpreadsheet, Plus, Printer, Save, Scale } from "lucide-react"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { BookOpen, ClipboardCheck, Download, Equal, EyeOff, FileSpreadsheet, PackageMinus, Plus, Printer, Save, Scale } from "lucide-react"
 import {
   cancelCount,
   closeCount,
@@ -13,6 +13,8 @@ import {
 } from "../api"
 import { CodeField, playScanPit, ScannerButton, useReaderEnabled } from "../components/Scanner"
 import { DataGrid, downloadGrid, type GridColumn } from "../components/DataGrid"
+import { KardexPage } from "./KardexPage"
+import { LossesPage } from "./LossesPage"
 
 const RED = "#dc2626"
 const BLUE = "#2563eb"
@@ -65,7 +67,62 @@ export const COUNT_TYPES: { id: CountMode; label: string; text: string; report: 
 
 type CountRow = Awaited<ReturnType<typeof getCounts>>["counts"][number]
 
+const MODULE_VIEWS = [
+  { id: "", label: "Toma de inventario", hint: "Ciego, corrección y faltas/sobras", icon: ClipboardCheck, color: "#0d9488" },
+  { id: "kardex", label: "Kardex", hint: "Entradas, salidas y saldo", icon: BookOpen, color: "#6366f1" },
+  { id: "mermas", label: "Mermas y pérdidas", hint: "Vencidos, dañados, robados", icon: PackageMinus, color: "#ef4444" },
+] as const
+
+/** Inventario y kardex: a la izquierda las opciones; a la derecha la opción elegida. */
 export function CountsPage() {
+  const [params, setParams] = useSearchParams()
+  const view = MODULE_VIEWS.some((item) => item.id === params.get("v")) ? params.get("v")! : ""
+  return (
+    <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      {/* Teléfono: selector; PC y tablet: panel lateral. */}
+      <select
+        aria-label="Opción de inventario"
+        className="h-11 rounded-xl border border-slate-300 bg-white px-2 text-sm font-semibold text-[var(--pf-navy)] lg:hidden"
+        value={view}
+        onChange={(event) => setParams(event.target.value ? { v: event.target.value } : {})}
+      >
+        {MODULE_VIEWS.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+      <aside className="hidden self-start rounded-2xl border border-slate-200 bg-white p-2 shadow-sm lg:sticky lg:top-0 lg:block">
+        {MODULE_VIEWS.map((item) => {
+          const active = item.id === view
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setParams(item.id ? { v: item.id } : {})}
+              className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50"
+              style={active ? { background: `${item.color}1f`, color: item.color } : { color: "#475569" }}
+            >
+              <span
+                className="grid size-8 shrink-0 place-items-center rounded-lg"
+                style={active ? { background: item.color, color: "#fff" } : { background: `${item.color}1a`, color: item.color }}
+              >
+                <item.icon size={16} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{item.label}</span>
+                <span className="block truncate text-[11px] font-normal text-slate-500">{item.hint}</span>
+              </span>
+            </button>
+          )
+        })}
+      </aside>
+      <div className="min-w-0">{view === "kardex" ? <KardexPage /> : view === "mermas" ? <LossesPage /> : <CountsHome />}</div>
+    </div>
+  )
+}
+
+function CountsHome() {
   const navigate = useNavigate()
   const [data, setData] = useState<Awaited<ReturnType<typeof getCounts>> | null>(null)
   const [error, setError] = useState("")
@@ -73,6 +130,8 @@ export function CountsPage() {
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const [typeFilter, setTypeFilter] = useState("")
+  // «Iniciar» abre una ventana con qué contar y la nota.
+  const [starting, setStarting] = useState<CountMode | null>(null)
 
   useEffect(() => {
     getCounts()
@@ -200,27 +259,18 @@ export function CountsPage() {
           </Link>
         </div>
       ) : data?.canManage ? (
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">
-              ¿Qué vas a contar?
-              <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
-                <option value="">Todos los productos</option>
-                {(data.brands ?? []).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    Marca {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
-              Nota <span className="font-normal text-slate-400">(opcional)</span>
-              <input className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. cierre de mes" />
-            </label>
-          </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-3 md:grid-cols-3">
             {COUNT_TYPES.map((type) => (
-              <form key={type.id} onSubmit={(event) => void onStart(event, type.id)} className="flex flex-col gap-2 rounded-2xl border-2 p-3" style={{ borderColor: `${type.color}55` }}>
+              <form
+                key={type.id}
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  setStarting(type.id)
+                }}
+                className="flex flex-col gap-2 rounded-2xl border-2 p-3"
+                style={{ borderColor: `${type.color}55` }}
+              >
                 <span className="flex items-center gap-2 font-semibold text-[var(--pf-navy)]">
                   <span className="grid size-9 place-items-center rounded-xl text-white" style={{ background: type.color }}>
                     <type.icon size={18} />
@@ -266,6 +316,60 @@ export function CountsPage() {
         </div>
       </div>
       {!data ? <p className="text-sm text-slate-500">Cargando…</p> : <DataGrid columns={columns} rows={rows} rowKey={(row) => row.id} empty="Todavía no hay inventarios de este tipo." />}
+
+      {starting && data ? (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-[var(--pf-navy)]/50 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Iniciar inventario"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) setStarting(null)
+          }}
+        >
+          {(() => {
+            const type = COUNT_TYPES.find((item) => item.id === starting)!
+            return (
+              <form onSubmit={(event) => void onStart(event, starting)} className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-xl">
+                <div className="flex items-center gap-2">
+                  <span className="grid size-9 place-items-center rounded-xl text-white" style={{ background: type.color }}>
+                    <type.icon size={18} />
+                  </span>
+                  <h2 className="flex-1 text-lg font-semibold text-[var(--pf-navy)]">{type.label}</h2>
+                  <button type="button" className="text-sm text-slate-500 hover:text-slate-800" disabled={busy} onClick={() => setStarting(null)}>
+                    Cerrar
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">{type.text}</p>
+                <label className="block text-sm font-medium text-slate-700">
+                  ¿Qué vas a contar?
+                  <select className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 text-sm" value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                    <option value="">Todos los productos</option>
+                    {(data.brands ?? []).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        Marca {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Nota <span className="font-normal text-slate-400">(opcional)</span>
+                  <input className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. cierre de mes" />
+                </label>
+                {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="inline-flex h-12 w-full items-center justify-center gap-1.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ background: type.color }}
+                >
+                  <Plus className="size-4" /> {busy ? "Iniciando…" : "Empezar inventario"}
+                </button>
+              </form>
+            )
+          })()}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -577,14 +681,9 @@ export function CountSheetPage() {
 
       {/* Herramientas */}
       <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm print:hidden">
-        {open ? (
-          <div className="flex gap-2">
-            <div className="min-w-0 flex-1">
-              {/* Con lector activado se usa el botón «Lector»; sin él, este campo permite escribir el código. */}
-              {reader ? null : <CodeField onCode={onScan} placeholder="Escribe el código y Enter (suma 1 y te lleva al producto)" />}
-            </div>
-            <ScannerButton onCode={onScan} continuous />
-          </div>
+        {open && !reader ? (
+          /* Sin lector activado, este campo permite escribir el código (suma 1). */
+          <CodeField onCode={onScan} placeholder="Escribe el código y Enter (suma 1 y te lleva al producto)" />
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -593,6 +692,11 @@ export function CountSheetPage() {
             placeholder="Buscar producto…"
             className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:max-w-xs"
           />
+          {open ? (
+            <span className="flex gap-2 [&_button]:h-10">
+              <ScannerButton onCode={onScan} continuous />
+            </span>
+          ) : null}
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-2 text-sm">
             <option value="">Todas las marcas</option>
             {categories.map((item) => (

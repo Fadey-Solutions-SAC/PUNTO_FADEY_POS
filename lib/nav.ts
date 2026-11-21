@@ -33,9 +33,7 @@ const NAV: NavGroup[] = [
     title: "Inventario y almacén",
     items: [
       { href: "/inventario/almacenes", label: "Almacenes" },
-      { href: "/inventario/conteo", label: "Toma de inventario", anyOf: ["adjust", "reports"] },
-      { href: "/inventario/kardex", label: "Kardex" },
-      { href: "/inventario/mermas", label: "Mermas y pérdidas", anyOf: ["inventoryMove", "reports"] },
+      { href: "/inventario/conteo", label: "Inventario y kardex" },
       { href: "/inventario/alertas", label: "Alertas de stock" },
       { href: "/inventario/informes", label: "Informes de inventario", permission: "reports" },
     ],
