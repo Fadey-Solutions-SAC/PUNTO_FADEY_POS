@@ -63,8 +63,8 @@ export function TicketPage() {
     }
     doc.open()
     doc.write(`<!doctype html><html><head><title>Ticket ${meta?.code ?? ""}</title>
-<style>@page{margin:4mm}body{font-family:ui-monospace,Consolas,monospace;white-space:pre;margin:0;font-size:12px}</style>
-</head><body>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</body></html>`)
+<style>@page{margin:4mm}body{font-family:ui-monospace,Consolas,monospace;margin:0;font-size:12px}.t{white-space:pre;display:table;margin:0 auto}</style>
+</head><body><div class="t">${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div></body></html>`)
     doc.close()
     const win = frame.contentWindow
     window.setTimeout(() => {

@@ -52,6 +52,10 @@ export type TicketSale = {
   legalName?: string | null
   taxId?: string | null
   address?: string | null
+  phone?: string | null
+  email?: string | null
+  /** Desglose por tipo de impuesto (en céntimos). */
+  taxes?: { gravada: number; exonerada: number; inafecta: number; igv: number }
   code: string
   createdAt: Date
   cashier: string
@@ -81,57 +85,118 @@ function stamp(date: Date) {
   return new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", dateStyle: "short", timeStyle: "short" }).format(date)
 }
 
+const UNITS = ["", "UNO", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE", "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISEIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE", "VEINTE", "VEINTIUNO", "VEINTIDOS", "VEINTITRES", "VEINTICUATRO", "VEINTICINCO", "VEINTISEIS", "VEINTISIETE", "VEINTIOCHO", "VEINTINUEVE"]
+const TENS = ["", "", "", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"]
+const HUNDREDS = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS", "OCHOCIENTOS", "NOVECIENTOS"]
+
+function under1000(n: number): string {
+  if (n === 0) return ""
+  if (n === 100) return "CIEN"
+  const h = Math.floor(n / 100)
+  const rest = n % 100
+  const head = HUNDREDS[h]
+  let tail = ""
+  if (rest < 30) tail = UNITS[rest]
+  else tail = TENS[Math.floor(rest / 10)] + (rest % 10 ? ` Y ${UNITS[rest % 10]}` : "")
+  return [head, tail].filter(Boolean).join(" ")
+}
+
+/** Monto en letras: 200.00 → «DOSCIENTOS Y 00/100 SOLES». */
+export function amountInWords(cents: number, currency = "PEN") {
+  const whole = Math.floor(Math.abs(cents) / 100)
+  const decimals = String(Math.abs(cents) % 100).padStart(2, "0")
+  const millions = Math.floor(whole / 1_000_000)
+  const thousands = Math.floor((whole % 1_000_000) / 1000)
+  const rest = whole % 1000
+  const parts: string[] = []
+  if (millions) parts.push(millions === 1 ? "UN MILLON" : `${under1000(millions)} MILLONES`)
+  if (thousands) parts.push(thousands === 1 ? "MIL" : `${under1000(thousands)} MIL`)
+  if (rest) parts.push(under1000(rest))
+  const words = (parts.join(" ") || "CERO").replace(/UNO MIL/g, "UN MIL").replace(/UNO MILLONES/g, "UN MILLONES")
+  return `${words} Y ${decimals}/100 ${currency === "USD" ? "DOLARES" : "SOLES"}`
+}
+
+/** Fila de producto: cantidad, descripción, precio unitario e importe en columnas. */
+function itemRows(description: string, quantity: string, unit: string, total: string, w: number) {
+  const qtyCol = 6
+  const priceCol = w >= 40 ? 9 : 7
+  const totalCol = w >= 40 ? 10 : 8
+  const descCol = Math.max(8, w - qtyCol - priceCol - totalCol)
+  const desc = wrap(description, descCol)
+  const rows: string[] = []
+  desc.forEach((text, index) => {
+    if (index === 0) {
+      rows.push(quantity.slice(0, qtyCol - 1).padEnd(qtyCol) + text.padEnd(descCol) + unit.padStart(priceCol) + total.padStart(totalCol))
+    } else rows.push(" ".repeat(qtyCol) + text)
+  })
+  return rows
+}
+
 export function buildTicketText(sale: TicketSale, width: number, document?: TicketDocument) {
   const w = paperChars(width)
   const rule = "-".repeat(w)
   const money = sale.currency === "USD" ? "$" : "S/"
   const out: string[] = []
-  out.push(center(sale.businessName.toUpperCase(), w))
-  if (sale.legalName && sale.legalName !== sale.businessName) out.push(...wrap(sale.legalName, w).map((line) => center(line, w)))
+  const centered = (text: string) => wrap(text, w).map((line) => center(line, w))
+  // Cabecera centrada: nombre, razón social, dirección, RUC, teléfono y correo.
+  out.push(...centered(sale.businessName.toUpperCase()))
+  if (sale.legalName && sale.legalName.toUpperCase() !== sale.businessName.toUpperCase()) out.push(...centered(sale.legalName.toUpperCase()))
+  if (sale.address) out.push(...centered(sale.address.toUpperCase()))
   if (sale.taxId) out.push(center(`RUC ${sale.taxId}`, w))
-  if (sale.address) out.push(...wrap(sale.address, w).map((line) => center(line, w)))
+  if (sale.phone) out.push(...centered(`Telf: ${sale.phone}`))
+  if (sale.email) out.push(...centered(sale.email))
   out.push(rule)
   if (document) {
-    out.push(center(document.title.toUpperCase(), w))
+    out.push(...centered(document.title.toUpperCase()))
     out.push(center(document.number, w))
-    out.push(rule)
   } else {
     out.push(center("NOTA DE VENTA", w))
+    out.push(center(`N. ${sale.code}`, w))
   }
-  out.push(`Fecha: ${stamp(sale.createdAt)}`)
-  out.push(`Venta: ${sale.code}`)
-  out.push(...wrap(`Cajero: ${sale.cashier}`, w))
-  const customer = document?.customerName ?? sale.customer
-  if (customer) out.push(...wrap(`Cliente: ${customer}`, w))
-  if (document?.customerDoc && document.customerDoc !== "-") out.push(`Doc: ${document.customerDoc}`)
   out.push(rule)
-  for (const line of sale.lines) {
-    out.push(...wrap(line.description, w))
-    out.push(pair(`  ${qty(line.quantity)} x ${amount(line.unitPrice)}`, amount(line.total), w))
+  // Datos de la venta (etiquetas alineadas).
+  // Etiqueta alineada y el valor partido en líneas que respetan la sangría.
+  const field = (label: string, value: string) => {
+    const head = `${label.padEnd(8)}: `
+    const parts = wrap(value || "-", Math.max(8, w - head.length))
+    return parts.map((part, index) => (index === 0 ? head : " ".repeat(head.length)) + part)
   }
+  out.push(...field("Fecha", stamp(sale.createdAt)))
+  const customer = document?.customerName ?? sale.customer
+  if (document?.customerDoc && document.customerDoc !== "-") out.push(...field(document.customerDoc.length === 11 ? "R.U.C." : "DNI", document.customerDoc))
+  out.push(...field("Cliente", customer || "CLIENTES VARIOS"))
+  out.push(...field("Vendedor", sale.cashier))
+  out.push(rule)
+  // Productos en columnas.
+  const priceCol = w >= 40 ? 9 : 7
+  const totalCol = w >= 40 ? 10 : 8
+  const descCol = Math.max(8, w - 6 - priceCol - totalCol)
+  out.push("Cant. " + "Descripcion".padEnd(descCol) + "P.Unit".padStart(priceCol) + "Importe".padStart(totalCol))
+  out.push(rule)
+  for (const line of sale.lines) out.push(...itemRows(line.description, qty(line.quantity), amount(line.unitPrice), amount(line.total), w))
   out.push(rule)
   if (sale.discount > 0) {
     out.push(pair("Subtotal", `${money} ${amount(sale.subtotal)}`, w))
     out.push(pair("Descuento", `-${money} ${amount(sale.discount)}`, w))
   }
   if (document) {
-    out.push(pair("Op. gravada", `${money} ${amount(document.taxable)}`, w))
-    out.push(pair(`IGV ${(document.igvRate / 100).toFixed(0)}%`, `${money} ${amount(document.tax)}`, w))
+    const taxes = sale.taxes ?? { gravada: document.taxable, exonerada: 0, inafecta: 0, igv: document.tax }
+    out.push(pair("Op. exonerada", `${money} ${amount(taxes.exonerada)}`, w))
+    out.push(pair("Op. inafecta", `${money} ${amount(taxes.inafecta)}`, w))
+    out.push(pair("Op. gravada", `${money} ${amount(taxes.gravada)}`, w))
+    out.push(pair(`I.G.V. ${(document.igvRate / 100).toFixed(0)}%`, `${money} ${amount(taxes.igv)}`, w))
   }
   out.push(pair("TOTAL", `${money} ${amount(sale.total)}`, w))
-  for (const payment of sale.payments) out.push(pair(payment.label, `${money} ${amount(payment.amount)}`, w))
+  out.push(...wrap(`Son: ${amountInWords(sale.total, sale.currency)}`, w))
   out.push(rule)
+  for (const payment of sale.payments) out.push(pair(`Pago ${payment.label}`, `${money} ${amount(payment.amount)}`, w))
+  if (sale.payments.length) out.push(rule)
   if (sale.voided) out.push(center("*** VENTA ANULADA ***", w))
   if (document) {
     if (document.hash) out.push(...wrap(`Resumen: ${document.hash}`, w))
-    out.push(
-      ...(document.accepted
-        ? wrap(`Representacion impresa de la ${document.title}`, w)
-        : wrap("Comprobante aun no aceptado por SUNAT", w)
-      ).map((line) => center(line, w)),
-    )
+    out.push(...(document.accepted ? centered(`Representacion impresa de la ${document.title}`) : centered("Comprobante aun no aceptado por SUNAT")))
   } else {
-    out.push(center("Este ticket no es comprobante de pago", w))
+    out.push(...centered("Este ticket no es comprobante de pago"))
   }
   out.push(center("Gracias por su compra", w))
   return out.join("\n")

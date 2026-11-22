@@ -9,22 +9,23 @@ import {
   releaseAssistantEmit,
   saveAssistantEmitResult,
 } from "./api"
-import { ASSISTANT_HELP, efactReachable, emitWithLocalBot, printText, readPrefs } from "./lib/local-assistant"
+import { ASSISTANT_HELP, efactReachable, emitWithLocalBot, printerPaperWidth, printText } from "./lib/local-assistant"
 import { qrDataUrl } from "./lib/qr-image"
 
+// El ticket se arma con el ancho de la ticketera configurada (58 u 80 mm) para que salga centrado en cualquiera.
 export async function printSaleTicket(saleId: string) {
-  const prefs = readPrefs()
-  const ticket = await getSaleTicket(saleId, prefs.paperWidth)
-  await printText(ticket.text, { brand: ticket.brand, logo: ticket.logo, paperWidth: prefs.paperWidth })
+  const paperWidth = await printerPaperWidth()
+  const ticket = await getSaleTicket(saleId, paperWidth)
+  await printText(ticket.text, { brand: ticket.brand, logo: ticket.logo, paperWidth })
 }
 
 export async function printDocumentTicket(documentId: string) {
-  const prefs = readPrefs()
-  const ticket = await getDocumentTicket(documentId, prefs.paperWidth)
+  const paperWidth = await printerPaperWidth()
+  const ticket = await getDocumentTicket(documentId, paperWidth)
   await printText(ticket.text, {
     brand: ticket.brand,
     logo: ticket.logo,
-    paperWidth: prefs.paperWidth,
+    paperWidth,
     qrDataUrl: ticket.qr ? qrDataUrl(ticket.qr) : undefined,
   })
 }

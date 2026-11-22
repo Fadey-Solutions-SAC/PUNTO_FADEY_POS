@@ -13,6 +13,7 @@ import {
   listPaymentMethods,
 } from "../../lib/payment-methods"
 import { readPosSettings, saveHardwareReader } from "../../lib/pos-settings"
+import { readBusinessContact, saveBusinessContact } from "../../lib/billing-assistant"
 import { can } from "../../lib/roles"
 import { businessSnapshot, createBranch, createWarehouse, deleteWarehouse, updateBusiness } from "../../lib/settings"
 import { createRegister, removeRegister } from "../../lib/cash"
@@ -27,13 +28,14 @@ export function registerSettingsRoutes(app: Express) {
         res.status(403).json({ error: "Sin permiso de configuración" })
         return
       }
-      const [{ business, branches, users }, methods, pos, theme, logo, cover] = await Promise.all([
+      const [{ business, branches, users }, methods, pos, theme, logo, cover, contact] = await Promise.all([
         businessSnapshot(ctx),
         listPaymentMethods(ctx),
         readPosSettings(ctx.businessId),
         readTheme(ctx.businessId),
         brandLogoUrl(ctx.businessId),
         loginCoverUrl(ctx.businessId),
+        readBusinessContact(ctx.businessId),
       ])
       res.json({
         version: APP_VERSION,
@@ -45,6 +47,9 @@ export function registerSettingsRoutes(app: Express) {
           currency: business.currency,
           discountLimitPct: fromPercentInt(business.discountLimitPct).toFixed(2),
           allowCredit: business.allowCredit,
+          address: contact.address,
+          phone: contact.phone,
+          email: contact.email,
         },
         branches: branches.map((branch) => ({
           id: branch.id,
@@ -86,6 +91,14 @@ export function registerSettingsRoutes(app: Express) {
         discountLimitPct: String(req.body?.discountLimitPct ?? "0"),
         allowCredit: Boolean(req.body?.allowCredit),
       })
+      // Dirección, teléfono y correo: salen en la nota de venta, la boleta y la factura.
+      if (req.body?.address != null || req.body?.phone != null || req.body?.email != null) {
+        await saveBusinessContact(ctx.businessId, {
+          address: String(req.body?.address ?? ""),
+          phone: String(req.body?.phone ?? ""),
+          email: String(req.body?.email ?? ""),
+        })
+      }
       res.json({ ok: true })
     } catch (error) {
       res.status(400).json({ error: errorMessage(error) })

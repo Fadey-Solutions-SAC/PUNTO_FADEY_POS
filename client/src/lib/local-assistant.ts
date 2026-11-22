@@ -190,6 +190,19 @@ function absolute(url: string | null | undefined) {
   return new URL(url, window.location.origin).toString()
 }
 
+/** Ancho del papel de la ticketera configurada en el asistente (58 u 80 mm); si no responde, el guardado aquí. */
+export async function printerPaperWidth(): Promise<58 | 80> {
+  try {
+    const all = await readPrintingConfig()
+    const cfg = configured(all[PRINT_MODULE]) ? all[PRINT_MODULE] : all[FALLBACK_MODULE]
+    const width = cfg?.anchoPapel ?? cfg?.paperWidth
+    if (width === 58 || width === 80) return width
+  } catch {
+    /* sin asistente: se usa la preferencia */
+  }
+  return readPrefs().paperWidth
+}
+
 export async function printText(text: string, options: { brand?: string; logo?: string | null; qrDataUrl?: string; paperWidth?: 58 | 80 } = {}) {
   const width = options.paperWidth ?? readPrefs().paperWidth
   const payload: PrintPayload = {

@@ -66,7 +66,28 @@ function clean(value: unknown, max = 200) {
 
 export async function readTicketHeader(businessId: string) {
   const row = await readRow(businessId)
-  return { tradeName: row?.tradeName ?? null, address: row?.address ?? null }
+  return { tradeName: row?.tradeName ?? null, address: row?.address ?? null, phone: row?.phone ?? null, email: row?.email ?? null }
+}
+
+/** Dirección, teléfono y correo del negocio (Configuración → Negocio). Son los mismos del asistente (Impresión y SUNAT). */
+export async function readBusinessContact(businessId: string) {
+  const row = await readRow(businessId)
+  return { address: row?.address ?? "", phone: row?.phone ?? "", email: row?.email ?? "" }
+}
+
+export async function saveBusinessContact(businessId: string, input: { address: string; phone: string; email: string }) {
+  await ensureTables()
+  const address = clean(input.address, 250)
+  const phone = clean(input.phone, 40)
+  const email = clean(input.email, 120)
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO AssistantBilling (businessId, address, phone, email, updatedAt) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(businessId) DO UPDATE SET address = excluded.address, phone = excluded.phone, email = excluded.email, updatedAt = CURRENT_TIMESTAMP`,
+    businessId,
+    address || null,
+    phone || null,
+    email || null,
+  )
 }
 
 /** ¿Están completos los datos que el asistente necesita para emitir? (sin revelar secretos) */

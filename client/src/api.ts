@@ -1080,6 +1080,9 @@ export function getSettings() {
       currency: string
       discountLimitPct: string
       allowCredit: boolean
+      address?: string
+      phone?: string
+      email?: string
     }
     branches: {
       id: string
@@ -1143,6 +1146,9 @@ export function saveSettingsBusiness(input: {
   currency: string
   discountLimitPct: string
   allowCredit: boolean
+  address?: string
+  phone?: string
+  email?: string
 }) {
   return request<{ ok: true }>("/api/settings/business", {
     method: "POST",

@@ -61,6 +61,9 @@ export function SettingsPage() {
     currency: "PEN",
     discountLimitPct: "10",
     allowCredit: false,
+    address: "",
+    phone: "",
+    email: "",
   })
   const [methodLabel, setMethodLabel] = useState("")
   const [error, setError] = useState("")
@@ -70,7 +73,7 @@ export function SettingsPage() {
   async function reload() {
     const payload = await getSettings()
     setData(payload)
-    setBusiness(payload.business)
+    setBusiness({ ...payload.business, address: payload.business.address ?? "", phone: payload.business.phone ?? "", email: payload.business.email ?? "" })
   }
 
   useEffect(() => {
@@ -182,6 +185,9 @@ export function SettingsPage() {
                   ["name", "Nombre comercial"],
                   ["legalName", "Razón social"],
                   ["taxId", "RUC o documento"],
+                  ["address", "Dirección"],
+                  ["phone", "Teléfono"],
+                  ["email", "Correo"],
                   ["currency", "Moneda"],
                   ["discountLimitPct", "Tope de descuento (%)"],
                 ] as const
@@ -195,6 +201,9 @@ export function SettingsPage() {
                         name: "Ej. Bodega Don Lucho",
                         legalName: "Ej. INVERSIONES LUCHO S.A.C.",
                         taxId: "Ej. 20601234567",
+                        address: "Ej. Jr. Los Olivos 245, Moyobamba",
+                        phone: "Ej. 987 654 321",
+                        email: "Ej. ventas@minegocio.com",
                         currency: "Ej. PEN",
                         discountLimitPct: "Ej. 10",
                       }[key]
@@ -204,6 +213,9 @@ export function SettingsPage() {
                   />
                 </Field>
               ))}
+              <p className="text-xs text-slate-500 sm:col-span-2">
+                Nombre, razón social, RUC, dirección, teléfono y correo se imprimen en la nota de venta, la boleta y la factura.
+              </p>
               <SaveButton pending={pending} color={current.color}>
                 Guardar negocio
               </SaveButton>
