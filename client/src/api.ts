@@ -169,10 +169,24 @@ export function getPanelBootstrap() {
   return request<PanelBootstrap>("/api/panel/bootstrap")
 }
 
+export type CashRegisterState = {
+  id: string
+  name: string
+  open: boolean
+  openedBy: string | null
+  openedAtLabel: string | null
+  accessible: boolean
+  current: boolean
+  people: string[]
+}
+
 export type CashStatus = {
   currency: string
   assignedRegisterId: string | null
   registers: { id: string; name: string }[]
+  fullAccess?: boolean
+  currentRegisterId?: string | null
+  board?: CashRegisterState[]
   session: null | {
     id: string
     registerName: string
@@ -196,6 +210,10 @@ export type CashStatus = {
 
 export function getCashStatus() {
   return request<CashStatus>("/api/cash/status")
+}
+
+export function enterCash(registerId: string) {
+  return request<{ ok: true; registerName: string }>("/api/cash/enter", { method: "POST", body: JSON.stringify({ registerId }) })
 }
 
 export function openCash(cashRegisterId: string, openingAmount: string) {
@@ -1292,6 +1310,7 @@ export type UserRow = {
 export function getUsers() {
   return request<{
     canManage: boolean
+    configMode?: boolean
     currentUserId: string
     roles: { code: string; label: string }[]
     permissions: { code: string; label: string }[]

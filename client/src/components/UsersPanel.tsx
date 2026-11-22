@@ -83,7 +83,7 @@ export function UsersPanel() {
       </div>
 
       {!data.canManage ? (
-        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">Solo el dueño del negocio puede crear, editar o eliminar usuarios y permisos.</p>
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">Solo el dueño o un administrador pueden crear, editar o eliminar usuarios y permisos.</p>
       ) : null}
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       {message ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {message}</p> : null}
@@ -209,7 +209,8 @@ function UserForm({
       registerId: form.registerId,
       mode: owner ? "role" : form.mode,
       permissions: form.mode === "custom" ? custom : undefined,
-      ...(isNew ? { role: form.role } : {}),
+      // El rol también se puede cambiar al editar (al Dueño solo desde el modo configuración).
+      ...(isNew || form.role !== user?.role ? { role: form.role } : {}),
     }
     try {
       if (isNew) await createUser(input)
@@ -271,7 +272,7 @@ function UserForm({
           <label className="block text-sm font-medium text-slate-700">
             Rol
             <select
-              disabled={!isNew}
+              disabled={!isNew && owner && !data.configMode}
               className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-2 disabled:bg-slate-50"
               value={form.role}
               onChange={(e) => {
@@ -280,7 +281,7 @@ function UserForm({
                 setCustom(data.roleMatrix.find((row) => row.role === role)?.permissions ?? [])
               }}
             >
-              {owner ? <option value="OWNER">Dueño</option> : null}
+              {owner && !data.roles.some((role) => role.code === "OWNER") ? <option value="OWNER">Dueño</option> : null}
               {data.roles.map((role) => (
                 <option key={role.code} value={role.code}>
                   {role.label}

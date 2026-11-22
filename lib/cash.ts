@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
 import { toMoneyInt } from "@/lib/money"
@@ -7,23 +8,51 @@ import type { TenantContext } from "@/lib/types"
 const INCOME = new Set(["INCOME", "DEPOSIT"])
 const EXPENSE = new Set(["EXPENSE", "WITHDRAWAL"])
 
+type Tx = Prisma.TransactionClient
+
+/**
+ * Cajas físicas: cada caja tiene a lo más una sesión abierta, compartida por quienes trabajan en ella.
+ * El cajero trabaja solo en la caja que tiene asignada; el dueño y el administrador pueden entrar a cualquiera.
+ * La caja en la que está cada usuario es la de su membresía (`cashRegisterId`).
+ */
+export function hasFullCashAccess(ctx: TenantContext) {
+  return ctx.role === "OWNER" || ctx.role === "ADMIN" || ctx.configMode === true
+}
+
+async function membershipOf(ctx: TenantContext, tx: Tx | typeof prisma = prisma) {
+  return tx.membership.findUnique({ where: { userId_businessId: { userId: ctx.userId, businessId: ctx.businessId } } })
+}
+
+/** ¿Puede este usuario trabajar en esa caja? */
+function mayUse(ctx: TenantContext, assigned: string | null | undefined, registerId: string) {
+  return hasFullCashAccess(ctx) || !assigned || assigned === registerId
+}
+
+/** Sesión abierta de la caja en la que está el usuario (sin importar quién la abrió). */
+export async function findActiveSession(ctx: TenantContext, tx: Tx | typeof prisma = prisma) {
+  const membership = await membershipOf(ctx, tx)
+  if (membership?.cashRegisterId) {
+    return tx.cashSession.findFirst({
+      where: { businessId: ctx.businessId, cashRegisterId: membership.cashRegisterId, status: "OPEN" },
+    })
+  }
+  // Sin caja elegida: la que abrió él mismo (comportamiento anterior).
+  return tx.cashSession.findFirst({
+    where: { businessId: ctx.businessId, userId: ctx.userId, branchId: ctx.branchId, status: "OPEN" },
+  })
+}
+
 export async function openSession(ctx: TenantContext, input: { cashRegisterId: string; openingAmount: string }) {
   assertCan(ctx, "cash")
-  const mine = await prisma.cashSession.findFirst({
-    where: { businessId: ctx.businessId, userId: ctx.userId, status: "OPEN" },
-  })
-  if (mine) throw new AppError("Ya tienes una caja abierta")
   const register = await prisma.cashRegister.findFirst({
     where: { id: input.cashRegisterId, businessId: ctx.businessId, branchId: ctx.branchId, isActive: true },
   })
   if (!register) throw new AppError("Caja no encontrada")
-  const membership = await prisma.membership.findUnique({
-    where: { userId_businessId: { userId: ctx.userId, businessId: ctx.businessId } },
-  })
-  if (membership?.cashRegisterId && membership.cashRegisterId !== register.id) throw new AppError("Solo puedes abrir tu caja")
+  const membership = await membershipOf(ctx)
+  if (!mayUse(ctx, membership?.cashRegisterId, register.id)) throw new AppError("Solo puedes abrir la caja que tienes asignada")
   const busy = await prisma.cashSession.findFirst({ where: { cashRegisterId: register.id, status: "OPEN" } })
-  if (busy) throw new AppError("Esa caja ya está abierta")
-  return prisma.cashSession.create({
+  if (busy) throw new AppError("Esa caja ya está abierta: usa «Entrar»")
+  const session = await prisma.cashSession.create({
     data: {
       businessId: ctx.businessId,
       branchId: ctx.branchId,
@@ -33,11 +62,67 @@ export async function openSession(ctx: TenantContext, input: { cashRegisterId: s
       status: "OPEN",
     },
   })
+  // Quien abre queda trabajando en esa caja.
+  if (membership && membership.cashRegisterId !== register.id) {
+    await prisma.membership.update({ where: { id: membership.id }, data: { cashRegisterId: register.id } })
+  }
+  return session
+}
+
+/** Entrar a una caja: el dueño y el administrador pueden cambiar a cualquiera; el cajero solo a la suya. */
+export async function enterRegister(ctx: TenantContext, registerId: string) {
+  if (!hasFullCashAccess(ctx)) assertCan(ctx, "sell")
+  const register = await prisma.cashRegister.findFirst({
+    where: { id: registerId, businessId: ctx.businessId, branchId: ctx.branchId, isActive: true },
+  })
+  if (!register) throw new AppError("Caja no encontrada")
+  const membership = await membershipOf(ctx)
+  if (!membership) throw new AppError("Usuario sin acceso a este negocio")
+  if (!mayUse(ctx, membership.cashRegisterId, register.id)) throw new AppError("Solo puedes entrar a la caja que tienes asignada")
+  if (membership.cashRegisterId !== register.id) {
+    await prisma.membership.update({ where: { id: membership.id }, data: { cashRegisterId: register.id } })
+  }
+  return register
+}
+
+/** Cajas de la sucursal con su estado, para el panel de caja. */
+export async function registerBoard(ctx: TenantContext) {
+  const [registers, membership] = await Promise.all([
+    prisma.cashRegister.findMany({
+      where: { businessId: ctx.businessId, branchId: ctx.branchId, isActive: true },
+      include: { sessions: { where: { status: "OPEN" }, include: { user: { select: { name: true } } }, take: 1 } },
+      orderBy: { name: "asc" },
+    }),
+    membershipOf(ctx),
+  ])
+  const users = await prisma.membership.findMany({
+    where: { businessId: ctx.businessId, cashRegisterId: { in: registers.map((item) => item.id) }, user: { email: { not: "configuracion@interno.fadey" } } },
+    include: { user: { select: { name: true } } },
+  })
+  return {
+    fullAccess: hasFullCashAccess(ctx),
+    currentRegisterId: membership?.cashRegisterId ?? null,
+    registers: registers.map((register) => {
+      const open = register.sessions[0] ?? null
+      return {
+        id: register.id,
+        name: register.name,
+        open: Boolean(open),
+        openedBy: open?.user.name ?? null,
+        openedAt: open?.openedAt ?? null,
+        accessible: mayUse(ctx, membership?.cashRegisterId && !hasFullCashAccess(ctx) ? membership.cashRegisterId : null, register.id),
+        current: membership?.cashRegisterId === register.id,
+        people: users.filter((item) => item.cashRegisterId === register.id).map((item) => item.user.name),
+      }
+    }),
+  }
 }
 
 export async function currentSession(ctx: TenantContext) {
+  const active = await findActiveSession(ctx)
+  if (!active) return null
   return prisma.cashSession.findFirst({
-    where: { businessId: ctx.businessId, userId: ctx.userId, branchId: ctx.branchId, status: "OPEN" },
+    where: { id: active.id },
     include: { register: true, movements: { orderBy: { createdAt: "desc" } }, user: true },
   })
 }

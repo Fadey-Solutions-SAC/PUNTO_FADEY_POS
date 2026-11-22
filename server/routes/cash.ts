@@ -3,6 +3,8 @@ import {
   addMovement,
   closeSession,
   currentSession,
+  enterRegister,
+  registerBoard,
   listSessions,
   openSession,
   summarizeSession,
@@ -152,12 +154,13 @@ export function registerCashRoutes(app: Express) {
         res.status(403).json({ error: "Sin permiso de caja" })
         return
       }
-      const [session, registers] = await Promise.all([
+      const [session, registers, board] = await Promise.all([
         currentSession(ctx),
         prisma.cashRegister.findMany({
           where: { businessId: ctx.businessId, branchId: ctx.branchId, isActive: true },
           orderBy: { name: "asc" },
         }),
+        registerBoard(ctx),
       ])
       const membership = await prisma.membership.findUnique({
         where: { userId_businessId: { userId: ctx.userId, businessId: ctx.businessId } },
@@ -167,6 +170,19 @@ export function registerCashRoutes(app: Express) {
         currency: ctx.currency,
         assignedRegisterId: membership?.cashRegisterId ?? null,
         registers: registers.map((item) => ({ id: item.id, name: item.name })),
+        // Panel de cajas: estado de cada caja física y si el usuario puede abrirla o entrar.
+        fullAccess: board.fullAccess,
+        currentRegisterId: board.currentRegisterId,
+        board: board.registers.map((item) => ({
+          id: item.id,
+          name: item.name,
+          open: item.open,
+          openedBy: item.openedBy,
+          openedAtLabel: item.openedAt ? formatDate(item.openedAt) : null,
+          accessible: item.accessible,
+          current: item.current,
+          people: item.people,
+        })),
         session: session
           ? {
               id: session.id,
@@ -198,6 +214,16 @@ export function registerCashRoutes(app: Express) {
       })
     } catch (error) {
       res.status(500).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Entrar a una caja ya abierta (o elegirla para abrirla).
+  app.post("/api/cash/enter", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const register = await enterRegister(req.tenant!, String(req.body?.registerId ?? ""))
+      res.json({ ok: true, registerName: register.name })
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
     }
   })
 

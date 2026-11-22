@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client"
+import { findActiveSession } from "@/lib/cash"
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
 import { applyStock } from "@/lib/inventory"
@@ -169,9 +170,7 @@ export async function confirmSale(ctx: TenantContext, input: SaleConfirmInput) {
         return tx.sale.findUniqueOrThrow({ where: { id: existing.id }, include: { lines: true, payments: true } })
       }
 
-      const session = await tx.cashSession.findFirst({
-        where: { businessId: ctx.businessId, userId: ctx.userId, branchId: ctx.branchId, status: "OPEN" },
-      })
+      const session = await findActiveSession(ctx, tx)
       if (!session) throw new AppError("Abre una caja antes de cobrar")
 
       const priced = await pricedLines(tx, ctx, input)
@@ -357,9 +356,7 @@ export async function returnSale(
       cashOut = input.refundMethod === "CASH" ? total - debtCut : 0
     }
     const session = cashOut > 0
-      ? await tx.cashSession.findFirst({
-          where: { businessId: ctx.businessId, userId: ctx.userId, branchId: ctx.branchId, status: "OPEN" },
-        })
+      ? await findActiveSession(ctx, tx)
       : null
     if (cashOut > 0 && !session) throw new AppError("Abre una caja para devolver efectivo")
 

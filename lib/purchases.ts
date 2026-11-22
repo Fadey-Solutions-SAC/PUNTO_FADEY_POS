@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client"
+import { findActiveSession } from "@/lib/cash"
 import { prisma } from "@/lib/db"
 import { AppError } from "@/lib/errors"
 import { applyStock, UNIT_OPTION } from "@/lib/inventory"
@@ -300,9 +301,7 @@ async function payInside(tx: Tx, ctx: TenantContext, purchaseId: string, amount:
   if (amount > due) throw new AppError("El pago supera la deuda con el proveedor")
   let sessionId: string | null = null
   if (method === "CASH") {
-    const session = await tx.cashSession.findFirst({
-      where: { businessId: ctx.businessId, userId: ctx.userId, branchId: ctx.branchId, status: "OPEN" },
-    })
+    const session = await findActiveSession(ctx, tx)
     if (!session) throw new AppError("Abre una caja para pagar en efectivo")
     sessionId = session.id
     await tx.cashMovement.create({

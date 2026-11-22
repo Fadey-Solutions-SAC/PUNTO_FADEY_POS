@@ -1,25 +1,19 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
-import { addCashMovement, getCashStatus, openCash, type CashStatus } from "../api"
+import { addCashMovement, enterCash, getCashStatus, openCash, type CashStatus } from "../api"
 
 /** mode: Ingreso de caja o Egreso de caja (módulos del menú); sin mode, la caja con ambos. */
 export function CashPage({ mode }: { mode?: "INCOME" | "EXPENSE" } = {}) {
   const [data, setData] = useState<CashStatus | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
-  const [registerId, setRegisterId] = useState("")
-  const [openingAmount, setOpeningAmount] = useState("0")
   const [type, setType] = useState<string>(mode ?? "INCOME")
   const [amount, setAmount] = useState("")
   const [reason, setReason] = useState("")
 
   const reload = useCallback(async () => {
-    const status = await getCashStatus()
-    setData(status)
-    if (!registerId && status.registers[0]) {
-      setRegisterId(status.assignedRegisterId || status.registers[0].id)
-    }
-  }, [registerId])
+    setData(await getCashStatus())
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -34,20 +28,6 @@ export function CashPage({ mode }: { mode?: "INCOME" | "EXPENSE" } = {}) {
       cancelled = true
     }
   }, [reload])
-
-  async function onOpen(event: FormEvent) {
-    event.preventDefault()
-    setPending(true)
-    setError("")
-    try {
-      await openCash(registerId, openingAmount || "0")
-      await reload()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo abrir")
-    } finally {
-      setPending(false)
-    }
-  }
 
   async function onMovement(event: FormEvent) {
     event.preventDefault()
@@ -114,50 +94,10 @@ export function CashPage({ mode }: { mode?: "INCOME" | "EXPENSE" } = {}) {
       {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {!session ? (
-        <form onSubmit={onOpen} className="mx-auto max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-              <span className="size-1.5 rounded-full bg-slate-400" />
-              Caja cerrada
-            </span>
-            <h2 className="mt-2 text-lg font-semibold text-[var(--pf-navy)]">Abrir caja del día</h2>
-            <p className="text-sm text-slate-500">Cuenta el efectivo con el que empiezas.</p>
-          </div>
-          <label className="block text-sm font-medium text-slate-700">
-            Caja registradora
-            <select
-              className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3"
-              value={registerId}
-              onChange={(event) => setRegisterId(event.target.value)}
-            >
-              {data?.registers.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Efectivo inicial
-            <input
-              placeholder="Ej. 100.00"
-              inputMode="decimal"
-              className="mt-1 h-12 w-full rounded-xl border border-slate-200 px-3 text-right text-lg tabular-nums"
-              value={openingAmount}
-              onFocus={(event) => event.currentTarget.select()}
-              onChange={(event) => setOpeningAmount(event.target.value)}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={pending || !data?.registers.length}
-            className="h-12 w-full rounded-xl bg-[var(--pf-accent)] text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-60"
-          >
-            {pending ? "Abriendo…" : "Abrir caja"}
-          </button>
-        </form>
+        data ? <RegisterBoard data={data} onDone={reload} onError={setError} /> : null
       ) : (
         <>
+          {!mode && data ? <RegisterBoard data={data} onDone={reload} onError={setError} compact /> : null}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
@@ -296,3 +236,132 @@ const MOVE_TYPES = [
   { code: "INCOME", label: "Ingreso" },
   { code: "EXPENSE", label: "Egreso" },
 ]
+
+/**
+ * Panel de cajas físicas de la sucursal: cada caja con su estado y el botón para abrirla o entrar.
+ * El dueño y el administrador ven y usan todas; el cajero solo la suya. Varias personas pueden estar en la misma caja.
+ */
+function RegisterBoard({
+  data,
+  onDone,
+  onError,
+  compact = false,
+}: {
+  data: CashStatus
+  onDone: () => Promise<void>
+  onError: (text: string) => void
+  compact?: boolean
+}) {
+  const [opening, setOpening] = useState<string | null>(null)
+  const [amount, setAmount] = useState("0")
+  const [busy, setBusy] = useState("")
+  const board = data.board ?? data.registers.map((item) => ({ ...item, open: false, openedBy: null, openedAtLabel: null, accessible: true, current: false, people: [] }))
+
+  async function act(id: string, action: () => Promise<unknown>) {
+    setBusy(id)
+    onError("")
+    try {
+      await action()
+      setOpening(null)
+      await onDone()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "No se pudo completar")
+    } finally {
+      setBusy("")
+    }
+  }
+
+  return (
+    <section className="space-y-2">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h2 className="font-semibold text-[var(--pf-navy)]">{compact ? "Cajas de la sucursal" : "Elige tu caja"}</h2>
+        <p className="text-xs text-slate-500">
+          {data.fullAccess ? "Tienes acceso a todas las cajas." : "Trabajas en la caja que tienes asignada."} Varias personas pueden estar en la misma caja.
+        </p>
+      </div>
+      {board.length === 0 ? (
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">No hay cajas en esta sucursal. Créalas en Configuración → Sucursales y cajas.</p>
+      ) : null}
+      <div className={`grid gap-3 ${compact ? "sm:grid-cols-3 xl:grid-cols-4" : "sm:grid-cols-2 xl:grid-cols-3"}`}>
+        {board.map((register) => (
+          <div
+            key={register.id}
+            className={`space-y-2 rounded-2xl border bg-white p-4 shadow-sm ${register.current ? "border-[var(--pf-accent)] ring-2 ring-[var(--pf-accent)]/20" : "border-slate-200"} ${
+              register.accessible ? "" : "opacity-60"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-lg font-semibold text-[var(--pf-navy)]">{register.name}</p>
+              <span
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  register.open ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                <span className={`size-1.5 rounded-full ${register.open ? "bg-emerald-500" : "bg-slate-400"}`} />
+                {register.open ? "Abierta" : "Cerrada"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">
+              {register.open ? `Abrió ${register.openedBy ?? "—"} · ${register.openedAtLabel ?? ""}` : "Sin turno abierto"}
+              {register.people.length ? ` · En la caja: ${register.people.join(", ")}` : ""}
+            </p>
+            {!register.accessible ? (
+              <p className="text-xs font-semibold text-slate-500">Sin acceso (no es tu caja)</p>
+            ) : register.current && register.open ? (
+              <p className="inline-flex h-10 items-center rounded-xl bg-emerald-50 px-3 text-sm font-semibold text-emerald-700">✓ Estás en esta caja</p>
+            ) : register.open ? (
+              <button
+                type="button"
+                disabled={busy === register.id}
+                onClick={() => void act(register.id, () => enterCash(register.id))}
+                className="h-10 w-full rounded-xl bg-[var(--pf-accent)] text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {busy === register.id ? "Entrando…" : "Entrar"}
+              </button>
+            ) : opening === register.id ? (
+              <form
+                className="space-y-2"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void act(register.id, () => openCash(register.id, amount || "0"))
+                }}
+              >
+                <label className="block text-xs font-medium text-slate-600">
+                  Efectivo inicial
+                  <input
+                    autoFocus
+                    inputMode="decimal"
+                    placeholder="Ej. 100.00"
+                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-right tabular-nums"
+                    value={amount}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onChange={(event) => setAmount(event.target.value)}
+                  />
+                </label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setOpening(null)} className="h-10 flex-1 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={busy === register.id} className="h-10 flex-1 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
+                    {busy === register.id ? "Abriendo…" : "Abrir caja"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpening(register.id)
+                  setAmount("0")
+                }}
+                className="h-10 w-full rounded-xl bg-emerald-600 text-sm font-semibold text-white"
+              >
+                Abrir
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}

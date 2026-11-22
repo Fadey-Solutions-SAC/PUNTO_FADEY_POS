@@ -205,7 +205,7 @@ export async function run() {
   const closed = await prisma.cashSession.findFirstOrThrow({ where: { userId: ctxA.userId, status: "CLOSED" } });
   assert(closed.difference === 0, "La diferencia de caja no quedó en cero");
 
-  const cashier = await createUser(ctxA.businessId, "OWNER", {
+  const cashier = await createUser(ctxA.businessId, { role: "OWNER" }, {
     name: "Caja",
     email: "caja@fadey.test",
     password: "clave-segura",

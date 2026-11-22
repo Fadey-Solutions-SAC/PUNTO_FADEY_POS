@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db"
+import { findActiveSession } from "@/lib/cash"
 import { AppError } from "@/lib/errors"
 import { toMoneyInt } from "@/lib/money"
 import { assertCan } from "@/lib/roles"
@@ -52,9 +53,7 @@ export async function registerAbono(
     const customer = await tx.customer.findFirst({ where: { id: customerId, businessId: ctx.businessId } })
     if (!customer) throw new AppError("Cliente no encontrado")
     if (customer.balance < value) throw new AppError("El abono supera la deuda")
-    const session = await tx.cashSession.findFirst({
-      where: { businessId: ctx.businessId, userId: ctx.userId, branchId: ctx.branchId, status: "OPEN" },
-    })
+    const session = await findActiveSession(ctx, tx)
     if (!session) throw new AppError("Abre una caja para cobrar")
     const openSales = await tx.sale.findMany({
       where: { businessId: ctx.businessId, customerId: customer.id, saleType: "CREDIT", status: "COMPLETED" },

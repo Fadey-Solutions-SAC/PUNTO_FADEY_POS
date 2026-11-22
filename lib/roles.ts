@@ -72,8 +72,8 @@ const MATRIX = {
   adjust: ["OWNER", "ADMIN"],
   transfer: ["OWNER", "ADMIN", "MANAGER", "WAREHOUSE"],
   settings: ["OWNER", "ADMIN"],
-  users: ["OWNER"],
-  permissions: ["OWNER"],
+  users: ["OWNER", "ADMIN"],
+  permissions: ["OWNER", "ADMIN"],
   voidSale: ["OWNER", "ADMIN", "MANAGER"],
   returnSale: ["OWNER", "ADMIN", "MANAGER", "CASHIER"],
   customers: ["OWNER", "ADMIN", "MANAGER", "CASHIER", "SELLER"],
@@ -89,7 +89,8 @@ type Actor = Role | { role: Role; grants?: PermissionGrant[] }
 
 export function can(role: Role, permission: Permission, grants?: PermissionGrant[]) {
   if (role === "OWNER") return true
-  if (permission === "users" || permission === "permissions") return false
+  // Usuarios y permisos: solo dueño y administrador (no se pueden dar a otros roles).
+  if (permission === "users" || permission === "permissions") return role === "ADMIN"
   const personal = grants?.filter((item) => item.userId)
   if (personal && personal.length > 0) return personal.some((item) => item.permission === permission && item.allowed)
   const grant = grants?.find((item) => item.role === role && item.permission === permission)

@@ -44,9 +44,14 @@ export function registerUsersRoutes(app: Express) {
         ),
       }))
       res.json({
-        canManage: ctx.role === "OWNER",
+        canManage: ctx.configMode === true || ctx.role === "OWNER" || ctx.role === "ADMIN",
+        configMode: ctx.configMode === true,
         currentUserId: ctx.userId,
-        roles: ROLES.filter((role) => role !== "OWNER").map((role) => ({ code: role, label: ROLE_LABEL[role] })),
+        // El modo configuración puede crear al Dueño (administrador del negocio) y cambiar cualquier rol.
+        roles: ROLES.filter((role) => role !== "OWNER" || ctx.configMode === true).map((role) => ({
+          code: role,
+          label: role === "OWNER" ? "Dueño (administrador del negocio)" : ROLE_LABEL[role],
+        })),
         permissions: ASSIGNABLE.map((code) => ({ code, label: PERMISSION_LABEL[code] })),
         registers: registers.map((item) => ({ id: item.id, name: `${item.name} · ${item.branch.name}` })),
         roleMatrix,
@@ -82,7 +87,7 @@ export function registerUsersRoutes(app: Express) {
       const ctx = req.tenant!
       const role = String(req.body?.role ?? "")
       const custom = req.body?.mode === "custom"
-      const user = await createUser(ctx.businessId, ctx.role, {
+      const user = await createUser(ctx.businessId, { role: ctx.role as Role, configMode: ctx.configMode === true }, {
         name: String(req.body?.name ?? ""),
         username: String(req.body?.username ?? ""),
         password: String(req.body?.password ?? ""),
@@ -104,8 +109,9 @@ export function registerUsersRoutes(app: Express) {
       const ctx = req.tenant!
       const custom = req.body?.mode === "custom"
       const password = String(req.body?.password ?? "")
-      await updateMember(ctx.businessId, ctx.role, {
+      await updateMember(ctx.businessId, { role: ctx.role as Role, configMode: ctx.configMode === true }, {
         userId: String(req.params.id),
+        role: req.body?.role ? String(req.body.role) : undefined,
         name: String(req.body?.name ?? ""),
         username: String(req.body?.username ?? ""),
         password: password || undefined,
@@ -131,7 +137,7 @@ export function registerUsersRoutes(app: Express) {
   app.delete("/api/settings/users/:id", requireApiTenant, async (req: AuthedRequest, res) => {
     try {
       const ctx = req.tenant!
-      await deleteMember(ctx.businessId, ctx.role, ctx.userId, String(req.params.id))
+      await deleteMember(ctx.businessId, { role: ctx.role as Role, configMode: ctx.configMode === true }, ctx.userId, String(req.params.id))
       await prisma.auditLog.create({
         data: { businessId: ctx.businessId, userId: ctx.userId, action: "user.delete", entity: "User", entityId: String(req.params.id) },
       })

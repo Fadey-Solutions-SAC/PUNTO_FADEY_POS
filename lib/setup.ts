@@ -175,17 +175,34 @@ async function freeUsername(base: string) {
   return candidate
 }
 
+/**
+ * Quién gestiona usuarios: el dueño y el administrador (cualquier rol menos Dueño).
+ * El modo configuración puede todo: crear al Dueño (administrador del negocio) y cambiar el rol de cualquiera.
+ */
+export type UserActor = { role: Role; configMode?: boolean }
+
+function assertManager(actor: UserActor) {
+  if (!actor.configMode && actor.role !== "OWNER" && actor.role !== "ADMIN") {
+    throw new AppError("Solo el dueño o un administrador pueden gestionar usuarios")
+  }
+}
+
+function assertAssignableRole(actor: UserActor, role: string) {
+  if (!isRole(role)) throw new AppError("Rol inválido")
+  if (role === "OWNER" && !actor.configMode) throw new AppError("Solo el modo configuración puede asignar el rol de Dueño")
+}
+
 export async function createUser(
   ctxBusinessId: string,
-  actorRole: Role,
+  actor: UserActor,
   input: { name: string; email?: string; username?: string; password: string; role: string; cashRegisterId?: string; permissions?: string[] },
 ) {
   assertNoCode(input.name)
   assertNoCode(input.username ?? "")
   assertNoCode(input.email ?? "")
   assertNoCode(input.password)
-  if (actorRole !== "OWNER") throw new AppError("Solo el dueño puede crear usuarios")
-  if (!isRole(input.role) || input.role === "OWNER") throw new AppError("Rol inválido")
+  assertManager(actor)
+  assertAssignableRole(actor, input.role)
   const name = input.name.trim()
   if (name.length < 2) throw new AppError("Indica el nombre")
   if (input.password.length < 8) throw new AppError("La contraseña debe tener al menos 8 caracteres")
@@ -202,6 +219,7 @@ export async function createUser(
     const register = await prisma.cashRegister.findFirst({ where: { id: registerId, businessId: ctxBusinessId, isActive: true } })
     if (!register) throw new AppError("Caja no encontrada")
   }
+  if (input.role === "OWNER") await demoteInternalOwner(ctxBusinessId)
   return prisma.user.create({
     data: {
       name,
@@ -222,18 +240,30 @@ export async function createUser(
 
 export async function updateMember(
   ctxBusinessId: string,
-  actorRole: Role,
-  input: { userId: string; name: string; username: string; password?: string; cashRegisterId?: string; permissions?: string[] },
+  actor: UserActor,
+  input: { userId: string; name: string; username: string; password?: string; cashRegisterId?: string; permissions?: string[]; role?: string },
 ) {
   assertNoCode(input.name)
   assertNoCode(input.username)
   if (input.password) assertNoCode(input.password)
-  if (actorRole !== "OWNER") throw new AppError("Solo el dueño puede editar usuarios")
+  assertManager(actor)
   const member = await prisma.membership.findUnique({
     where: { userId_businessId: { userId: input.userId, businessId: ctxBusinessId } },
     include: { user: true },
   })
   if (!member) throw new AppError("Usuario no encontrado")
+  // Al Dueño solo lo edita él mismo o el modo configuración.
+  if (member.role === "OWNER" && !actor.configMode && actor.role !== "OWNER") throw new AppError("Solo el dueño o el modo configuración pueden editar al dueño")
+  const nextRole = input.role && input.role !== member.role ? input.role : null
+  if (nextRole) {
+    assertAssignableRole(actor, nextRole)
+    if (member.role === "OWNER" && !actor.configMode) throw new AppError("Solo el modo configuración puede cambiar el rol del dueño")
+    if (member.role === "OWNER") {
+      const owners = await prisma.membership.count({ where: { businessId: ctxBusinessId, role: "OWNER", user: { email: { not: INTERNAL_EMAIL } } } })
+      if (owners <= 1) throw new AppError("El negocio debe tener al menos un dueño")
+    }
+    if (nextRole === "OWNER") await demoteInternalOwner(ctxBusinessId)
+  }
   const name = input.name.trim()
   const username = cleanUsername(input.username)
   if (name.length < 2) throw new AppError("Indica el nombre")
@@ -253,7 +283,6 @@ export async function updateMember(
         ? undefined
         : input.permissions.filter((permission) => isPermission(permission) && permission !== "users" && permission !== "permissions")
   if (permissions?.includes("cash") && !registerId) throw new AppError("Asigna una caja a este usuario")
-  if (member.role === "OWNER" && !registerId) throw new AppError("Asigna una caja al dueño")
   if (input.password && input.password.length < 8) throw new AppError("La contraseña debe tener al menos 8 caracteres")
   await prisma.$transaction(async (tx) => {
     await tx.user.update({
@@ -266,7 +295,7 @@ export async function updateMember(
     })
     await tx.membership.update({
       where: { id: member.id },
-      data: { cashRegisterId: registerId },
+      data: { cashRegisterId: registerId, ...(nextRole ? { role: nextRole } : {}) },
     })
     if (permissions === undefined) {
       await tx.userPermission.deleteMany({ where: { businessId: ctxBusinessId, userId: member.userId } })
@@ -285,8 +314,8 @@ export async function updateMember(
   })
 }
 
-export async function deleteMember(ctxBusinessId: string, actorRole: Role, actorId: string, userId: string) {
-  if (actorRole !== "OWNER") throw new AppError("Solo el dueño puede eliminar usuarios")
+export async function deleteMember(ctxBusinessId: string, actor: UserActor, actorId: string, userId: string) {
+  assertManager(actor)
   if (actorId === userId) throw new AppError("No puedes eliminar tu propio usuario")
   const member = await prisma.membership.findUnique({
     where: { userId_businessId: { userId, businessId: ctxBusinessId } },
@@ -309,9 +338,19 @@ export async function deleteMember(ctxBusinessId: string, actorRole: Role, actor
   }
 }
 
+/**
+ * El dueño creado por configuración es el dueño del negocio: el usuario interno de configuración
+ * deja de figurar como dueño (queda como administrador interno, oculto en la lista de usuarios).
+ */
+async function demoteInternalOwner(businessId: string) {
+  const internal = await prisma.user.findUnique({ where: { email: INTERNAL_EMAIL } })
+  if (!internal) return
+  await prisma.membership.updateMany({ where: { businessId, userId: internal.id, role: "OWNER" }, data: { role: "ADMIN" } })
+}
+
 export async function openConfigSession() {
   const memberships = await prisma.membership.findMany({
-    where: { role: "OWNER" },
+    where: { OR: [{ role: "OWNER" }, { role: "ADMIN", user: { email: INTERNAL_EMAIL } }] },
     include: {
       user: true,
       business: {
