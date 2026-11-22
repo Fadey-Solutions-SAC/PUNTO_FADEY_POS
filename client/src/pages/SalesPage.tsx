@@ -851,17 +851,20 @@ export function SalesPage() {
                   ) : null}
                   {/* Nombre y código a la izquierda; precio en etiqueta naranja a la derecha. */}
                   <span className="flex items-start justify-between gap-2">
-                    <span className="min-w-0">
-                      <span className="line-clamp-2 text-[15px] font-extrabold uppercase leading-tight text-[var(--pf-navy)]">{product.name}</span>
+                    <span className="min-w-0 flex-1">
+                      {/* Nombre en una sola línea; si no cabe, se desliza en fila sin fin. */}
+                      <Marquee text={product.name} className="text-[15px] font-extrabold uppercase leading-tight text-[var(--pf-navy)]" />
                       {product.brandName ? (
                         <span
-                          className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                          className="mt-1 flex h-5 w-fit max-w-full items-center gap-1 rounded-full px-2 text-[10px] font-bold uppercase tracking-wide"
                           style={{ background: tint(categoryColor(product.brandId), 0.14), color: categoryColor(product.brandId) }}
                         >
                           <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(product.brandId) }} />
                           <span className="truncate">{product.brandName}</span>
                         </span>
-                      ) : null}
+                      ) : (
+                        <span aria-hidden className="mt-1 block h-5" />
+                      )}
                       <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
                         <span aria-hidden className="font-mono tracking-tighter text-slate-400">||||</span>
                         <span className="truncate">
@@ -1289,6 +1292,40 @@ export function SalesPage() {
         </div>
       ) : null}
     </div>
+  )
+}
+
+/** Texto en una línea: si no cabe en su cuadro, se desliza de forma continua (sin fin). */
+function Marquee({ text, className = "" }: { text: string; className?: string }) {
+  const box = useRef<HTMLSpanElement>(null)
+  const probe = useRef<HTMLSpanElement>(null)
+  const [overflow, setOverflow] = useState(false)
+  useEffect(() => {
+    const check = () => {
+      if (box.current && probe.current) setOverflow(probe.current.scrollWidth > box.current.clientWidth + 1)
+    }
+    check()
+    const observer = new ResizeObserver(check)
+    if (box.current) observer.observe(box.current)
+    return () => observer.disconnect()
+  }, [text])
+  return (
+    <span ref={box} className={`relative block overflow-hidden whitespace-nowrap ${className}`} title={text}>
+      {/* Medidor invisible del ancho real del texto. */}
+      <span ref={probe} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">
+        {text}
+      </span>
+      {overflow ? (
+        <span className="pf-marquee inline-flex" style={{ animationDuration: `${Math.max(6, text.length * 0.4)}s` }}>
+          <span className="pr-10">{text}</span>
+          <span className="pr-10" aria-hidden>
+            {text}
+          </span>
+        </span>
+      ) : (
+        text
+      )}
+    </span>
   )
 }
 

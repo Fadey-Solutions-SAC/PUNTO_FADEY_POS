@@ -97,3 +97,17 @@ div:has(> table) {
     display: none !important;
   }
 }
+
+/* Nombre de producto que no cabe: se desliza en fila sin fin (dos copias, vuelve al inicio sin salto). */
+.pf-marquee {
+  animation-name: pf-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes pf-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-marquee { animation: none; }
+}
