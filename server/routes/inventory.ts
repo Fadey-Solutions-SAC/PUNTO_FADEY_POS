@@ -1,4 +1,4 @@
-import type { Express } from "express"
+import express, { type Express } from "express"
 import { loadCatalog } from "../../lib/catalog"
 import { errorMessage } from "../../lib/errors"
 import {
@@ -10,6 +10,7 @@ import {
   sendTransfer,
   setStock,
 } from "../../lib/inventory"
+import { applyStockSheet, buildStockSheet, readStockSheet } from "../../lib/stock-sheet"
 import { MOVE_LABEL, TRANSFER_LABEL } from "../../lib/labels"
 import { formatDate, limaDay, formatMoney, formatQty } from "../../lib/money"
 import { prisma } from "../../lib/db"
@@ -311,6 +312,34 @@ export function registerInventoryRoutes(app: Express) {
       res.status(400).json({ error: errorMessage(error) })
     }
   })
+
+  // Plantilla Excel de stock (Almacenes): descargar, cambiar cantidades y volver a subir.
+  app.get("/api/inventory/stock-sheet", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const file = await buildStockSheet(req.tenant!)
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      res.setHeader("Content-Disposition", `attachment; filename="plantilla-stock-${limaDay(new Date())}.xlsx"`)
+      res.send(file)
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post(
+    "/api/inventory/stock-sheet",
+    requireApiTenant,
+    express.raw({ type: () => true, limit: "8mb" }),
+    async (req: AuthedRequest, res) => {
+      try {
+        const file = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
+        if (!file.length) throw new Error("Sube el archivo de la plantilla")
+        const result = req.query.apply === "1" ? await applyStockSheet(req.tenant!, file) : await readStockSheet(req.tenant!, file)
+        res.json(result)
+      } catch (error) {
+        res.status(400).json({ error: errorMessage(error) })
+      }
+    },
+  )
 
   app.get("/api/inventory/adjustments", requireApiTenant, async (req: AuthedRequest, res) => {
     try {

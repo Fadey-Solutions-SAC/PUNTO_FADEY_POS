@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { AlertTriangle, ArrowLeftRight, Boxes, ChevronRight, DollarSign, Package, Pencil, Plus, Search, SlidersHorizontal, Store, Warehouse } from "lucide-react"
-import { deleteWarehouseApi, getInventoryWarehouses, postInventoryAdjustment, sendInventoryTransfer } from "../api"
+import { AlertTriangle, ArrowLeftRight, Boxes, ChevronRight, DollarSign, FileDown, FileUp, Package, Pencil, Plus, Search, SlidersHorizontal, Store, Warehouse } from "lucide-react"
+import {
+  deleteWarehouseApi,
+  downloadStockSheet,
+  getInventoryWarehouses,
+  postInventoryAdjustment,
+  sendInventoryTransfer,
+  uploadStockSheet,
+  type StockSheetChange,
+} from "../api"
 
 type Data = Awaited<ReturnType<typeof getInventoryWarehouses>>
 
@@ -27,6 +35,10 @@ export function WarehousesPage() {
   const [onlyLow, setOnlyLow] = useState(false)
   // Ventanas emergentes: mover a otro almacén o ajustar el stock, sin salir de esta pantalla.
   const [dialog, setDialog] = useState<{ kind: "move" | "adjust"; productId: string } | null>(null)
+  // Plantilla Excel de stock: archivo subido y su vista previa de cambios.
+  const [sheet, setSheet] = useState<{ file: File; rows: number; changes: StockSheetChange[]; errors: string[] } | null>(null)
+  const [sheetBusy, setSheetBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(
     () =>
@@ -65,6 +77,36 @@ export function WarehousesPage() {
       setMessage(`Almacén ${name} eliminado`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo eliminar")
+    }
+  }
+
+  async function onDownloadSheet() {
+    setError("")
+    setMessage("")
+    setSheetBusy(true)
+    try {
+      await downloadStockSheet()
+      setMessage("Plantilla descargada: cambia las cantidades de las columnas amarillas y súbela con «Subir plantilla»")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo descargar")
+    } finally {
+      setSheetBusy(false)
+    }
+  }
+
+  async function onPickSheet(file: File | undefined) {
+    if (!file) return
+    setError("")
+    setMessage("")
+    setSheetBusy(true)
+    try {
+      const preview = await uploadStockSheet(file, false)
+      setSheet({ file, ...preview })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo leer la plantilla")
+    } finally {
+      setSheetBusy(false)
+      if (fileRef.current) fileRef.current.value = ""
     }
   }
 
@@ -141,6 +183,29 @@ export function WarehousesPage() {
           <span />
         )}
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void onDownloadSheet()}
+            disabled={sheetBusy}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
+          >
+            <FileDown size={16} /> Descargar plantilla
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={sheetBusy}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-amber-50 px-4 text-sm font-semibold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100 disabled:opacity-50"
+          >
+            <FileUp size={16} /> {sheetBusy ? "Leyendo…" : "Subir plantilla"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(event) => void onPickSheet(event.target.files?.[0])}
+          />
           <Link to="/productos/nuevo" className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-600 px-4 text-sm font-semibold text-white">
             <Plus size={16} /> Nuevo producto
           </Link>
@@ -251,11 +316,133 @@ export function WarehousesPage() {
           }}
         />
       ) : null}
+
+      {sheet ? (
+        <StockSheetDialog
+          sheet={sheet}
+          onClose={() => setSheet(null)}
+          onDone={async (text, failed) => {
+            setSheet(null)
+            setMessage(text)
+            setError(failed.length ? `No se ajustaron: ${failed.join(" · ")}` : "")
+            await load()
+          }}
+        />
+      ) : null}
     </div>
   )
 }
 
-type Product = NonNullable<Data["products"]>[number]
+/** Vista previa de la plantilla subida: cuadro con lo que cambia y botón para aplicar los ajustes. */
+function StockSheetDialog({
+  sheet,
+  onClose,
+  onDone,
+}: {
+  sheet: { file: File; rows: number; changes: StockSheetChange[]; errors: string[] }
+  onClose: () => void
+  onDone: (message: string, failed: string[]) => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const count = sheet.changes.length
+
+  async function onApply() {
+    setBusy(true)
+    setError("")
+    try {
+      const result = await uploadStockSheet(sheet.file, true)
+      await onDone(`Plantilla aplicada: ${result.applied} ajuste(s) de stock guardados (quedan en el kardex)`, result.failed)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo aplicar")
+      setBusy(false)
+    }
+  }
+
+  const cell = "border border-slate-300 px-2 py-1.5"
+  return (
+    <div
+      className="fixed inset-0 z-[60] grid place-items-center bg-[var(--pf-navy)]/50 p-3"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Subir plantilla de stock"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose()
+      }}
+    >
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col gap-3 rounded-2xl bg-white p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--pf-navy)]">Plantilla de stock</h2>
+            <p className="text-sm text-slate-500">
+              {sheet.file.name} · {sheet.rows} producto(s) leídos · {count ? `${count} cambio(s) de stock` : "sin cambios de stock"}
+            </p>
+          </div>
+          <button type="button" className="text-sm text-slate-500 hover:text-slate-800" onClick={onClose} disabled={busy}>
+            Cerrar
+          </button>
+        </div>
+
+        {sheet.errors.length ? (
+          <ul className="max-h-28 list-disc overflow-auto rounded-xl bg-amber-50 py-2 pl-7 pr-3 text-xs text-amber-800">
+            {sheet.errors.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : null}
+
+        {count ? (
+          <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="sticky top-0 bg-slate-800 text-white">
+                <tr>
+                  <th className={`${cell} font-semibold`}>Producto</th>
+                  <th className={`${cell} font-semibold`}>Almacén</th>
+                  <th className={`${cell} text-right font-semibold`}>Stock actual</th>
+                  <th className={`${cell} text-right font-semibold`}>Stock nuevo</th>
+                  <th className={`${cell} text-right font-semibold`}>Diferencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sheet.changes.map((change) => (
+                  <tr key={`${change.productId}-${change.warehouseId}`}>
+                    <td className={`${cell} font-semibold text-[var(--pf-navy)]`}>{change.product}</td>
+                    <td className={`${cell} text-slate-600`}>{change.warehouse}</td>
+                    <td className={`${cell} text-right tabular-nums`}>
+                      {change.current} {change.unit}
+                    </td>
+                    <td className={`${cell} bg-yellow-50 text-right font-bold tabular-nums`}>
+                      {change.next} {change.unit}
+                    </td>
+                    <td className={`${cell} text-right font-semibold tabular-nums ${change.diff.startsWith("-") ? "text-red-600" : "text-emerald-700"}`}>
+                      {change.diff}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+            Las cantidades son iguales al stock actual. Cambia las columnas amarillas «Stock …» y vuelve a subir la plantilla.
+          </p>
+        )}
+
+        {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+        <button
+          type="button"
+          onClick={() => void onApply()}
+          disabled={busy || !count}
+          className="h-12 w-full rounded-xl bg-[var(--pf-accent)] text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+        >
+          {busy ? "Guardando…" : `Aplicar ${count} ajuste(s) de stock`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+type Product =NonNullable<Data["products"]>[number]
 
 /** Mover a almacén (se envía y se recibe al instante) o ajustar el stock real de un almacén. */
 function StockDialog({
