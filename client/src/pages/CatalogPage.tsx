@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { Check, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react"
 import { ProductPhoto } from "../components/ProductPhoto"
 import { createTaxonomy, getCatalog, setCatalogProductActive } from "../api"
-import { CatalogImport } from "../components/CatalogImport"
+import { ProductSheetButtons } from "../components/ProductSheet"
 import { TaxonomyPage } from "./TaxonomyPage"
 
 type Data = Awaited<ReturnType<typeof getCatalog>>
@@ -19,7 +19,6 @@ export function CatalogPage() {
   const [brandQuery, setBrandQuery] = useState("")
   const [brandId, setBrandId] = useState("")
   const [showVoided, setShowVoided] = useState(false)
-  const [importing, setImporting] = useState(false)
   const [managing, setManaging] = useState(false)
   const [adding, setAdding] = useState(false)
   const [newBrand, setNewBrand] = useState("")
@@ -194,18 +193,7 @@ export function CatalogPage() {
               <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition ${showVoided ? "left-[1.1rem]" : "left-0.5"}`} />
             </button>
           </label>
-          <a href="/api/catalog/export" className="inline-flex h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[var(--pf-navy)] shadow-sm">
-            Exportar CSV
-          </a>
-          {data.writable ? (
-            <button
-              type="button"
-              onClick={() => setImporting(true)}
-              className="inline-flex h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[var(--pf-navy)] shadow-sm"
-            >
-              Importar CSV
-            </button>
-          ) : null}
+          <ProductSheetButtons writable={Boolean(data.writable)} onMessage={setNotice} onError={setError} onDone={reload} />
         </div>
 
         <p className="text-sm text-slate-500">
@@ -313,17 +301,6 @@ export function CatalogPage() {
           ) : null}
         </div>
       </div>
-
-      {importing ? (
-        <CatalogImport
-          onClose={() => setImporting(false)}
-          onDone={async (text) => {
-            setImporting(false)
-            setNotice(text)
-            await reload()
-          }}
-        />
-      ) : null}
 
       {managing ? (
         <div

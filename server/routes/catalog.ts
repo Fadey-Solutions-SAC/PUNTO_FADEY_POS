@@ -1,6 +1,7 @@
 import express, { type Express } from "express"
 import { deleteNamed, exportCatalogCsv, getProductForm, importCatalogCsv, loadCatalog, saveNamed, saveProduct, saveProductImage } from "../../lib/catalog"
 import { errorMessage } from "../../lib/errors"
+import { applyProductSheet, buildProductSheet, readProductSheet } from "../../lib/product-sheet"
 import { formatMoney, toMoneyInt } from "../../lib/money"
 import { prisma } from "../../lib/db"
 import { can } from "../../lib/roles"
@@ -245,6 +246,39 @@ export function registerCatalogRoutes(app: Express) {
       if (!req.body?.dryRun && !result.errors.length) {
         await prisma.auditLog.create({
           data: { businessId: ctx.businessId, userId: ctx.userId, action: "catalog.import", entity: "Product", detail: `${result.created} nuevos · ${result.updated} actualizados` },
+        })
+      }
+      res.json(result)
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  // Plantilla Excel de productos: descargar todos los productos (con filas vacías para nuevos) y volver a subirla.
+  app.get("/api/catalog/product-sheet", requireApiTenant, async (req: AuthedRequest, res) => {
+    try {
+      const file = await buildProductSheet(req.tenant!)
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      res.setHeader("Content-Disposition", `attachment; filename="plantilla-productos-${new Date().toLocaleDateString("en-CA")}.xlsx"`)
+      res.send(file)
+    } catch (error) {
+      res.status(400).json({ error: errorMessage(error) })
+    }
+  })
+
+  app.post("/api/catalog/product-sheet", requireApiTenant, express.raw({ type: () => true, limit: "8mb" }), async (req: AuthedRequest, res) => {
+    try {
+      const ctx = req.tenant!
+      const file = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
+      if (!file.length) throw new Error("Sube el archivo de la plantilla")
+      if (req.query.apply !== "1") {
+        res.json(await readProductSheet(ctx, file))
+        return
+      }
+      const result = await applyProductSheet(ctx, file)
+      if (result.created || result.updated) {
+        await prisma.auditLog.create({
+          data: { businessId: ctx.businessId, userId: ctx.userId, action: "catalog.import", entity: "Product", detail: `Plantilla: ${result.created} nuevos · ${result.updated} actualizados` },
         })
       }
       res.json(result)

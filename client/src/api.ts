@@ -926,11 +926,48 @@ export type StockSheetChange = {
   diff: string
 }
 
-/** Plantilla Excel de stock (Almacenes): descarga el .xlsx con los productos y su stock por almacén. */
-export async function downloadStockSheet() {
+export type ProductSheetRow = {
+  kind: "new" | "update"
+  line: number
+  id?: string
+  name: string
+  changes: string[]
+  values: { barcode: string; name: string; brand: string; cost: string; price: string; min: string; tax: string; stock: string; code: string }
+}
+
+/** Plantilla Excel de productos (Productos y marcas): todos los productos y filas vacías para nuevos. */
+export function downloadProductSheet() {
+  return downloadStockSheet("/api/catalog/product-sheet")
+}
+
+/** Sube la plantilla de productos: sin apply devuelve la vista previa; con apply guarda lo nuevo y lo modificado. */
+export async function uploadProductSheet<T extends boolean>(file: Blob, apply: T) {
   let res: Response
   try {
-    res = await fetch("/api/inventory/stock-sheet", { credentials: "include" })
+    res = await fetch(`/api/catalog/product-sheet${apply ? "?apply=1" : ""}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    })
+  } catch {
+    throw new Error("Sin conexión: no se pudo subir la plantilla")
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string }
+  if (!res.ok) {
+    if (res.status === 413) throw new Error("El archivo supera 8 MB")
+    throw new Error(data.error || `Error ${res.status}`)
+  }
+  return data as T extends true
+    ? { created: number; updated: number; failed: string[]; errors: string[] }
+    : { rows: ProductSheetRow[]; errors: string[]; total: number }
+}
+
+/** Plantilla Excel de stock (Almacenes): descarga el .xlsx con los productos y su stock por almacén. */
+export async function downloadStockSheet(url = "/api/inventory/stock-sheet") {
+  let res: Response
+  try {
+    res = await fetch(url, { credentials: "include" })
   } catch {
     throw new Error("Sin conexión: no se pudo descargar la plantilla")
   }
@@ -939,14 +976,14 @@ export async function downloadStockSheet() {
     throw new Error(data.error || `Error ${res.status}`)
   }
   const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "plantilla-stock.xlsx"
-  const url = URL.createObjectURL(await res.blob())
+  const href = URL.createObjectURL(await res.blob())
   const link = document.createElement("a")
-  link.href = url
+  link.href = href
   link.download = name
   document.body.appendChild(link)
   link.click()
   link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 5000)
+  setTimeout(() => URL.revokeObjectURL(href), 5000)
 }
 
 /** Sube la plantilla: sin apply devuelve la vista previa de cambios; con apply ajusta el stock. */
