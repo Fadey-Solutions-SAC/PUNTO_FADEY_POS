@@ -10,8 +10,9 @@ import type { Link, ToolResult } from "@/lib/pix/data"
 import { calendarText, foodFactsText, openFoodFacts, pricesText, sizeNorm, supermarketPrices } from "@/lib/pix/external"
 import { findGuide, guidesFor, guideText } from "@/lib/pix/guides"
 import { forgetAll, forgetMatching, recall, rememberNote, setGoal, type Memory } from "@/lib/pix/history"
-import { fold, money, parsePeriod, searchTerms, type Period } from "@/lib/pix/text"
+import { fold, foldKeepNumbers, money, parsePeriod, searchTerms, type Period } from "@/lib/pix/text"
 import { prisma } from "@/lib/db"
+import { templateRequest, textAction, type PixAction } from "@/lib/pix/actions"
 
 export const ASSISTANT_NAME = "PIX"
 
@@ -21,6 +22,8 @@ export type PixReply = {
   suggestions: string[]
   /** Qué respondió (para el historial y las pruebas): nombre de la consulta, guía o fuente externa. */
   source: string
+  /** Cambio pendiente de confirmar con el botón «Aplicar». */
+  action?: PixAction
 }
 
 /* ───────────── Límite de mensajes y contexto de la conversación ───────────── */
@@ -57,6 +60,8 @@ export function suggestionsFor(ctx: TenantContext): string[] {
   if (has(ctx, "purchases") || data.canReports(ctx)) out.push("¿Qué debo comprar?")
   if (has(ctx, "customers")) out.push("¿Quién me debe?")
   if (has(ctx, "purchases")) out.push("¿Cuánto debo a proveedores?")
+  if (has(ctx, "catalogWrite")) out.push("Dame la plantilla de productos")
+  if (has(ctx, "adjust")) out.push("Dame la plantilla de stock")
   out.push("Precio de leche Gloria en supermercados", "Feriados y fechas comerciales que se vienen", "¿Para qué sirve Almacenes?")
   return out
 }
@@ -241,7 +246,7 @@ function parseAmount(raw: string) {
 
 async function memoryCommand(ctx: TenantContext, text: string, m: string): Promise<PixReply | null> {
   const base = { links: [], suggestions: [] as string[] }
-  const goal = m.match(/\bmi meta (diaria|del dia|de hoy|mensual|del mes|de ventas)?\s*(?:diaria|mensual)?\s*(?:es|sera|de)\s*(?:s\/\.?\s*)?([\d.,]+)/)
+  const goal = foldKeepNumbers(text).match(/\bmi meta (diaria|del dia|de hoy|mensual|del mes|de ventas)?\s*(?:diaria|mensual)?\s*(?:es|sera|de)\s*(?:s\/\.?\s*)?([\d.,]+)/)
   if (goal) {
     const amount = parseAmount(goal[2])
     if (!amount) return null
@@ -310,7 +315,7 @@ function isHowTo(m: string) {
 }
 
 function wantsStorePrices(m: string) {
-  return /supermercad|plaza ?vea|\bwong\b|\bmetro\b|\btottus\b|\bvivanda\b|competencia|precio (de )?referencia|precios? (en el|del) mercado|cuanto (cuesta|venden|lo venden) (afuera|en otro|en la competencia|en el super)|precio sugerido|a cuanto (lo )?venden|esta caro|estoy caro|mas caro que/.test(m)
+  return /supermercad|precios? (de )?referencia|precios? referencial|busca(r)? precios?|compara(r)? precios?|precios? (de|en) (la )?competencia|plaza ?vea|\bwong\b|\bmetro\b|\btottus\b|\bvivanda\b|competencia|precio (de )?referencia|precios? (en el|del) mercado|cuanto (cuesta|venden|lo venden) (afuera|en otro|en la competencia|en el super)|precio sugerido|a cuanto (lo )?venden|esta caro|estoy caro|mas caro que/.test(m)
 }
 
 function wantsCalendar(m: string) {
@@ -331,6 +336,19 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
 
   const mem = await memoryCommand(ctx, text, m)
   if (mem) return mem
+
+  // Cambios en el sistema (siempre con confirmación) y entrega de plantillas.
+  const change = await textAction(ctx, text, foldKeepNumbers(text))
+  if (change) return { ...change, suggestions: [] }
+  const template = templateRequest(ctx, m)
+  if (template) return { ...template, suggestions: [] }
+
+  // Respuesta a «¿de qué producto busco el precio?»: el siguiente mensaje es el producto.
+  const lastAsk = LAST_INTENT.get(ctx.userId)
+  if (lastAsk?.intent === "store_prices_ask" && Date.now() - lastAsk.at < 10 * 60 * 1000 && !detectIntent(m) && !isHowTo(m)) {
+    LAST_INTENT.delete(ctx.userId)
+    if (!wantsStorePrices(m)) return answer(ctx, `precio de ${text} en supermercados`)
+  }
 
   if (isGreeting(m)) {
     const name = ctx.userName.split(/\s+/)[0]
@@ -356,6 +374,7 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
         "- **Datos del negocio:** " + [data.canReports(ctx) || has(ctx, "sell") ? "ventas" : "", "productos más vendidos", "stock y alertas", "vencimientos", has(ctx, "cash") ? "caja" : "", has(ctx, "purchases") ? "compras y proveedores" : "", has(ctx, "customers") ? "clientes y deudas" : "", data.canReports(ctx) ? "márgenes, marcas, horas punta, valor del inventario" : ""].filter(Boolean).join(", ") + ".",
         "- **Guías:** para qué sirve y cómo se usa cada módulo que tienes: " + modules.join(", ") + ".",
         "- **Afuera:** precios de referencia en Plaza Vea, Wong y Metro; datos de un producto por código de barras (Open Food Facts); feriados y fechas comerciales.",
+        "- **Cambios con tu confirmación:** te entrego la plantilla de productos o de stock y, cuando la subes con el clip 📎, te muestro qué cambia y lo aplico al pulsar Aplicar; también «cambia el precio de arroz a 3.50» o «pon el stock mínimo de cebolla en 20».",
         "- **Memoria:** «recuerda que…», «mi meta diaria es S/ 1500», «¿qué recuerdas?».",
         "",
         "Puedes preguntar con fechas: «ventas de ayer», «más vendidos de octubre», «del 1/11 al 15/11», y luego «¿y la semana pasada?».",
@@ -401,7 +420,10 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
 
   if (wantsStorePrices(m)) {
     const terms = searchTerms(sizeNorm(text), ["competencia", "plaza", "vea", "wong", "metro", "tottus", "vivanda", "esta", "caro", "estoy", "barato", "lo", "venden", "afuera", "otro", "otros", "sugerido", "mi", "en", "el"])
-    if (!terms.length) return { reply: "Dime qué producto buscar, por ejemplo «precio de aceite Primor 1 L en supermercados».", links: [], suggestions: [], source: "store_prices" }
+    if (!terms.length) {
+      LAST_INTENT.set(ctx.userId, { intent: "store_prices_ask", at: Date.now() })
+      return { reply: "¿De qué producto busco el precio de referencia? Escribe el nombre y, si puedes, la marca y el tamaño (por ejemplo «aceite Primor 900 ml» o «leche Gloria 400 g»). Busco en Plaza Vea, Wong y Metro.", links: [], suggestions: [], source: "store_prices_ask" }
+    }
     const query = terms.join(" ")
     const own = await data.searchProducts(ctx, terms.filter((t) => !/^\d/.test(t)))
     const only = [/plaza ?vea/.test(m) ? "Plaza Vea" : "", /\bwong\b/.test(m) ? "Wong" : "", /\bmetro\b/.test(m) ? "Metro" : ""].filter(Boolean)

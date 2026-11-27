@@ -1818,25 +1818,51 @@ export function cancelPurchaseRequirement() {
 
 /* ───────────── Asistente PIX ───────────── */
 
-export type PixLink = { label: string; href: string }
-export type PixMessage = { id: string; role: "user" | "assistant"; content: string; links?: PixLink[]; createdAt?: string }
-export type PixAnswer = { id: string; reply: string; links: PixLink[]; suggestions: string[]; source: string }
+export type PixLink = { label: string; href: string; download?: boolean }
+export type PixAction = { id: string; label: string }
+export type PixMessage = { id: string; role: "user" | "assistant"; content: string; links?: PixLink[]; action?: PixAction; createdAt?: string }
+export type PixAnswer = { id: string; reply: string; links: PixLink[]; suggestions: string[]; source: string; action?: PixAction }
 
 export async function getPix() {
   const data = await request<{
     name: string
     suggestions: string[]
-    messages: { id: string; role: "user" | "assistant"; content: string; sources: { links?: PixLink[] } | null; createdAt: string }[]
+    messages: { id: string; role: "user" | "assistant"; content: string; sources: { links?: PixLink[]; action?: PixAction } | null; createdAt: string }[]
   }>("/api/pix")
   return {
     name: data.name,
     suggestions: data.suggestions,
-    messages: data.messages.map((m): PixMessage => ({ id: m.id, role: m.role, content: m.content, links: m.sources?.links ?? [], createdAt: m.createdAt })),
+    messages: data.messages.map((m): PixMessage => ({ id: m.id, role: m.role, content: m.content, links: m.sources?.links ?? [], action: m.sources?.action, createdAt: m.createdAt })),
   }
 }
 
 export function askPix(message: string) {
   return request<PixAnswer>("/api/pix/chat", { method: "POST", body: JSON.stringify({ message }) })
+}
+
+/** Sube un archivo (plantilla Excel) al chat: PIX responde con la vista previa y el botón Aplicar. */
+export async function sendPixFile(file: File) {
+  let res: Response
+  try {
+    res = await fetch(`/api/pix/file?name=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    })
+  } catch {
+    throw new OfflineError("Sin conexión: no se pudo subir el archivo.")
+  }
+  const data = (await res.json().catch(() => ({}))) as PixAnswer & { error?: string }
+  if (!res.ok) {
+    if (res.status === 413) throw new Error("El archivo supera 8 MB")
+    throw new Error(data.error || `Error ${res.status}`)
+  }
+  return data
+}
+
+export function runPixAction(id: string, cancel = false) {
+  return request<PixAnswer>(`/api/pix/action/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ cancel }) })
 }
 
 export function clearPix() {

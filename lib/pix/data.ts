@@ -12,7 +12,8 @@ import { can } from "@/lib/roles"
 import type { TenantContext } from "@/lib/types"
 import { dayText, fold, money, pct, previousPeriod, qtyText, type Period } from "@/lib/pix/text"
 
-export type Link = { label: string; href: string }
+/** `download`: el botón descarga el archivo (plantillas) en lugar de abrir una pantalla. */
+export type Link = { label: string; href: string; download?: boolean }
 export type ToolResult = { text: string; links?: Link[] }
 
 const DAY = 24 * 60 * 60 * 1000

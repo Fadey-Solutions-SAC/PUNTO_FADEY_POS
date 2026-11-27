@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowRight, Eraser, SendHorizontal, Sparkles, X } from "lucide-react"
-import { askPix, clearPix, getPix, isOfflineError, type PixLink, type PixMessage } from "../api"
+import { ArrowRight, Check, Download, Eraser, Paperclip, SendHorizontal, Sparkles, X } from "lucide-react"
+import { askPix, clearPix, downloadStockSheet, getPix, isOfflineError, runPixAction, sendPixFile, type PixAnswer, type PixLink, type PixMessage } from "../api"
 
 /** Negritas (**texto**) e itálicas (_texto_) dentro de una línea, sin HTML. */
 function inline(text: string): ReactNode[] {
@@ -62,6 +62,7 @@ export function PixChat({ open, onClose }: { open: boolean; onClose: () => void 
   const [error, setError] = useState("")
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -90,6 +91,46 @@ export function PixChat({ open, onClose }: { open: boolean; onClose: () => void 
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onClose])
 
+  function failMessage(err: unknown) {
+    return isOfflineError(err) ? "Sin conexión con el servidor. Intenta de nuevo cuando vuelva la red." : err instanceof Error ? err.message : "No se pudo enviar."
+  }
+
+  function addAnswer(res: PixAnswer) {
+    setMessages((list) => [...list, { id: res.id, role: "assistant", content: res.reply, links: res.links, action: res.action }])
+    if (res.suggestions.length) setSuggestions(res.suggestions)
+  }
+
+  async function upload(file: File) {
+    if (busy) return
+    setError("")
+    setMessages((list) => [...list, { id: `local-${Date.now()}`, role: "user", content: `📎 ${file.name}` }])
+    setBusy(true)
+    try {
+      addAnswer(await sendPixFile(file))
+    } catch (err) {
+      setError(failMessage(err))
+    } finally {
+      setBusy(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
+  async function act(message: PixMessage, cancel: boolean) {
+    if (!message.action || busy) return
+    const id = message.action.id
+    setError("")
+    // El botón desaparece al pulsarlo: cada cambio se aplica una sola vez.
+    setMessages((list) => [...list.map((m) => (m.id === message.id ? { ...m, action: undefined } : m)), { id: `local-${Date.now()}`, role: "user", content: cancel ? "Cancelar" : "Aplicar cambios" }])
+    setBusy(true)
+    try {
+      addAnswer(await runPixAction(id, cancel))
+    } catch (err) {
+      setError(failMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function send(question: string) {
     const value = question.trim()
     if (!value || busy) return
@@ -98,11 +139,9 @@ export function PixChat({ open, onClose }: { open: boolean; onClose: () => void 
     setMessages((list) => [...list, { id: `local-${Date.now()}`, role: "user", content: value }])
     setBusy(true)
     try {
-      const res = await askPix(value)
-      setMessages((list) => [...list, { id: res.id, role: "assistant", content: res.reply, links: res.links }])
-      if (res.suggestions.length) setSuggestions(res.suggestions)
+      addAnswer(await askPix(value))
     } catch (err) {
-      setError(isOfflineError(err) ? "Sin conexión con el servidor. Intenta de nuevo cuando vuelva la red." : err instanceof Error ? err.message : "No se pudo enviar.")
+      setError(failMessage(err))
     } finally {
       setBusy(false)
       inputRef.current?.focus()
@@ -121,6 +160,10 @@ export function PixChat({ open, onClose }: { open: boolean; onClose: () => void 
   }
 
   function go(link: PixLink) {
+    if (link.download) {
+      downloadStockSheet(link.href).catch((err) => setError(failMessage(err)))
+      return
+    }
     navigate(link.href)
     if (window.innerWidth < 1024) onClose()
   }
@@ -165,7 +208,7 @@ export function PixChat({ open, onClose }: { open: boolean; onClose: () => void 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
               <p className="font-semibold text-[var(--pf-navy)]">Hola, soy {name}.</p>
               <p className="mt-1">
-                Pregúntame por tus ventas, stock, vencimientos, caja, compras o clientes; cómo se usa cada módulo; o precios de referencia en supermercados y datos de un producto por su código de barras.
+                Pregúntame por tus ventas, stock, vencimientos, caja, compras o clientes; cómo se usa cada módulo; o precios de referencia en supermercados y datos de un producto por su código de barras. También hago cambios con tu confirmación: pídeme la plantilla de productos o de stock y súbela con el clip 📎, o dime «cambia el precio de arroz a 3.50».
               </p>
             </div>
           ) : null}
@@ -192,10 +235,32 @@ export function PixChat({ open, onClose }: { open: boolean; onClose: () => void 
                           onClick={() => go(link)}
                           className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-[var(--pf-navy)] hover:bg-slate-200"
                         >
+                          {link.download ? <Download size={12} /> : null}
                           {link.label}
-                          <ArrowRight size={12} />
+                          {link.download ? null : <ArrowRight size={12} />}
                         </button>
                       ))}
+                    </div>
+                  ) : null}
+                  {m.action ? (
+                    <div className="mt-2.5 flex flex-wrap gap-2 border-t border-slate-100 pt-2.5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => act(m, false)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        <Check size={13} />
+                        {m.action.label}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => act(m, true)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -238,6 +303,26 @@ export function PixChat({ open, onClose }: { open: boolean; onClose: () => void 
             void send(text)
           }}
         >
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void upload(file)
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-[var(--pf-navy)] disabled:opacity-40"
+            title="Subir plantilla Excel (productos o stock)"
+            aria-label="Subir plantilla Excel"
+          >
+            <Paperclip size={17} />
+          </button>
           <textarea
             ref={inputRef}
             value={text}

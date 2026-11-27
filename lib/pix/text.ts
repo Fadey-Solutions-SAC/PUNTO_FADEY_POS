@@ -4,6 +4,20 @@
  * Las fechas se calculan en hora de Perú (el servidor corre con TZ=America/Lima).
  */
 
+/** Como `fold` pero conserva puntos y comas de los números («5.80», «1,5»). Para órdenes con montos. */
+export function foldKeepNumbers(text: string) {
+  return String(text ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[¿?¡!"“”()]/g, " ")
+    .replace(/(\d)[.,](\d)/g, "$1#$2")
+    .replace(/[.,;:]/g, " ")
+    .replace(/#/g, ".")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 /** Minúsculas, sin tildes ni signos, espacios simples. */
 export function fold(text: string) {
   return String(text ?? "")
