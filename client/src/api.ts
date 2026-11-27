@@ -1820,19 +1820,20 @@ export function cancelPurchaseRequirement() {
 
 export type PixLink = { label: string; href: string; download?: boolean }
 export type PixAction = { id: string; label: string }
-export type PixMessage = { id: string; role: "user" | "assistant"; content: string; links?: PixLink[]; action?: PixAction; createdAt?: string }
-export type PixAnswer = { id: string; reply: string; links: PixLink[]; suggestions: string[]; source: string; action?: PixAction }
+export type PixKpi = { label: string; value: string; hint?: string; tone?: "blue" | "gold" | "green" | "red" | "slate"; trend?: "up" | "down" }
+export type PixMessage = { id: string; role: "user" | "assistant"; content: string; links?: PixLink[]; action?: PixAction; kpis?: PixKpi[]; createdAt?: string }
+export type PixAnswer = { id: string; reply: string; links: PixLink[]; suggestions: string[]; source: string; action?: PixAction; kpis?: PixKpi[] }
 
 export async function getPix() {
   const data = await request<{
     name: string
     suggestions: string[]
-    messages: { id: string; role: "user" | "assistant"; content: string; sources: { links?: PixLink[]; action?: PixAction } | null; createdAt: string }[]
+    messages: { id: string; role: "user" | "assistant"; content: string; sources: { links?: PixLink[]; action?: PixAction; kpis?: PixKpi[] } | null; createdAt: string }[]
   }>("/api/pix")
   return {
     name: data.name,
     suggestions: data.suggestions,
-    messages: data.messages.map((m): PixMessage => ({ id: m.id, role: m.role, content: m.content, links: m.sources?.links ?? [], action: m.sources?.action, createdAt: m.createdAt })),
+    messages: data.messages.map((m): PixMessage => ({ id: m.id, role: m.role, content: m.content, links: m.sources?.links ?? [], action: m.sources?.action, kpis: m.sources?.kpis, createdAt: m.createdAt })),
   }
 }
 

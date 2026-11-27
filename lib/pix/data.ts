@@ -14,7 +14,15 @@ import { dayText, fold, money, pct, previousPeriod, qtyText, type Period } from 
 
 /** `download`: el botón descarga el archivo (plantillas) en lugar de abrir una pantalla. */
 export type Link = { label: string; href: string; download?: boolean }
-export type ToolResult = { text: string; links?: Link[] }
+/** Tarjeta de indicador que el chat muestra arriba de la respuesta. */
+export type Kpi = { label: string; value: string; hint?: string; tone?: "blue" | "gold" | "green" | "red" | "slate"; trend?: "up" | "down" }
+export type ToolResult = { text: string; links?: Link[]; kpis?: Kpi[] }
+
+function trendKpi(current: number, before: number): Pick<Kpi, "hint" | "trend" | "tone"> {
+  if (!before) return { hint: "sin período anterior", tone: "blue" }
+  const diff = ((current - before) / Math.abs(before)) * 100
+  return { hint: `${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(0)} % vs. anterior`, trend: diff >= 0 ? "up" : "down", tone: diff >= 0 ? "green" : "red" }
+}
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -87,9 +95,18 @@ export async function salesSummary(ctx: TenantContext, period: Period, opts: { m
   }
   if (full) {
     const report = await salesReport(ctx, { from: period.from, to: period.to })
-    lines.push("", `Ganancia bruta estimada (venta − costo): **${money(report.gross, ctx.currency)}** · margen ${pct(report.gross, report.total)}.`)
+    lines.push("", `Tu ganancia bruta estimada (venta − costo): **${money(report.gross, ctx.currency)}** · margen ${pct(report.gross, report.total)}.`)
   }
-  return { text: lines.join("\n"), links: full ? [{ label: "Ver informes", href: "/informes" }] : [{ label: "Historial de ventas", href: "/ventas/historial" }] }
+  const kpis: Kpi[] = [
+    { label: "Ventas", value: money(now.total, ctx.currency), ...trendKpi(now.total, before.total) },
+    { label: "N.º de ventas", value: String(now.count), tone: "slate" },
+    { label: "Ticket promedio", value: money(now.count ? Math.round(now.total / now.count) : 0, ctx.currency), tone: "gold" },
+  ]
+  if (full) {
+    const report = await salesReport(ctx, { from: period.from, to: period.to })
+    kpis.push({ label: "Margen bruto", value: pct(report.gross, report.total), hint: money(report.gross, ctx.currency), tone: report.total && report.gross / report.total < 0.15 ? "red" : "green" })
+  }
+  return { text: lines.join("\n"), kpis, links: full ? [{ label: "Ver informes", href: "/informes" }] : [{ label: "Historial de ventas", href: "/ventas/historial" }] }
 }
 
 /** Productos más (o menos) vendidos. Sin permiso de informes se muestran solo cantidades. */
@@ -292,7 +309,15 @@ export async function lowStock(ctx: TenantContext): Promise<ToolResult> {
     if (empty.length > 12) lines.push(`…y ${empty.length - 12} más.`)
   }
   lines.push("", "Suma el stock de todos los almacenes activos.")
-  return { text: lines.join("\n").trim(), links: [{ label: "Alertas de stock", href: "/inventario/alertas" }, { label: "Requerimiento", href: "/compras/requerimiento" }] }
+  return {
+    text: lines.join("\n").trim(),
+    kpis: [
+      { label: "Agotados", value: String(empty.length), tone: empty.length ? "red" : "green" },
+      { label: "Bajo el mínimo", value: String(low.length), tone: low.length ? "gold" : "green" },
+      { label: "Productos activos", value: String(products.length), tone: "slate" },
+    ],
+    links: [{ label: "Alertas de stock", href: "/inventario/alertas" }, { label: "Requerimiento", href: "/compras/requerimiento" }],
+  }
 }
 
 export async function expiring(ctx: TenantContext, days = 30): Promise<ToolResult> {
@@ -315,7 +340,14 @@ export async function expiring(ctx: TenantContext, days = 30): Promise<ToolResul
   if (expired.length) lines.push(`**Ya vencidos (${expired.length}):**`, ...expired.slice(0, 10).map(fmt), "")
   if (soon.length) lines.push(`**Vencen en los próximos ${days} días (${soon.length}):**`, ...soon.slice(0, 15).map(fmt))
   lines.push("", "Sugerencia: pon adelante lo que vence antes, haz una oferta o regístralo como merma si ya no se puede vender.")
-  return { text: lines.join("\n").trim(), links: [{ label: "Alertas de stock", href: "/inventario/alertas" }, { label: "Mermas", href: "/inventario/conteo?v=mermas" }] }
+  return {
+    text: lines.join("\n").trim(),
+    kpis: [
+      { label: "Ya vencidos", value: String(expired.length), tone: expired.length ? "red" : "green" },
+      { label: `Vencen en ${days} días`, value: String(soon.length), tone: soon.length ? "gold" : "green" },
+    ],
+    links: [{ label: "Alertas de stock", href: "/inventario/alertas" }, { label: "Mermas", href: "/inventario/conteo?v=mermas" }],
+  }
 }
 
 /** Productos con stock que no se venden hace N días (capital inmovilizado). */
@@ -406,6 +438,11 @@ export async function reorderSuggestion(ctx: TenantContext): Promise<ToolResult>
     ]
       .filter(Boolean)
       .join("\n"),
+    kpis: [
+      { label: "Por reponer", value: String(rows.length), tone: "gold" },
+      { label: "Más urgente", value: rows[0].name, hint: Number.isFinite(rows[0].daysLeft) ? `~${Math.floor(rows[0].daysLeft)} día(s) de stock` : "bajo el mínimo", tone: "red" },
+      ...(showCost ? [{ label: "Inversión estimada", value: money(total, ctx.currency), tone: "blue" as const }] : []),
+    ],
     links: [{ label: "Armar requerimiento", href: "/compras/requerimiento" }],
   }
 }
@@ -453,6 +490,11 @@ export async function inventoryValueReport(ctx: TenantContext): Promise<ToolResu
       `**Valor del inventario:** ${money(total.cost, ctx.currency)} al costo · ${money(total.sale, ctx.currency)} a precio de venta (ganancia potencial ${money(total.sale - total.cost, ctx.currency)}).`,
       ...[...per.entries()].map(([name, r]) => `- ${name}: ${money(r.cost, ctx.currency)} al costo · ${r.items} producto(s) con stock`),
     ].join("\n"),
+    kpis: [
+      { label: "Al costo", value: money(total.cost, ctx.currency), tone: "blue" },
+      { label: "A precio de venta", value: money(total.sale, ctx.currency), tone: "gold" },
+      { label: "Ganancia potencial", value: money(total.sale - total.cost, ctx.currency), tone: total.sale >= total.cost ? "green" : "red" },
+    ],
     links: [{ label: "Almacenes", href: "/inventario/almacenes" }],
   }
 }
@@ -504,7 +546,15 @@ export async function cashStatus(ctx: TenantContext): Promise<ToolResult> {
       ].join("\n"),
     )
   }
-  return { text: blocks.join("\n\n"), links: can(ctx.role, "cashClose", ctx.grants) ? [{ label: "Cierre de caja", href: "/caja/cierre" }] : undefined }
+  const expectedTotal = (await Promise.all(sessions.map((s) => summarizeSession(ctx, s.id)))).reduce((sum, r) => sum + r.expected, 0)
+  return {
+    text: blocks.join("\n\n"),
+    kpis: [
+      { label: "Cajas abiertas", value: String(sessions.length), tone: "blue" },
+      { label: "Efectivo esperado", value: money(expectedTotal, ctx.currency), tone: "green" },
+    ],
+    links: can(ctx.role, "cashClose", ctx.grants) ? [{ label: "Cierre de caja", href: "/caja/cierre" }] : undefined,
+  }
 }
 
 export async function cashMovements(ctx: TenantContext, period: Period): Promise<ToolResult> {
@@ -549,6 +599,11 @@ export async function payables(ctx: TenantContext): Promise<ToolResult> {
         .sort((a, b) => b[1].debt - a[1].debt)
         .map(([name, r]) => `- ${name}: ${money(r.debt, ctx.currency)} (desde ${dayText(r.oldest)})${r.overdue ? ` · ⚠️ vencido ${money(r.overdue, ctx.currency)}` : ""}`),
     ].join("\n"),
+    kpis: [
+      { label: "Por pagar", value: money(total, ctx.currency), tone: "gold" },
+      { label: "Compras pendientes", value: String(open.length), tone: "slate" },
+      { label: "Vencido", value: money([...bySupplier.values()].reduce((s, r) => s + r.overdue, 0), ctx.currency), tone: [...bySupplier.values()].some((r) => r.overdue) ? "red" : "green" },
+    ],
     links: [{ label: "Pago pendiente", href: "/compras/por-pagar" }],
   }
 }
@@ -609,6 +664,11 @@ export async function receivables(ctx: TenantContext): Promise<ToolResult> {
       `**Cuentas por cobrar:** ${money(total, ctx.currency)} de ${customers.length} cliente(s).`,
       ...customers.slice(0, 15).map((c) => `- ${c.name}: ${money(c.balance, ctx.currency)}${c.creditLimit && c.balance > c.creditLimit ? " ⚠️ supera su límite" : ""}${c.phone ? ` · ☎ ${c.phone}` : ""}`),
     ].join("\n"),
+    kpis: [
+      { label: "Por cobrar", value: money(total, ctx.currency), tone: "gold" },
+      { label: "Clientes con deuda", value: String(customers.length), tone: "slate" },
+      { label: "Mayor deuda", value: customers[0].name, hint: money(customers[0].balance, ctx.currency), tone: "red" },
+    ],
     links: [{ label: "Cuentas pendientes", href: "/ventas" }, { label: "Clientes", href: "/clientes" }],
   }
 }
@@ -709,6 +769,6 @@ export async function briefing(ctx: TenantContext, period: Period): Promise<Tool
     const open = await prisma.cashSession.count({ where: { businessId: ctx.businessId, status: "OPEN" } })
     parts.push(`Cajas abiertas: ${open}.`)
   }
-  parts.push("", alerts.length ? `**Para atender:**\n${alerts.map((a) => `- ${a}`).join("\n")}` : "Sin alertas pendientes. ✅")
-  return { text: parts.join("\n"), links: [{ label: "Panel principal", href: "/" }] }
+  parts.push("", alerts.length ? `**Esto necesita tu atención:**\n${alerts.map((a) => `- ${a}`).join("\n")}` : "Todo en orden por ahora. ✅")
+  return { text: parts.join("\n"), kpis: [...(sales.kpis ?? [{ label: "Ventas", value: money(0, ctx.currency), hint: "aún sin ventas", tone: "slate" as const }]).slice(0, 2), { label: "Bajo mínimo / agotados", value: `${lowCount} / ${emptyCount}`, tone: lowCount + emptyCount ? "red" : "green" }, { label: "Vencen en 15 días", value: String(expSoon), tone: expSoon ? "gold" : "green" }], links: [{ label: "Panel principal", href: "/" }] }
 }

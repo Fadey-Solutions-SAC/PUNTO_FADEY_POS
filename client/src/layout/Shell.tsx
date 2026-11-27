@@ -24,7 +24,6 @@ import {
   Settings,
   ShoppingBag,
   SlidersHorizontal,
-  Sparkles,
   Tags,
   Truck,
   Undo2,
@@ -40,7 +39,7 @@ import type { PanelBootstrap } from "../api"
 import { isServerReachable, logout, SERVER_EVENT } from "../api"
 import { formatAppPath } from "../nav"
 import { setReaderEnabled } from "../components/Scanner"
-import { PixChat } from "../components/PixChat"
+import { PixAvatar, PixChat } from "../components/PixChat"
 import { clearOfflineCache, OFFLINE_EVENT, pendingCount } from "../offline"
 
 type LucideIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
@@ -376,8 +375,8 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
 
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-              pixOpen ? "bg-[var(--pf-accent)] text-white" : "bg-white/10 text-[var(--pf-panel-ink)] hover:bg-[var(--pf-panel-hover)]"
+            className={`relative inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#050b1f] to-[#123a8a] py-0.5 pl-0.5 pr-3 text-xs font-black italic tracking-wide text-[#fcd34d] shadow-[0_0_12px_rgba(56,189,248,0.45)] ring-1 transition ${
+              pixOpen ? "ring-[#f5b301]" : "ring-[#38bdf8]/60 hover:ring-[#f5b301]"
             }`}
             onClick={() => {
               setPixOpen((value) => !value)
@@ -387,7 +386,8 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
             aria-label="Asistente PIX"
             title="Asistente PIX"
           >
-            <Sparkles size={14} />
+            {pixOpen ? null : <span className="absolute -left-0.5 -top-0.5 size-[30px] animate-ping rounded-full bg-[#38bdf8]/30 [animation-duration:2.5s]" aria-hidden />}
+            <PixAvatar size={28} />
             PIX
           </button>
 

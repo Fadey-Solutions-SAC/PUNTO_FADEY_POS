@@ -247,3 +247,53 @@ export function calendarText(days = 45) {
   lines.push("_Feriados nacionales según la ley vigente; el Gobierno puede declarar días no laborables adicionales._")
   return lines.join("\n")
 }
+
+/* ───────────── Wikipedia (español): qué es un producto o categoría ───────────── */
+
+export type WikiSummary = { title: string; extract: string; url: string }
+
+export async function wikipediaSummary(term: string): Promise<WikiSummary | null> {
+  const q = term.trim()
+  if (q.length < 3) return null
+  return cached(`wiki:${fold(q)}`, async () => {
+    const search = (await getJson(`https://es.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(q)}&limit=1&namespace=0&format=json`, 6000)) as [string, string[], string[], string[]]
+    const title = search?.[1]?.[0]
+    if (!title) return null
+    const page = (await getJson(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`, 6000)) as { type?: string; extract?: string; content_urls?: { desktop?: { page?: string } } }
+    if (!page?.extract || page.type === "disambiguation") return null
+    // Las dos primeras oraciones bastan para el chat.
+    const sentences = page.extract.split(/(?<=\.)\s+/).slice(0, 2).join(" ")
+    return { title, extract: sentences.slice(0, 420), url: page.content_urls?.desktop?.page ?? `https://es.wikipedia.org/wiki/${encodeURIComponent(title)}` }
+  })
+}
+
+/* ───────────── Open Food Facts por nombre (cuando no hay código de barras) ───────────── */
+
+export async function foodFactsByName(query: string): Promise<FoodFacts | null> {
+  const q = query.trim()
+  if (q.length < 3) return null
+  return cached(`offq:${fold(q)}`, async () => {
+    const data = (await getJson(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=5&fields=code,product_name,brands,quantity,nutriscore_grade,categories_tags`, 7000)) as {
+      hits?: { code?: string; product_name?: string; brands?: string[] | string; quantity?: string; nutriscore_grade?: string; categories_tags?: string[] }[]
+    }
+    const words = fold(q).split(" ").filter((w) => w.length > 2)
+    // Solo un resultado que contenga todas las palabras buscadas (evita «galleta de arroz» al buscar «arroz»).
+    const hit = (data.hits ?? []).find((h) => {
+      const brand = Array.isArray(h.brands) ? h.brands.join(" ") : h.brands ?? ""
+      const name = fold(`${h.product_name ?? ""} ${brand.replace(/^xx:/, "")}`)
+      return h.product_name && words.every((w) => name.includes(w)) && fold(h.product_name).startsWith(words[0])
+    })
+    if (!hit?.code) return null
+    const brand = (Array.isArray(hit.brands) ? hit.brands[0] : hit.brands ?? "").replace(/^\w\w:/, "")
+    return {
+      code: hit.code,
+      name: hit.product_name ?? "",
+      brand,
+      quantity: hit.quantity ?? "",
+      categories: (hit.categories_tags ?? []).slice(-2).map((c) => c.replace(/^\w\w:/, "").replace(/-/g, " ")).join(", "),
+      nutriscore: /^[a-e]$/.test(hit.nutriscore_grade ?? "") ? hit.nutriscore_grade!.toUpperCase() : "",
+      ingredients: "",
+      image: null,
+    }
+  })
+}

@@ -6,13 +6,14 @@
 import { can, ROLE_LABEL, type Permission } from "@/lib/roles"
 import type { TenantContext } from "@/lib/types"
 import * as data from "@/lib/pix/data"
-import type { Link, ToolResult } from "@/lib/pix/data"
+import type { Kpi, Link, ToolResult } from "@/lib/pix/data"
 import { calendarText, foodFactsText, openFoodFacts, pricesText, sizeNorm, supermarketPrices } from "@/lib/pix/external"
 import { findGuide, guidesFor, guideText } from "@/lib/pix/guides"
 import { forgetAll, forgetMatching, recall, rememberNote, setGoal, type Memory } from "@/lib/pix/history"
 import { fold, foldKeepNumbers, money, parsePeriod, searchTerms, type Period } from "@/lib/pix/text"
 import { prisma } from "@/lib/db"
 import { templateRequest, textAction, type PixAction } from "@/lib/pix/actions"
+import { expertTopic, growthPlan, metrics, productInsight, topicScore } from "@/lib/pix/advisor"
 
 export const ASSISTANT_NAME = "PIX"
 
@@ -24,6 +25,8 @@ export type PixReply = {
   source: string
   /** Cambio pendiente de confirmar con el botón «Aplicar». */
   action?: PixAction
+  /** Tarjetas de indicadores que el chat muestra arriba del texto. */
+  kpis?: Kpi[]
 }
 
 /* ───────────── Límite de mensajes y contexto de la conversación ───────────── */
@@ -62,6 +65,8 @@ export function suggestionsFor(ctx: TenantContext): string[] {
   if (has(ctx, "purchases")) out.push("¿Cuánto debo a proveedores?")
   if (has(ctx, "catalogWrite")) out.push("Dame la plantilla de productos")
   if (has(ctx, "adjust")) out.push("Dame la plantilla de stock")
+  if (data.canReports(ctx)) out.splice(1, 0, "¿Cómo hago crecer mi negocio?")
+  out.push("Análisis del producto más vendido", "Ideas de promociones para vender más")
   out.push("Precio de leche Gloria en supermercados", "Feriados y fechas comerciales que se vienen", "¿Para qué sirve Almacenes?")
   return out
 }
@@ -302,6 +307,24 @@ async function goalLine(ctx: TenantContext, memory: Memory, period: Period) {
 
 /* ───────────── Respuesta principal ───────────── */
 
+function wantsGrowth(m: string) {
+  return /(hacer |como )?crec(er|e|a|imiento)( mi| el| del)? (negocio|tienda|bodega|minimarket)|siguiente nivel|proximo nivel|llevar (mi |el )?(negocio|tienda|bodega) (a|al)|(mejorar|potenciar|escalar) (mi|el) (negocio|tienda|bodega|minimarket)|diagnostico( del| de mi)? (negocio|tienda)|analiza(r)? (mi|el) negocio|analisis (de mi|del) negocio|plan (para|de) (crecer|crecimiento|mejora|negocio)|(que|cuales) (me )?recomiendas? (para|hacer)|consejos? (para|de) (mi|el) negocio|como (gano|ganar|ganamos) mas|como mejoro (mi|el) negocio|que debo mejorar|en que (estoy fallando|fallo|debo mejorar)/.test(m)
+}
+
+function wantsAdvice(m: string) {
+  return /como (puedo |hago (para )?|deberia |se puede |podria )?(reducir|evitar|mejorar|aumentar|vender|atraer|conseguir|fidelizar|negociar|controlar|manejar|fijar|fijo|calculo|calcular|pongo|poner|subir|bajar|ordenar|exhibir|acomodar|expandir|formalizar|retener|ahorrar|separar|crecer|empezar|hacer (promociones|ofertas|combos|delivery|marketing|publicidad))|consejos?|recomienda|recomendaciones|estrategia|ideas?|tips|que (hago|me conviene|conviene)|deberia|vale la pena|es bueno|como experto|mejores practicas|claves? para/.test(m)
+}
+
+function mentionsSystem(m: string) {
+  return /(modulo|pantalla|sistema|punto fadey|boton|menu|registr[a-z]*|configur[a-z]*|descarg[a-z]*|subo|subir la|imprim[a-z]*|en la app)/.test(m)
+}
+
+const NL = String.fromCharCode(10)
+
+function wantsInsight(m: string) {
+  return /hablame|cuentame|analiza|analisis|ficha|todo (sobre|del|de)|que sabes|investiga|(busca|informacion|info|datos) (en|de) (la red|internet|la web)|informacion (completa|del producto)|como (va|le va|esta yendo|se vende|vendo) (el|la|los|las|mi)|que opinas|que me recomiendas con|experto en/.test(m)
+}
+
 function isGreeting(m: string) {
   return /^(hola|holi|holaa+|buenas|buenos dias|buenas tardes|buenas noches|hey|saludos|que tal)( pix)?( [a-z]+)?$/.test(m)
 }
@@ -332,7 +355,7 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
   const text = String(message ?? "").trim().slice(0, 600)
   const m = fold(text)
   const suggestions = suggestionsFor(ctx)
-  const reply = (r: ToolResult, source: string, extra = ""): PixReply => ({ reply: r.text + extra, links: r.links ?? [], suggestions: [], source })
+  const reply = (r: ToolResult, source: string, extra = ""): PixReply => ({ reply: r.text + extra, links: r.links ?? [], kpis: r.kpis, suggestions: [], source })
 
   const mem = await memoryCommand(ctx, text, m)
   if (mem) return mem
@@ -350,12 +373,47 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
     if (!wantsStorePrices(m)) return answer(ctx, `precio de ${text} en supermercados`)
   }
 
+  // Consultor de negocios: plan para crecer, temas de gestión y ficha experta de un producto.
+  if (wantsGrowth(m)) {
+    if (!data.canReports(ctx)) {
+      const topic = await expertTopic(ctx, "como vender mas")
+      return { reply: `El diagnóstico completo del negocio usa ventas y márgenes, que tu usuario (${ROLE_LABEL[ctx.role]}) no puede ver. Te dejo las claves para vender más:
+
+${topic?.text ?? ""}`, links: topic?.links ?? [], suggestions: [], source: "growth_limited" }
+    }
+    const plan = await growthPlan(ctx)
+    return { reply: plan.text, links: plan.links, kpis: plan.kpis, suggestions: [], source: "growth" }
+  }
+  const topic = topicScore(m)
+  if (topic && wantsAdvice(m) && !mentionsSystem(m)) {
+    const r = await expertTopic(ctx, m)
+    if (r) return { reply: r.text, links: r.links, kpis: r.kpis, suggestions: [], source: `expert:${topic.topic.id}` }
+  }
+  if (wantsInsight(m) && /mas vendid|estrella|top/.test(m)) {
+    const best = (await metrics(ctx)).products[0]
+    if (best) {
+      const r = await productInsight(ctx, best.id)
+      return { reply: r.text, links: r.links, kpis: r.kpis, suggestions: [], source: "product_insight" }
+    }
+  }
+  if (wantsInsight(m)) {
+    const terms = searchTerms(text, ["hablame", "cuentame", "analiza", "analisis", "ficha", "todo", "sabes", "investiga", "red", "internet", "web", "info", "informacion", "como", "va", "le", "esta", "yendo", "vende", "experto", "opinas", "recomiendas", "producto", "completo", "completa"])
+    const products = terms.length ? await data.searchProducts(ctx, terms) : []
+    if (products.length === 1 || (products.length > 1 && fold(products[0].name) === terms.join(" "))) {
+      const r = await productInsight(ctx, products[0].id)
+      return { reply: r.text, links: r.links, kpis: r.kpis, suggestions: [], source: "product_insight" }
+    }
+    if (products.length > 1) {
+      return { reply: [`Encontré ${products.length} productos. ¿Cuál quieres analizar?`, ...products.slice(0, 8).map((p) => `- ${p.name}${p.brand ? ` (${p.brand.name})` : ""}`), "", `Escribe, por ejemplo, «análisis de ${products[0].name.toLowerCase()}».`].join(NL), links: [], suggestions: [], source: "product_insight_ambiguous" }
+    }
+  }
+
   if (isGreeting(m)) {
     const name = ctx.userName.split(/\s+/)[0]
     const hour = new Date().getHours()
     const hello = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches"
     return {
-      reply: `${hello}, ${name}. Soy ${ASSISTANT_NAME}, tu asistente de Punto Fadey. Respondo con los datos de ${ctx.businessName} (ventas, stock, caja, compras, clientes…), te explico cómo usar cada módulo y busco información útil afuera (precios en supermercados, productos por código de barras, feriados). Solo te muestro lo que tu usuario (${ROLE_LABEL[ctx.role]}) puede ver.\n\nElige una opción o escríbeme tu pregunta.`,
+      reply: `¡${hello}, ${name}! 👋 Soy **${ASSISTANT_NAME}**, tu socio para hacer crecer **${ctx.businessName}**.\n\nMiro tus ventas, stock, caja, compras y clientes; te digo qué está funcionando y qué mejorar, como lo haría un consultor de negocios; te explico cualquier módulo y busco en la red precios del mercado e información de tus productos. Solo te muestro lo que tu usuario (${ROLE_LABEL[ctx.role]}) puede ver.\n\n¿Por dónde empezamos? Elige una opción o escríbeme con tus palabras.`,
       links: [],
       suggestions,
       source: "greeting",
@@ -375,6 +433,7 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
         "- **Guías:** para qué sirve y cómo se usa cada módulo que tienes: " + modules.join(", ") + ".",
         "- **Afuera:** precios de referencia en Plaza Vea, Wong y Metro; datos de un producto por código de barras (Open Food Facts); feriados y fechas comerciales.",
         "- **Cambios con tu confirmación:** te entrego la plantilla de productos o de stock y, cuando la subes con el clip 📎, te muestro qué cambia y lo aplico al pulsar Aplicar; también «cambia el precio de arroz a 3.50» o «pon el stock mínimo de cebolla en 20».",
+        "- **Consultor de negocios:** «¿cómo hago crecer mi negocio?» (diagnóstico con tus números y plan 30-60-90), «análisis del arroz» (ficha del producto con tus ventas, el mercado e información de la red) y consejos de experto sobre precios, surtido, exhibición, promociones, fidelización, inventario, proveedores, flujo de caja, mermas, marketing, delivery, formalización y expansión.",
         "- **Memoria:** «recuerda que…», «mi meta diaria es S/ 1500», «¿qué recuerdas?».",
         "",
         "Puedes preguntar con fechas: «ventas de ayer», «más vendidos de octubre», «del 1/11 al 15/11», y luego «¿y la semana pasada?».",
@@ -489,6 +548,12 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
     return reply(result, intent, extra)
   }
 
+  // Tema de negocio sin pregunta explícita («promociones», «marketing»…).
+  if (topic && !mentionsSystem(m)) {
+    const r = await expertTopic(ctx, m)
+    if (r) return { reply: r.text, links: r.links, kpis: r.kpis, suggestions: [], source: `expert:${topic.topic.id}` }
+  }
+
   // Sin intención clara: guía del módulo si la menciona, o un producto del catálogo.
   const found = findGuide(ctx, text)
   if (found) {
@@ -501,7 +566,7 @@ export async function answer(ctx: TenantContext, message: string): Promise<PixRe
     if (products.length && products.length <= 3) return reply(await data.productInfo(ctx, products, "both"), "product")
   }
   return {
-    reply: "No estoy seguro de qué necesitas. Puedo responder sobre ventas, stock, vencimientos, caja, compras, clientes e informes; explicarte cualquier módulo («¿cómo registro una compra?»), o buscar precios de referencia y datos por código de barras. Prueba con una de estas opciones:",
+    reply: "Uy, no te entendí bien 😅. Puedo ayudarte con tus ventas, stock, vencimientos, caja, compras y clientes; darte consejos para hacer crecer tu negocio; explicarte cualquier módulo («¿cómo registro una compra?») o buscar precios del mercado. Prueba con una de estas opciones o pregúntame de otra forma:",
     links: [],
     suggestions,
     source: "fallback",

@@ -42,7 +42,7 @@ export function registerPixRoutes(app: Express) {
         console.error("[pix]", errorMessage(error))
         result = { reply: "Tuve un problema al consultar eso. Intenta de nuevo o pregunta de otra forma.", links: [], suggestions: [], source: "error" }
       }
-      const id = await saveMessage(ctx, "assistant", result.reply, { links: result.links, source: result.source, action: result.action })
+      const id = await saveMessage(ctx, "assistant", result.reply, { links: result.links, source: result.source, action: result.action, kpis: "kpis" in result ? result.kpis : undefined })
       pruneHistory(ctx).catch(() => undefined)
       res.json({ ...result, id })
     } catch (error) {
