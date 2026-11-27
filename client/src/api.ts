@@ -1815,3 +1815,30 @@ export function getRequirementSuggestions(input: { origen: string[]; marcas: str
 export function cancelPurchaseRequirement() {
   return request<{ ok: true }>("/api/purchases/requirement/cancel", { method: "POST" })
 }
+
+/* ───────────── Asistente PIX ───────────── */
+
+export type PixLink = { label: string; href: string }
+export type PixMessage = { id: string; role: "user" | "assistant"; content: string; links?: PixLink[]; createdAt?: string }
+export type PixAnswer = { id: string; reply: string; links: PixLink[]; suggestions: string[]; source: string }
+
+export async function getPix() {
+  const data = await request<{
+    name: string
+    suggestions: string[]
+    messages: { id: string; role: "user" | "assistant"; content: string; sources: { links?: PixLink[] } | null; createdAt: string }[]
+  }>("/api/pix")
+  return {
+    name: data.name,
+    suggestions: data.suggestions,
+    messages: data.messages.map((m): PixMessage => ({ id: m.id, role: m.role, content: m.content, links: m.sources?.links ?? [], createdAt: m.createdAt })),
+  }
+}
+
+export function askPix(message: string) {
+  return request<PixAnswer>("/api/pix/chat", { method: "POST", body: JSON.stringify({ message }) })
+}
+
+export function clearPix() {
+  return request<{ ok: true }>("/api/pix", { method: "DELETE" })
+}

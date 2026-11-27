@@ -896,3 +896,17 @@ model StockCountLine {
 
   @@unique([countId, productId])
 }
+
+/// Asistente PIX: conversación y memoria de cada usuario (role: user · assistant · memory).
+/// Sin relaciones, para no tocar las tablas existentes.
+model AssistantMessage {
+  id          String   @id @default(cuid())
+  businessId  String
+  userId      String
+  role        String
+  content     String
+  sourcesJson String?
+  createdAt   DateTime @default(now())
+
+  @@index([businessId, userId, createdAt])
+}

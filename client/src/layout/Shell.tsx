@@ -24,6 +24,7 @@ import {
   Settings,
   ShoppingBag,
   SlidersHorizontal,
+  Sparkles,
   Tags,
   Truck,
   Undo2,
@@ -39,6 +40,7 @@ import type { PanelBootstrap } from "../api"
 import { isServerReachable, logout, SERVER_EVENT } from "../api"
 import { formatAppPath } from "../nav"
 import { setReaderEnabled } from "../components/Scanner"
+import { PixChat } from "../components/PixChat"
 import { clearOfflineCache, OFFLINE_EVENT, pendingCount } from "../offline"
 
 type LucideIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
@@ -203,6 +205,7 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
   const [open, setOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [noticesOpen, setNoticesOpen] = useState(false)
+  const [pixOpen, setPixOpen] = useState(false)
   const [rail, setRail] = useState(false)
   const [online, setOnline] = useState(true)
   const [queued, setQueued] = useState(() => pendingCount())
@@ -371,6 +374,23 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
             </NavLink>
           ) : null}
 
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+              pixOpen ? "bg-[var(--pf-accent)] text-white" : "bg-white/10 text-[var(--pf-panel-ink)] hover:bg-[var(--pf-panel-hover)]"
+            }`}
+            onClick={() => {
+              setPixOpen((value) => !value)
+              setNoticesOpen(false)
+              setAccountOpen(false)
+            }}
+            aria-label="Asistente PIX"
+            title="Asistente PIX"
+          >
+            <Sparkles size={14} />
+            PIX
+          </button>
+
           <div className="relative">
             <button
               type="button"
@@ -485,6 +505,7 @@ export function Shell({ panel }: { panel: PanelBootstrap }) {
         <main className="min-w-0 flex-1 overflow-y-auto px-4 py-5 lg:px-6">
           <Outlet />
         </main>
+        <PixChat open={pixOpen} onClose={() => setPixOpen(false)} />
       </div>
     </div>
   )
