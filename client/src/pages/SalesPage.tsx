@@ -39,6 +39,39 @@ function money(cents: number) {
   return (cents / 100).toFixed(2)
 }
 
+/** Productos que se venden por peso o medida (kg, g, L, ml, m…): aceptan cantidades con decimales. */
+function isWeighed(product: { unit?: string; factor?: number }) {
+  const unit = (product.unit ?? "").trim().toLowerCase()
+  return Boolean(unit) && !["und", "unid", "u", "pza"].includes(unit) && (product.factor ?? 1) === 1
+}
+
+/** Cantidad redondeada a 3 decimales (gramos en kg). */
+function roundQty(value: number) {
+  return Math.round(value * 1000) / 1000
+}
+
+function qtyText(value: number) {
+  return String(roundQty(value))
+}
+
+/** Importe de una línea en céntimos (la cantidad puede tener decimales). */
+function lineCents(line: { unitPriceCents: number; quantity: number }) {
+  return Math.round(line.unitPriceCents * line.quantity)
+}
+
+/** Botones rápidos según la unidad. */
+function quickAmounts(unit: string) {
+  const u = unit.toLowerCase()
+  if (u === "g" || u === "ml") return [100, 250, 500, 1000].map((value) => ({ value, label: `${value} ${unit}` }))
+  return [
+    { value: 0.25, label: `¼ ${unit}` },
+    { value: 0.5, label: `½ ${unit}` },
+    { value: 1, label: `1 ${unit}` },
+    { value: 2, label: `2 ${unit}` },
+    { value: 5, label: `5 ${unit}` },
+  ]
+}
+
 function toCents(value: string) {
   const raw = Number(String(value).replace(",", ".") || 0)
   return Number.isFinite(raw) ? Math.round(raw * 100) : 0
@@ -80,6 +113,8 @@ export function SalesPage() {
   const [paying, setPaying] = useState(false)
   const [payKey, setPayKey] = useState("")
   const [flash, setFlash] = useState<{ text: string; tone: "ok" | "warn" } | null>(null)
+  // Producto por peso o con varias presentaciones: ventana para elegir cuánto y cómo.
+  const [picking, setPicking] = useState<SaleProduct | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
   // Cliente y venta a crédito
@@ -226,7 +261,7 @@ export function SalesPage() {
   }, [flash])
 
   const subtotalCents = useMemo(
-    () => cart.reduce((sum, line) => sum + line.unitPriceCents * line.quantity, 0),
+    () => cart.reduce((sum, line) => sum + lineCents(line), 0),
     [cart],
   )
 
@@ -257,22 +292,28 @@ export function SalesPage() {
   const creditBlocked = isCredit && (!customer || creditOverLimit)
   const parkMode = accountMode && accountKind === "name"
 
-  function addProduct(product: SaleProduct) {
+  function addProduct(product: SaleProduct, amount = 1) {
     const key = `${product.id}:${product.presentationId}`
     setCart((current) => {
       const existing = current.find((line) => line.key === key)
       if (existing) {
-        return current.map((line) => (line.key === key ? { ...line, quantity: line.quantity + 1 } : line))
+        return current.map((line) => (line.key === key ? { ...line, quantity: roundQty(line.quantity + amount) } : line))
       }
-      return [...current, { ...product, quantity: 1, key }]
+      return [...current, { ...product, quantity: roundQty(amount), key }]
     })
     const already = qtyInCart.get(key) ?? 0
-    const lowStock = typeof product.stock === "number" && product.stock < already + 1
+    const lowStock = typeof product.stock === "number" && product.stock < (already + amount) * (product.factor ?? 1)
     setFlash(
       lowStock
         ? { text: `${product.name}: stock insuficiente (${product.stockLabel ?? 0})`, tone: "warn" }
         : { text: `${product.name} agregado`, tone: "ok" },
     )
+  }
+
+  /** Tocar un producto: si se vende por peso o tiene varias presentaciones, se pregunta cuánto y cómo. */
+  function pickProduct(product: SaleProduct) {
+    if (isWeighed(product) || (product.presentations?.length ?? 0) > 1) setPicking(product)
+    else addProduct(product)
   }
 
   async function onCode(code: string) {
@@ -301,7 +342,7 @@ export function SalesPage() {
     )
     const pick = exact.length === 1 ? exact[0] : products.length === 1 ? products[0] : null
     if (pick) {
-      addProduct(pick)
+      pickProduct(pick)
       setQuery("")
       return
     }
@@ -416,7 +457,7 @@ export function SalesPage() {
           lines: cart.map((line) => ({
             productId: line.id,
             presentationId: line.presentationId,
-            quantity: String(line.quantity),
+            quantity: qtyText(line.quantity),
           })),
           payments: isCredit ? [] : rows,
           saleType,
@@ -584,7 +625,8 @@ export function SalesPage() {
           </div>
         ) : null}
         {cart.map((line) => {
-          const short = typeof line.stock === "number" && line.quantity > line.stock
+          const short = typeof line.stock === "number" && line.quantity * (line.factor ?? 1) > line.stock
+          const weighed = isWeighed(line)
           return (
             <div key={line.key} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
               <div className="flex items-start justify-between gap-2">
@@ -600,7 +642,7 @@ export function SalesPage() {
                   </p>
                 </div>
                 <p className="shrink-0 text-sm font-bold tabular-nums text-teal-700">
-                  {money(line.unitPriceCents * line.quantity)}
+                  {money(lineCents(line))}
                 </p>
               </div>
               <div className="mt-2 flex items-center gap-2">
@@ -609,24 +651,44 @@ export function SalesPage() {
                     type="button"
                     aria-label={`Quitar uno de ${line.name}`}
                     className="grid size-8 place-items-center text-lg text-slate-600 hover:bg-slate-100"
-                    onClick={() => changeQty(line.key, line.quantity - 1)}
+                    onClick={() => changeQty(line.key, roundQty(line.quantity - (weighed ? 0.25 : 1)))}
                   >
                     −
                   </button>
-                  <input
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    aria-label={`Cantidad de ${line.name}`}
-                    value={line.quantity}
-                    onChange={(event) => changeQty(line.key, Math.max(1, Math.floor(Number(event.target.value)) || 1))}
-                    className="h-8 w-12 border-x border-slate-200 text-center text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                  />
+                  {weighed ? (
+                    <input
+                      key={`${line.key}:${line.quantity}`}
+                      type="text"
+                      inputMode="decimal"
+                      aria-label={`Cantidad de ${line.name} en ${line.unit}`}
+                      defaultValue={qtyText(line.quantity)}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur()
+                      }}
+                      onBlur={(event) => {
+                        const value = roundQty(Number(event.currentTarget.value.replace(",", ".")))
+                        if (Number.isFinite(value) && value > 0) changeQty(line.key, value)
+                        else event.currentTarget.value = qtyText(line.quantity)
+                      }}
+                      className="h-8 w-16 border-x border-slate-200 text-center text-sm tabular-nums outline-none"
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      aria-label={`Cantidad de ${line.name}`}
+                      value={line.quantity}
+                      onChange={(event) => changeQty(line.key, Math.max(1, Math.floor(Number(event.target.value)) || 1))}
+                      className="h-8 w-12 border-x border-slate-200 text-center text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  )}
                   <button
                     type="button"
                     aria-label={`Agregar uno de ${line.name}`}
                     className="grid size-8 place-items-center text-lg text-slate-600 hover:bg-slate-100"
-                    onClick={() => changeQty(line.key, line.quantity + 1)}
+                    onClick={() => changeQty(line.key, roundQty(line.quantity + (weighed ? 0.25 : 1)))}
                   >
                     +
                   </button>
@@ -834,7 +896,7 @@ export function SalesPage() {
                 <button
                   type="button"
                   key={key}
-                  onClick={() => addProduct(product)}
+                  onClick={() => pickProduct(product)}
                   aria-label={`Agregar ${product.name}`}
                   className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white p-2.5 pt-3.5 text-left shadow-sm transition active:scale-[0.98] ${
                     inCart > 0
@@ -1291,6 +1353,161 @@ export function SalesPage() {
           </form>
         </div>
       ) : null}
+
+      {picking ? (
+        <QuantityPicker
+          product={picking}
+          onClose={() => setPicking(null)}
+          onAdd={(choice, amount) => {
+            setPicking(null)
+            addProduct(choice, amount)
+          }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Cuánto y cómo vender: presentaciones (kilo, medio kilo, saco…) y, si se vende por peso,
+ * botones rápidos (¼, ½, 1 kg…), cantidad libre o «por monto» (S/ 3 de arroz → 0.714 kg).
+ */
+function QuantityPicker({ product, onClose, onAdd }: { product: SaleProduct; onClose: () => void; onAdd: (choice: SaleProduct, amount: number) => void }) {
+  const options = product.presentations?.length ? product.presentations : [{ id: product.presentationId, name: product.presentationName, factor: product.factor ?? 1, unitPriceCents: product.unitPriceCents, unitPriceLabel: product.unitPriceLabel, isDefault: true }]
+  const [selectedId, setSelectedId] = useState(product.presentationId)
+  const selected = options.find((item) => item.id === selectedId) ?? options[0]
+  const choice: SaleProduct = { ...product, presentationId: selected.id, presentationName: selected.name, unitPriceCents: selected.unitPriceCents, unitPriceLabel: selected.unitPriceLabel, factor: selected.factor }
+  const weighed = isWeighed(choice)
+  const unit = product.unit ?? ""
+  const [mode, setMode] = useState<"qty" | "money">("qty")
+  const [text, setText] = useState(weighed ? "" : "1")
+  const typed = Number(text.replace(",", "."))
+  const amount =
+    mode === "money"
+      ? choice.unitPriceCents > 0 && typed > 0
+        ? roundQty((typed * 100) / choice.unitPriceCents)
+        : 0
+      : weighed
+        ? roundQty(typed)
+        : Math.floor(typed)
+  const valid = Number.isFinite(amount) && amount > 0
+  const totalCents = valid ? Math.round(choice.unitPriceCents * amount) : 0
+  const stockBase = typeof product.stock === "number" ? product.stock : null
+  const over = valid && stockBase !== null && amount * (choice.factor ?? 1) > stockBase
+
+  function add(value = amount) {
+    if (value > 0) onAdd(choice, value)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] grid place-items-center bg-[var(--pf-navy)]/50 p-3"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Cantidad de ${product.name}`}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <form
+        className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-xl"
+        onSubmit={(event) => {
+          event.preventDefault()
+          add()
+        }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold text-[var(--pf-navy)]">{product.name}</h2>
+            <p className="text-sm text-slate-500">
+              {selected.name} · {selected.unitPriceLabel}
+              {stockBase !== null ? ` · stock ${product.stockLabel ?? stockBase} ${unit}` : ""}
+            </p>
+          </div>
+          <button type="button" className="text-sm text-slate-500 hover:text-slate-800" onClick={onClose}>
+            Cerrar
+          </button>
+        </div>
+
+        {options.length > 1 ? (
+          <div className="flex flex-wrap gap-2">
+            {options.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setSelectedId(item.id)
+                  setMode("qty")
+                  setText(isWeighed({ unit, factor: item.factor }) ? "" : "1")
+                }}
+                className={`rounded-xl px-3 py-2 text-left text-sm ring-1 ${item.id === selected.id ? "bg-[var(--pf-accent)] text-white ring-[var(--pf-accent)]" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"}`}
+              >
+                <span className="block font-semibold">{item.name}</span>
+                <span className={`block text-xs ${item.id === selected.id ? "text-white/80" : "text-slate-500"}`}>
+                  {item.unitPriceLabel}
+                  {item.factor !== 1 ? ` · ${item.factor} ${unit}` : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {weighed ? (
+          <>
+            <div className="grid grid-cols-5 gap-2">
+              {quickAmounts(unit).map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => add(item.value)}
+                  className="h-12 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex rounded-xl bg-slate-100 p-1 text-sm font-semibold">
+              {(["qty", "money"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setMode(value)
+                    setText("")
+                  }}
+                  className={`h-9 flex-1 rounded-lg ${mode === value ? "bg-white text-[var(--pf-navy)] shadow-sm" : "text-slate-500"}`}
+                >
+                  {value === "qty" ? `Por peso (${unit})` : "Por monto (S/)"}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        <label className="block text-sm font-medium text-slate-700">
+          {mode === "money" ? "Monto que pide el cliente (S/)" : weighed ? `Cantidad en ${unit}` : `Cantidad (${selected.name})`}
+          <input
+            autoFocus
+            inputMode="decimal"
+            className="mt-1 h-12 w-full rounded-xl border border-slate-200 px-3 text-right text-xl font-bold tabular-nums"
+            placeholder={mode === "money" ? "Ej. 3.00" : weighed ? "Ej. 0.750" : "1"}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </label>
+
+        <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+          <span className="text-slate-600">
+            {valid ? `${qtyText(amount)} ${weighed ? unit : selected.name}` : "—"}
+          </span>
+          <b className="text-lg tabular-nums text-teal-700">S/ {money(totalCents)}</b>
+        </div>
+        {over ? <p className="text-xs font-medium text-amber-700">No alcanza el stock ({product.stockLabel ?? stockBase} {unit}).</p> : null}
+
+        <button type="submit" disabled={!valid} className="h-12 w-full rounded-xl bg-[var(--pf-accent)] text-sm font-semibold text-white shadow-sm disabled:opacity-50">
+          Agregar a la venta
+        </button>
+      </form>
     </div>
   )
 }

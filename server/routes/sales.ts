@@ -224,6 +224,22 @@ export function registerSalesRoutes(app: Express) {
               unit: product.baseUnit.symbol,
               imagePath: product.imagePath ?? null,
               barcodes: product.barcodes.map((item) => item.code),
+              // Venta por peso o por presentación: cuántas unidades base trae y las otras formas de venderlo.
+              factor: product.presentations[0] ? Number(formatQty(presentation.factorToBase)) : 1,
+              presentations:
+                product.presentations.length > 1
+                  ? product.presentations.map((item) => {
+                      const price = resolveUnitPriceCents({ product, presentation: item, mode: "SALE", listItems: null })
+                      return {
+                        id: item.id,
+                        name: item.name,
+                        factor: Number(formatQty(item.factorToBase)),
+                        unitPriceCents: price,
+                        unitPriceLabel: formatMoney(price, ctx.currency),
+                        isDefault: item.id === presentation.id,
+                      }
+                    })
+                  : undefined,
             },
           ]
         })

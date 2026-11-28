@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode, type Ref } from "react"
-import { Boxes, DollarSign, Package } from "lucide-react"
+import { Boxes, DollarSign, Layers, Package, Trash2 } from "lucide-react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { getCatalogForm, getCatalogProduct, saveCatalogProduct } from "../api"
 import { ProductPhoto } from "../components/ProductPhoto"
@@ -48,6 +48,8 @@ export function ProductFormPage() {
     isActive: true,
   })
   const [imagePath, setImagePath] = useState<string | null>(null)
+  // Presentaciones de venta (kilo, medio kilo, saco…): se conservan al guardar.
+  const [presentations, setPresentations] = useState<PresentationRow[]>([])
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [pending, setPending] = useState(false)
@@ -83,6 +85,17 @@ export function ProductFormPage() {
             trackLots: data.values.trackLots,
             isActive: data.values.isActive,
           })
+          setPresentations(
+            (data.values.presentations ?? []).map((item) => ({
+              id: item.id,
+              name: item.name,
+              factorToBase: item.factorToBase,
+              unitId: item.unitId ?? "",
+              price: item.price ?? "",
+              barcode: item.barcode ?? "",
+              isDefault: item.isDefault,
+            })),
+          )
         } else {
           const data = await getCatalogForm()
           if (cancelled) return
@@ -137,7 +150,7 @@ export function ProductFormPage() {
         trackLots: form.trackLots,
         isActive: form.isActive,
         barcodes: form.barcode ? [form.barcode] : [],
-        presentations: [],
+        presentations: presentationsToSave(),
       })
       navigate(`/productos`)
     } catch (err) {
@@ -147,7 +160,48 @@ export function ProductFormPage() {
     }
   }
 
-  const unitSymbol = units.find((unit) => unit.id === form.baseUnitId)?.symbol ?? ""
+  const baseUnit = units.find((unit) => unit.id === form.baseUnitId)
+  const unitSymbol = baseUnit?.symbol ?? ""
+
+  /** Lo que se envía: la principal se llama como la unidad base si vale 1 (p. ej. «Kilogramo»). */
+  function presentationsToSave() {
+    const rows = presentations.filter((item) => item.name.trim() && Number(String(item.factorToBase).replace(",", ".")) > 0)
+    if (!rows.length) return []
+    if (!rows.some((item) => item.isDefault)) rows[0] = { ...rows[0], isDefault: true }
+    return rows.map((item) => {
+      const factor = String(item.factorToBase).replace(",", ".")
+      const renamed = item.isDefault && Number(factor) === 1 && units.some((unit) => unit.name === item.name) && baseUnit ? baseUnit.name : item.name.trim()
+      return { ...item, name: renamed, factorToBase: factor, price: String(item.price ?? "").replace(",", ".") || undefined, unitId: item.unitId || undefined }
+    })
+  }
+
+  function updatePresentation(index: number, patch: Partial<PresentationRow>) {
+    setPresentations((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)))
+  }
+
+  function addPresentation(name = "", factor = "") {
+    setPresentations((current) => {
+      const base = current.length
+        ? current
+        : [{ name: baseUnit?.name ?? "Unidad", factorToBase: "1", unitId: "", price: "", barcode: "", isDefault: true }]
+      return [...base, { name, factorToBase: factor, unitId: "", price: "", barcode: "", isDefault: false }]
+    })
+  }
+
+  const weightUnit = ["kg", "g", "l", "ml"].includes(unitSymbol.toLowerCase())
+  const suggestions =
+    unitSymbol.toLowerCase() === "kg"
+      ? [
+          { name: "Medio kilo", factor: "0.5" },
+          { name: "Cuarto de kilo", factor: "0.25" },
+          { name: "Saco 50 kg", factor: "50" },
+        ]
+      : unitSymbol.toLowerCase() === "und"
+        ? [
+            { name: "Paquete x 6", factor: "6" },
+            { name: "Caja x 12", factor: "12" },
+          ]
+        : []
   const num = (value: string) => Number(String(value).replace(",", ".")) || 0
   const cost = num(form.costPrice)
   const sale = num(form.salePrice)
@@ -312,6 +366,102 @@ export function ProductFormPage() {
           </div>
         </Section>
 
+        {/* 4. Presentaciones de venta */}
+        <Section
+          color="#0284c7"
+          icon={<Layers size={18} />}
+          title="Presentaciones de venta"
+          subtitle={`Formas de vender el mismo producto; todas descuentan del stock en ${unitSymbol || "la unidad base"}.${weightUnit ? " En Caja también se puede vender por peso o por monto." : ""}`}
+        >
+          {presentations.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] border-collapse text-sm">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <th className="border border-slate-200 px-2 py-1.5 font-semibold">Nombre</th>
+                    <th className="border border-slate-200 px-2 py-1.5 font-semibold">Cantidad ({unitSymbol || "base"})</th>
+                    <th className="border border-slate-200 px-2 py-1.5 font-semibold">Precio (S/)</th>
+                    <th className="w-10 border border-slate-200" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {presentations.map((item, index) => {
+                    const factor = Number(String(item.factorToBase).replace(",", ".")) || 0
+                    const auto = (sale * factor).toFixed(2)
+                    return (
+                      <tr key={item.id ?? `nuevo-${index}`}>
+                        <td className="border border-slate-200 p-1">
+                          <input
+                            className="h-9 w-full rounded-lg px-2 font-semibold"
+                            value={item.name}
+                            onChange={(e) => updatePresentation(index, { name: e.target.value })}
+                            placeholder="Ej. Medio kilo"
+                          />
+                          {item.isDefault ? <span className="px-2 text-[11px] text-slate-400">Principal (la que sale primero en Caja)</span> : null}
+                        </td>
+                        <td className="border border-slate-200 p-1">
+                          <input
+                            inputMode="decimal"
+                            className="h-9 w-full rounded-lg px-2 text-right tabular-nums"
+                            value={item.factorToBase}
+                            onChange={(e) => updatePresentation(index, { factorToBase: e.target.value })}
+                            placeholder="Ej. 0.5"
+                          />
+                        </td>
+                        <td className="border border-slate-200 p-1">
+                          <input
+                            inputMode="decimal"
+                            className="h-9 w-full rounded-lg px-2 text-right tabular-nums"
+                            value={item.price}
+                            onChange={(e) => updatePresentation(index, { price: e.target.value })}
+                            placeholder={`Auto: ${auto}`}
+                          />
+                        </td>
+                        <td className="border border-slate-200 p-1 text-center">
+                          {!item.isDefault ? (
+                            <button
+                              type="button"
+                              aria-label={`Quitar ${item.name || "presentación"}`}
+                              className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              onClick={() => setPresentations((current) => current.filter((_, i) => i !== index))}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-1 text-xs text-slate-400">Precio vacío = precio de venta × cantidad. Escribe un precio para darle uno especial (p. ej. el saco más barato).</p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Se vende solo por {baseUnit?.name?.toLowerCase() || "unidad"}. Agrega presentaciones si lo vendes también en otros formatos.</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {suggestions
+              .filter((item) => !presentations.some((row) => row.name.trim().toLowerCase() === item.name.toLowerCase()))
+              .map((item) => (
+                <button
+                  key={item.name}
+                  type="button"
+                  onClick={() => addPresentation(item.name, item.factor)}
+                  className="inline-flex h-9 items-center rounded-xl bg-sky-50 px-3 text-xs font-semibold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100"
+                >
+                  + {item.name}
+                </button>
+              ))}
+            <button
+              type="button"
+              onClick={() => addPresentation()}
+              className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              + Otra presentación
+            </button>
+          </div>
+        </Section>
+
         </div>
 
         <div className="sticky bottom-2 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
@@ -330,6 +480,8 @@ export function ProductFormPage() {
     </div>
   )
 }
+
+type PresentationRow = { id?: string; name: string; factorToBase: string; unitId: string; price: string; barcode: string; isDefault: boolean }
 
 function Section({ color, icon, title, subtitle, children }: { color: string; icon: ReactNode; title: string; subtitle: string; children: ReactNode }) {
   return (

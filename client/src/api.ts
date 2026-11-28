@@ -307,6 +307,10 @@ export type SaleProduct = {
   stock?: number
   stockLabel?: string
   imagePath?: string | null
+  /** Unidades base que trae la presentación elegida (1 = se vende por la unidad base, p. ej. por kg). */
+  factor?: number
+  /** Otras formas de venderlo (kilo, medio kilo, saco…), cuando tiene más de una. */
+  presentations?: { id: string; name: string; factor: number; unitPriceCents: number; unitPriceLabel: string; isDefault: boolean }[]
 }
 
 export function getSaleStatus() {
@@ -549,6 +553,7 @@ export function getCatalogProduct(id: string) {
       trackLots: boolean
       isActive: boolean
       barcodes: string[]
+      presentations?: { id: string; name: string; factorToBase: string; unitId: string; price: string; barcode: string; isDefault: boolean }[]
     }
     imagePath?: string | null
     categories: { id: string; name: string }[]
